@@ -39,10 +39,7 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 
 依實作順序。
 
-- [ ] **1. `tool-guard`：加入 cmd-rewrite、學來的守門**。
-  - cmd-rewrite：CLAUDE.md 寫的指令規則常沒被遵守（例如 repo 已有 `npm run test:brief`，Claude 仍直接打 `npx vitest`）。`tool.call`（Bash）執行前依 repo 層設定的規則（`{ "match": "^npx vitest run", "replace": "npm run test:brief --" }`）改寫指令，改寫時提示一次。進版控的規則第一次生效前要使用者核准（見「設計原則」）。
-  - 學來的守門：`/tool-guard suggest` 讀 memory 中出現 3 次以上的規則，由模型草擬工具呼叫前的比對式（擋下或只提醒），使用者核准才生效。上游：`guards.ts`。
-- [ ] **2. `agent-dispatch`：加入用量帳本與分派提醒**。2026-10-09 決定。
+- [ ] **1. `agent-dispatch`：加入用量帳本與分派提醒**。2026-10-09 決定。
   - 用量帳本：`agent.spawn` 記下 agentId 對應的 agent 種類、呼叫有沒有指定 model、description，以及 `next(e)` 回傳的實際模型（被其他 mod 改過的也記得到）；`turn.step` 依 `agentId` 把每步 usage 歸到主 session 或該 agent。依「日期 × 主 session／subagent × agent 種類 × 模型」累計 input、cache write、cache read、output、步數與派出次數，存 `$.store`（跨 repo 共用一份），保留 90 天。
   - 報表：`/agent-dispatch stats [天數]` 列出 subagent 佔總用量的比例、各模型用量、agent 種類 × 模型、指定 opus 與 fork 的次數，以及指定 opus 的 description 清單。
   - 分派提醒（只提醒，不擋也不改模型）：subagent 跑在 Opus 但 description 看不出理由、或同一個 session fork 次數偏多時跳 toast，並記進帳本。「看不出理由」的判斷與 fork 門檻實作時再定，先只記錄不提醒，看一段時間的誤判再開。
@@ -119,7 +116,7 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 | `self-check`（由 nudges 改名） | 重複失敗、說完成卻沒驗證 | 對象是 Claude 不是使用者、看的是執行後的結果與 `classic.Stop`，和守門共用不到程式；出錯時跳過即可；「說完成卻沒驗證」會顯示成 Stop hook error，獨立才能用 `/plugin` 單獨停用 |
 | `session-keeper` | cache 狀態、保持快取、new-task-gate、交接、進度的讀取與帶入 | 共用用量、TTL 與閒置計時；保持快取的 fork 要讓快取到期時間跟著更新 |
 | `project-memory` | 專案筆記、進度的產生 | 上游兩者在同一個請求產生；筆記的規則是守門的來源 |
-| `tool-guard`（由 shell-guard 改名） | 固定規則、cmd-rewrite、學來的守門（bash-edit-snapshot 暫緩） | 都在工具執行前做事，共用指令解析、影響預覽與確認面板；學來的守門不只看 Bash，`shell-guard` 這個名字不準 |
+| `tool-guard`（由 shell-guard 改名） | 固定規則（cmd-rewrite、學來的守門、bash-edit-snapshot 暫緩） | 都在工具執行前做事，共用指令解析、影響預覽與確認面板；學來的守門不只看 Bash，`shell-guard` 這個名字不準 |
 | `agent-dispatch`（由 agent-watch 改名） | 背景 agent 監看與重派、用量帳本、分派提醒 | 都圍繞派 agent 這件事，共用 Agent 呼叫與 `agent.spawn` 的資料（種類、模型、description）。用量帳本要的 `turn.step` 雖然 session-keeper 也聽，但它拿不到 agent 種類 |
 | 維持獨立 | secret-scrub、output-trimmer、open-items | secret-scrub 要排第一，併入的功能也會看到未遮蔽的原文；output-trimmer、open-items 和別人沒有共用的資料。open-items 載入後會自己把清單附給 Claude，交接與進度不用帶未完成項目 |
 
@@ -165,6 +162,8 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 | project-memory 只送相關的記憶給模型（Mem0 只送相似的前 10 筆） | 要 embedding 或相似度比對；記憶少時整份清單送得進去，`MEMORY.md` 也限 60 條 | 記憶（含失效前）超過約 150 條、或整理輸出常被截斷（debug log 的「丟棄 N 行」中出現 JSON 錯誤） |
 | project-memory 的離線評估集（照 LongMemEval 分類標 30–50 段對話的預期整理結果，量抽取與更新的錯誤率） | 成本較高，要先累積一段時間的真實整理結果才有素材 | 用過一個月以上，或懷疑整理品質（記錯、漏記、重複）時 |
 | 費用回報（見「費用回報」：每次呼叫的 toast、輸入框上方的各 mod 累計、依價格表估算金額） | 2026-10-11 查一個多月的 prompt 與 transcript：沒有一次問過 mod 呼叫模型花多少 token 或錢，也沒有因費用關功能；問過的是主對話的 context、訂閱額度與 cache 何時過期 | 開了 `keep_warm` 等背景呼叫後問「花了多少」、對用量表示意外，或 `/usage` 額度的消耗說不出來源。先做最窄的版本：`/<mod> status` 列累計 token 數，不估金額 |
+| `tool-guard` 的 cmd-rewrite（Bash 執行前依 repo 設定的 `{ "match", "replace" }` 改寫指令，例如 `npx vitest run` 換成 `npm run test:brief --`；改寫時提示一次，進版控的規則第一次生效前要使用者核准） | 2026-10-11 查一個多月的 prompt 與 transcript：沒有一次因為 Claude 沒照 CLAUDE.md 的指令規則而糾正；唯一一條「該用 X 不要用 Y」的規則才加 5 天，之後還沒有 session 可看 | 有這類規則的 repo 累積 5 個以上 session 後，仍有 2 次以上被糾正或照舊跑錯的指令。先做最窄的版本：設定檔寫死的字面 match／replace |
+| `tool-guard` 的學來的守門（`/tool-guard suggest` 把 memory 中出現 3 次以上的規則交給模型草擬工具呼叫前的比對式，核准才生效；上游 `guards.ts`） | 同一次查證：沒有同一種工具呼叫錯誤在不同 session 被糾正 3 次以上；反覆出現的糾正是寫作風格與流程，比對式擋不了；規則提升已由 `project-memory` 的「3 個 session 證實」處理 | 同一個工具呼叫錯誤在不同 session 被糾正 3 次以上，且寫得成字面比對式。先做使用者自己在設定檔寫 block／warn 比對式，不用模型草擬 |
 | CI 跑 `tsc` | 型別檔只在 Claude Code 載入 mod 時產生，CI 拿不到 | Claude Code 提供產生型別檔的指令，或型別檔有公開的套件 |
 
 ### 不做
