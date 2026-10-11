@@ -580,6 +580,18 @@ describe('usage ledger', () => {
     expect((await pane.find({ type: 'Text', text: /Oct 12 12:00 \(no prompt\)/ }))).toBeDefined()
     await pane.unmount()
   })
+  test('the two cards sit side by side from 60 body columns, stacked below', async ($, on) => {
+    await busyDay($, on)
+    for (const [bodyColumns, direction] of [[52, 'column'], [60, 'row'], [64, 'row']] as const) {
+      const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' } as never)
+      expect((await pane.find({ key: 'cards' }))?.props.flexDirection).toBe(direction)
+      await pane.press({ key: 'row:/repo' })
+      expect((await pane.find({ key: 'cards' }))?.props.flexDirection).toBe(direction)
+      await pane.press({ key: 'back' })
+      await pane.unmount()
+    }
+  })
+
   test('the desktop pane draws its bars as Svg', async ($, on) => {
     await twoWeeks($, on, 'desktop')
     await stats($, 'stats')

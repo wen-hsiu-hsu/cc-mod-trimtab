@@ -61,6 +61,8 @@ const PANE = 'agent-dispatch-stats'
 const PERIODS = [7, 30, 90]
 // From this many body columns a row is one line; below, its bar goes on a second line.
 const WIDE_COLUMNS = 80
+// From this many body columns the two cards sit side by side; below, one above the other.
+const CARD_COLUMNS = 60
 const SPECS: Specs = { ledger: LEDGER_SPEC, language: LANGUAGE }
 const POLL_MS = 3000
 const STOPPED = new Set(['killed', 'failed'])
@@ -522,8 +524,9 @@ export const register: Register = (on, options) => {
     const bar = (part: number) => cellBar(part, most, barWidth)
 
     // Two cards, each a total over a bar of what it is made of: stacked in a dock, side by side
-    // from WIDE_COLUMNS. A card's border and padding take four of its columns.
-    const cardWidth = wide ? Math.floor((body - 2) / 2) : body
+    // from CARD_COLUMNS. A card's border and padding take four of its columns.
+    const paired = body >= CARD_COLUMNS
+    const cardWidth = paired ? Math.floor((body - 2) / 2) : body
     const tokenPartsOf = (main: number, sub: number): Part[] => [
       { key: 'main', label: pick(lang, { en: 'main session', 'zh-TW': '主 session' }), value: main, ...COLORS.main },
       { key: 'sub', label: 'subagent', value: sub, ...COLORS.sub },
@@ -637,7 +640,7 @@ export const register: Register = (on, options) => {
             </Box>
           </Box>
           <Text dimColor>{pick(lang, { en: `${shown.days} days`, 'zh-TW': `${shown.days} 天` })}</Text>
-          <Box flexDirection={wide ? 'row' : 'column'} marginTop={1} gap={wide ? 2 : 0}>
+          <Box key="cards" flexDirection={paired ? 'row' : 'column'} marginTop={1} gap={paired ? 2 : 0}>
             {compact(
               'tokens',
               <Text>
@@ -801,7 +804,7 @@ export const register: Register = (on, options) => {
           </Box>
         ) : (
           <Box flexDirection="column">
-            <Box flexDirection={wide ? 'row' : 'column'} marginTop={1} gap={wide ? 2 : 0}>
+            <Box key="cards" flexDirection={paired ? 'row' : 'column'} marginTop={1} gap={paired ? 2 : 0}>
               {card(
                 'tokens',
                 pick(lang, { en: 'Tokens', 'zh-TW': '總 token' }),
