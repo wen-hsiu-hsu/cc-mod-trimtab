@@ -18,7 +18,6 @@ import {
 
 const running = atom({ plugin: 'agent-dispatch', key: 'running' } as const, [])
 const stopped = atom({ plugin: 'agent-dispatch', key: 'stopped' } as const, [])
-const now = atom({ plugin: 'agent-dispatch', key: 'now' } as const, 0)
 
 const MOD = 'agent-dispatch'
 const REDISPATCH = 'redispatch'
@@ -71,8 +70,6 @@ async function refresh($: EngineInterface, lang: Lang): Promise<void> {
   }
 
   await update($, running, () => stillRunning)
-  const at = await $.clock.now()
-  await update($, now, () => at)
   if (newlyStopped.length > 0) {
     await update($, stopped, list => [...list, ...newlyStopped])
     $.ui.toast(
@@ -297,7 +294,6 @@ export const register: Register = (on, options) => {
         ...((e.model ?? result.resolvedModel) ? { model: e.model ?? result.resolvedModel } : {}),
       }
       await update($, running, list => [...list, agent])
-      await update($, now, () => agent.startedAt)
       await showStatus($, lang)
     }
 
@@ -307,42 +303,24 @@ export const register: Register = (on, options) => {
   // The band is one instance shared by every plugin: draw above what the plugins beneath drew
   // (open-items), never in place of it.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const agents = await read($, running)
     const lost = await read($, stopped)
-    if (e.props.hasSurvey || (agents.length === 0 && lost.length === 0)) {
+    if (e.props.hasSurvey || lost.length === 0) {
       return next(e)
     }
     const below = await next(e)
-    const at = await read($, now)
     const { Box, Button, Text } = $.ui.resolve(e)
 
     return (
       <Box flexDirection="column">
-        {agents.length > 0 && (
-          <Text>
-            <Text color="yellow">
-              {pick(lang, { en: `${agents.length} background agent(s) running`, 'zh-TW': `${agents.length} 個背景 agent 執行中` })}
-            </Text>
-            <Text dimColor> · {pick(lang, { en: 'typing is queued, Esc interrupts them', 'zh-TW': '打字會排隊，Esc 會中斷它們' })}</Text>
+        <Box flexDirection="row">
+          <Text color="red" wrap="truncate-end">
+            {pick(lang, { en: `${lost.length} agent(s) interrupted`, 'zh-TW': `${lost.length} 個 agent 被中斷` })}
+            {pick(lang, { en: ': ', 'zh-TW': '：' })}
+            {lost.map(agent => agent.description).join(pick(lang, { en: ', ', 'zh-TW': '、' }))}{' '}
           </Text>
-        )}
-        {agents.map(agent => (
-          <Text dimColor wrap="truncate-end">
-            {'   '}
-            {agent.description} · {label(agent)} · {elapsed(at - agent.startedAt)}
-          </Text>
-        ))}
-        {lost.length > 0 && (
-          <Box flexDirection="row">
-            <Text color="red" wrap="truncate-end">
-              {pick(lang, { en: `${lost.length} agent(s) interrupted`, 'zh-TW': `${lost.length} 個 agent 被中斷` })}
-              {pick(lang, { en: ': ', 'zh-TW': '：' })}
-              {lost.map(agent => agent.description).join(pick(lang, { en: ', ', 'zh-TW': '、' }))}{' '}
-            </Text>
-            <Button key="redispatch" label={pick(lang, { en: 'Redispatch', 'zh-TW': '重派' })} hotkey="r" onPress={() => void fillRedispatch($, lang)} />
-            <Button key="dismiss" label={pick(lang, { en: 'Dismiss', 'zh-TW': '略過' })} hotkey="d" onPress={() => void update($, stopped, () => [])} />
-          </Box>
-        )}
+          <Button key="redispatch" label={pick(lang, { en: 'Redispatch', 'zh-TW': '重派' })} hotkey="r" onPress={() => void fillRedispatch($, lang)} />
+          <Button key="dismiss" label={pick(lang, { en: 'Dismiss', 'zh-TW': '略過' })} hotkey="d" onPress={() => void update($, stopped, () => [])} />
+        </Box>
         {below}
       </Box>
     )

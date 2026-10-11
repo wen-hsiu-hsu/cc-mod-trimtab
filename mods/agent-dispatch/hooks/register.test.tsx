@@ -77,15 +77,15 @@ function engine(on: On, status: { value: AgentStatus }, userFile = '{"*":{"langu
   return clock
 }
 
-test('shows a launched agent above the prompt and the stop once it is killed', async ($, on) => {
+test('draws nothing above the prompt while an agent runs, and the stop once it is killed', async ($, on) => {
   const status: { value: AgentStatus } = { value: 'running' }
   const clock = engine(on, status)
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
   await $.tool.call({ tool: 'Agent', description: 'review', prompt: 'review the diff', model: 'sonnet' })
 
   const ui = await $.ui.mount({ plugin: 'agent-dispatch', surface: 'terminal', ...BAND } as never)
-  expect(await ui.find({ type: 'Text', text: /1 個背景 agent 執行中/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /review · general-purpose\/sonnet/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /執行中|Esc/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /review/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: 'band beneath' })).toBeDefined()
   await ui.unmount()
 
@@ -113,9 +113,6 @@ test('the wording is English by default', async ($, on) => {
   const clock = engine(on, status, '')
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
   await $.tool.call({ tool: 'Agent', description: 'review', prompt: 'review the diff', model: 'sonnet' })
-  const ui = await $.ui.mount({ plugin: 'agent-dispatch', surface: 'terminal', ...BAND } as never)
-  expect(await ui.find({ type: 'Text', text: /1 background agent\(s\) running/ })).toBeDefined()
-  await ui.unmount()
   status.value = 'killed'
   await clock.advance(3000)
   const after = await $.ui.mount({ plugin: 'agent-dispatch', surface: 'terminal', ...BAND } as never)
