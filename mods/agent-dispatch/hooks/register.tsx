@@ -255,6 +255,9 @@ const COLORS = {
   fork: { ink: 'green', fill: '#3f9a4f' },
 } as const
 
+// The main session's models, one after another in the same bar.
+const MAIN_SHADES = [COLORS.main, { ink: 'magentaBright', fill: '#b48ee6' }, { ink: 'magenta', fill: '#6b3fa8' }]
+
 // `width` cells shared out by `values`, each part with any value at least one cell.
 function splitCells(values: number[], width: number): number[] {
   const total = values.reduce((sum, value) => sum + value, 0)
@@ -532,6 +535,11 @@ export const register: Register = (on, options) => {
       { key: 'sub', label: 'subagent', value: sub, ...COLORS.sub },
     ]
     const tokenParts = tokenPartsOf(report.main, report.sub)
+    // An opened session's main tokens by model, most first, in alternating shades of purple.
+    const modelParts = (byModel: [string, number][]): Part[] =>
+      [...byModel]
+        .sort((a, b) => b[1] - a[1])
+        .map(([model, value], i) => ({ key: `main:${model}`, label: model, value, ...MAIN_SHADES[i % MAIN_SHADES.length]! }))
     const kindPartsOf = (s: Report['spawned']): Part[] => [
       {
         key: 'named',
@@ -649,7 +657,7 @@ export const register: Register = (on, options) => {
               openSub === 0 ? null : (
                 <Text color={COLORS.sub.ink}>{pick(lang, { en: `by subagents ${share(openSub, open.tokens)}`, 'zh-TW': `subagent 佔 ${share(openSub, open.tokens)}` })}</Text>
               ),
-              tokenPartsOf(openMain, openSub),
+              by === 'session' ? [...modelParts(open.detail.flatMap(part => part.session.mainByModel)), ...tokenPartsOf(openMain, openSub).slice(1)] : tokenPartsOf(openMain, openSub),
             )}
             {counted.all === 0
               ? null

@@ -592,6 +592,24 @@ describe('usage ledger', () => {
     }
   })
 
+  test('an opened session splits its token card by the main session\'s models', async ($, on) => {
+    const world = await twoWeeks($, on)
+    await step($, 'claude-sonnet-4-6')
+    await step($, 'claude-sonnet-4-6')
+    await stats($, 'stats')
+    const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
+    await pane.select({ key: 'group', value: 'session' })
+    await pane.press({ key: `row:/repo|${world.now}` })
+    const card = (await pane.find({ key: 'card:tokens' }))?.text ?? ''
+    expect(card).toMatch(/claude-sonnet-4-6 320.*claude-opus-4 160.*subagent 160/)
+    // Every other grouping keeps one main session part.
+    await pane.press({ key: 'back' })
+    await pane.select({ key: 'group', value: 'repo' })
+    await pane.press({ key: 'row:/repo' })
+    expect((await pane.find({ key: 'card:tokens' }))?.text).toMatch(/main session 480.*subagent 160/)
+    await pane.unmount()
+  })
+
   test('the desktop pane draws its bars as Svg', async ($, on) => {
     await twoWeeks($, on, 'desktop')
     await stats($, 'stats')
