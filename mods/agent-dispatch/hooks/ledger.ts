@@ -191,6 +191,32 @@ export type Report = {
   sessions: SessionRow[]
 }
 
+// Adds `spawns` to `counts` by where their model came from, in three kinds that never overlap:
+// a fork runs on the main session's model, so it named none and took no default. A spawn the
+// ledger only saw step is not counted.
+function addKinds(counts: Report['spawned'], spawns: Spawn[]): void {
+  for (const spawn of spawns.filter(spawn => spawn.type !== 'unknown')) {
+    counts.all += 1
+    if (spawn.fork) {
+      counts.forks += 1
+    } else if (spawn.requested !== undefined) {
+      counts.explicit += 1
+      if (spawn.requested.toLowerCase().includes('opus')) {
+        counts.opus += 1
+      }
+    } else {
+      counts.defaults += 1
+    }
+  }
+}
+
+export function countKinds(spawns: Spawn[]): Report['spawned'] {
+  const counts = { all: 0, explicit: 0, opus: 0, forks: 0, defaults: 0 }
+  addKinds(counts, spawns)
+
+  return counts
+}
+
 // False for anything else, such as a ledger of the unreleased first format (spawns per day).
 export function isLedger(value: unknown): value is Ledger {
   return typeof value === 'object' && value !== null && Array.isArray((value as Ledger).spawns) && typeof (value as Ledger).main === 'object'
@@ -226,23 +252,8 @@ export function buildReport(stored: unknown[], days: number, now: number): Repor
     for (const spawn of spawns) {
       report.sub += tokens(spawn)
       report.cacheRead += spawn.cacheRead
-      if (spawn.type === 'unknown') {
-        continue
-      }
-      // Three kinds that never overlap: a fork runs on the main session's model, so it named
-      // none and took no default.
-      report.spawned.all += 1
-      if (spawn.fork) {
-        report.spawned.forks += 1
-      } else if (spawn.requested !== undefined) {
-        report.spawned.explicit += 1
-        if (spawn.requested.toLowerCase().includes('opus')) {
-          report.spawned.opus += 1
-        }
-      } else {
-        report.spawned.defaults += 1
-      }
     }
+    addKinds(report.spawned, spawns)
   }
   report.sessions.sort((a, b) => b.started - a.started)
 

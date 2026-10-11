@@ -8,9 +8,11 @@ export type WatchedAgent = {
   status: string
 }
 
-// What the stats pane shows: the period in days, the grouping (repo, session, model or type)
-// and the key of the row opened to its spawns ('' for none).
-export type StatsView = { days: number; by: string; item: string }
+// What the stats pane shows: the period in days, the grouping (repo, session, model or type),
+// the key of the row opened to its spawns ('' for none), their order (tokens, time or
+// duration), how many are listed, and the spawn opened in place ('' for none). A view saved
+// before the last three existed lacks them.
+export type StatsView = { days: number; by: string; item: string; sort: string; limit: number; spawn: string }
 
 declare module 'claude-code' {
   interface PluginState {

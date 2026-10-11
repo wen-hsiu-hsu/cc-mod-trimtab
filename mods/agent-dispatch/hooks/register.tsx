@@ -6,6 +6,7 @@ import { configCommand, LANGUAGE, loadConfig, pick, type ConfigIO, type Lang, ty
 import {
   applyMeta,
   buildReport,
+  countKinds,
   dayLabel,
   elapsed,
   DEFAULT_DAYS,
@@ -240,7 +241,8 @@ function svgBar(cells: number, width: number): string {
 }
 
 // One colored part of a card's bar and its legend line: `ink` on the terminal, `fill` on desktop.
-type Part = { key: string; label: string; note?: string; value: number; ink: string; fill: string }
+// `tally` follows it on every card, `note` only on the overview's.
+type Part = { key: string; label: string; short?: string; tally?: string; note?: string; value: number; ink: string; fill: string }
 
 // main session purple, subagent cyan, named model yellow, default model gray, fork green.
 const COLORS = {
@@ -519,12 +521,102 @@ export const register: Register = (on, options) => {
     }
     const bar = (part: number) => cellBar(part, most, barWidth)
 
+    // Two cards, each a total over a bar of what it is made of: stacked in a dock, side by side
+    // from WIDE_COLUMNS. A card's border and padding take four of its columns.
+    const cardWidth = wide ? Math.floor((body - 2) / 2) : body
+    const tokenPartsOf = (main: number, sub: number): Part[] => [
+      { key: 'main', label: pick(lang, { en: 'main session', 'zh-TW': '主 session' }), value: main, ...COLORS.main },
+      { key: 'sub', label: 'subagent', value: sub, ...COLORS.sub },
+    ]
+    const tokenParts = tokenPartsOf(report.main, report.sub)
+    const kindPartsOf = (s: Report['spawned']): Part[] => [
+      {
+        key: 'named',
+        label: pick(lang, { en: 'named a model', 'zh-TW': '指定模型' }),
+        short: pick(lang, { en: 'named', 'zh-TW': '指定' }),
+        tally: pick(lang, { en: ` (Opus: ${s.opus})`, 'zh-TW': `（Opus ${s.opus}）` }),
+        value: s.explicit,
+        ...COLORS.named,
+      },
+      { key: 'default', label: pick(lang, { en: 'default model', 'zh-TW': '沿用預設' }), short: pick(lang, { en: 'default', 'zh-TW': '預設' }), value: s.defaults, ...COLORS.default },
+      {
+        key: 'fork',
+        label: 'fork',
+        note: pick(lang, { en: " (main session's model)", 'zh-TW': '（用主 session 的模型）' }),
+        short: 'fork',
+        value: s.forks,
+        ...COLORS.fork,
+      },
+    ]
+    const kindParts = kindPartsOf(report.spawned)
+    const card = (key: string, title: string, aside: RenderNode, total: string, parts: Part[], legendKey: string) => (
+      <Box key={`card:${key}`} flexDirection="column" width={cardWidth} flexShrink={0} borderStyle="round" borderDimColor paddingX={1}>
+        <Box flexDirection="row" justifyContent="space-between" gap={1}>
+          <Text dimColor>{title}</Text>
+          {aside}
+        </Box>
+        <Text bold>{total}</Text>
+        {stack(parts, cardWidth - 4)}
+        {parts.map(part => (
+          <Box key={`${legendKey}:${part.key}`} flexDirection="row" justifyContent="space-between" gap={1}>
+            <Box flexShrink={1}>
+              <Text wrap="truncate-end">
+                <Text color={part.ink}>●</Text> {part.label}
+                {part.tally === undefined && part.note === undefined ? '' : <Text dimColor>{`${part.tally ?? ''}${part.note ?? ''}`}</Text>}
+              </Text>
+            </Box>
+            <Text>{n(part.value)}</Text>
+          </Box>
+        ))}
+      </Box>
+    )
+    // An opened row's card: its total and `aside`, and only when it has more than one part, the bar and a
+    // legend on one line by short labels: `named 22 (Opus: 0)`. A spawns card always splits.
+    const compact = (key: string, total: RenderNode, aside: RenderNode, parts: Part[], kinds = false) => {
+      const split = kinds || parts.filter(part => part.value > 0).length > 1
+
+      return (
+        <Box key={`card:${key}`} flexDirection="column" width={cardWidth} flexShrink={0} borderStyle="round" borderDimColor paddingX={1}>
+          <Box flexDirection="row" justifyContent="space-between" gap={1}>
+            {total}
+            {aside}
+          </Box>
+          {split ? stack(parts, cardWidth - 4) : null}
+          {split ? (
+            <Text wrap="wrap">
+              {parts.map((part, i) => [
+                i === 0 ? '' : '  ',
+                <Text color={part.ink}>●</Text>,
+                ` ${part.short ?? part.label} ${n(part.value)}`,
+                part.tally === undefined ? '' : <Text dimColor>{part.tally}</Text>,
+              ])}
+            </Text>
+          ) : null}
+        </Box>
+      )
+    }
+    const stack = (parts: Part[], width: number) => {
+      const cells = splitCells(parts.map(part => part.value), width)
+      if (Svg !== undefined) {
+        return <Svg source={svgStack(parts.map((part, i) => ({ cells: cells[i] ?? 0, fill: part.fill })))} alt={parts.map(part => `${part.label} ${n(part.value)}`).join(', ')} width={width * 8} height={8} />
+      }
+
+      return (
+        <Text>
+          {parts.map((part, i) => ((cells[i] ?? 0) === 0 ? '' : <Text backgroundColor={part.ink}>{' '.repeat(cells[i] ?? 0)}</Text>))}
+        </Text>
+      )
+    }
+
     if (open !== undefined) {
       const sort: SortBy = shown.sort in SORTS ? (shown.sort as SortBy) : 'tokens'
       const listed = open.detail
         .flatMap(part => part.spawns.map(spawn => ({ spawn, session: part.session })))
         .sort((a, b) => SORTS[sort](b.spawn) - SORTS[sort](a.spawn))
       const limit = Math.max(PAGE, Number(shown.limit) || PAGE)
+      const openMain = open.detail.reduce((sum, part) => sum + part.main, 0)
+      const openSub = open.tokens - openMain
+      const counted = countKinds(listed.map(item => item.spawn))
       const top = Math.max(1, ...listed.map(item => tokens(item.spawn)))
       const rowBar = wide ? 16 : 8
 
@@ -544,12 +636,42 @@ export const register: Register = (on, options) => {
               </Text>
             </Box>
           </Box>
-          <Text dimColor wrap="wrap">
-            {pick(lang, {
-              en: `${n(open.tokens)} tokens · ${open.spawns} spawns · ${shown.days} days`,
-              'zh-TW': `${n(open.tokens)} token · 派出 ${open.spawns} 次 · ${shown.days} 天`,
-            })}
-          </Text>
+          <Text dimColor>{pick(lang, { en: `${shown.days} days`, 'zh-TW': `${shown.days} 天` })}</Text>
+          <Box flexDirection={wide ? 'row' : 'column'} marginTop={1} gap={wide ? 2 : 0}>
+            {compact(
+              'tokens',
+              <Text>
+                <Text bold>{n(open.tokens)}</Text> <Text dimColor>token</Text>
+              </Text>,
+              openSub === 0 ? null : (
+                <Text color={COLORS.sub.ink}>{pick(lang, { en: `by subagents ${share(openSub, open.tokens)}`, 'zh-TW': `subagent 佔 ${share(openSub, open.tokens)}` })}</Text>
+              ),
+              tokenPartsOf(openMain, openSub),
+            )}
+            {counted.all === 0
+              ? null
+              : compact(
+                  'spawns',
+                  <Text>
+                    <Text bold>{counted.all}</Text> <Text dimColor>{pick(lang, { en: 'spawns', 'zh-TW': '次派出' })}</Text>
+                  </Text>,
+                  null,
+                  kindPartsOf(counted),
+                  true,
+                )}
+          </Box>
+          {listed.length === 0 ? (
+            // The main session row: no spawns, each session's own tokens instead.
+            open.detail.map(part => (
+              <Box key={`main:${part.session.repo}-${part.session.started}`} flexDirection="row" gap={1}>
+                <Box flexGrow={1} flexShrink={1}>
+                  <Text wrap="truncate-end">{sessionName(lang, part.session)}</Text>
+                </Box>
+                <Text>{n(part.main)}</Text>
+              </Box>
+            ))
+          ) : (
+          <Box flexDirection="column">
           <Box marginTop={1}>
             <Select
               key="sort"
@@ -648,71 +770,14 @@ export const register: Register = (on, options) => {
               </Button>
             </Box>
           ) : null}
+          </Box>
+          )}
           <Box marginTop={1}>
             <Text dimColor wrap="wrap">
               {pick(lang, { en: '‹ Back (b) returns · Esc closes', 'zh-TW': '‹ 返回（b）回總覽 · Esc 關閉' })}
             </Text>
           </Box>
         </Box>
-      )
-    }
-
-    const s = report.spawned
-    // Two cards, each a total over a bar of what it is made of: stacked in a dock, side by side
-    // from WIDE_COLUMNS. A card's border and padding take four of its columns.
-    const cardWidth = wide ? Math.floor((body - 2) / 2) : body
-    const tokenParts: Part[] = [
-      { key: 'main', label: pick(lang, { en: 'main session', 'zh-TW': '主 session' }), value: report.main, ...COLORS.main },
-      { key: 'sub', label: 'subagent', value: report.sub, ...COLORS.sub },
-    ]
-    const kindParts: Part[] = [
-      {
-        key: 'named',
-        label: pick(lang, { en: 'named a model', 'zh-TW': '指定模型' }),
-        note: pick(lang, { en: ` (Opus: ${s.opus})`, 'zh-TW': `（Opus ${s.opus}）` }),
-        value: s.explicit,
-        ...COLORS.named,
-      },
-      { key: 'default', label: pick(lang, { en: 'default model', 'zh-TW': '沿用預設' }), value: s.defaults, ...COLORS.default },
-      {
-        key: 'fork',
-        label: 'fork',
-        note: pick(lang, { en: " (main session's model)", 'zh-TW': '（用主 session 的模型）' }),
-        value: s.forks,
-        ...COLORS.fork,
-      },
-    ]
-    const card = (key: string, title: string, aside: RenderNode, total: string, parts: Part[], legendKey: string) => (
-      <Box key={`card:${key}`} flexDirection="column" width={cardWidth} flexShrink={0} borderStyle="round" borderDimColor paddingX={1}>
-        <Box flexDirection="row" justifyContent="space-between" gap={1}>
-          <Text dimColor>{title}</Text>
-          {aside}
-        </Box>
-        <Text bold>{total}</Text>
-        {stack(parts, cardWidth - 4)}
-        {parts.map(part => (
-          <Box key={`${legendKey}:${part.key}`} flexDirection="row" justifyContent="space-between" gap={1}>
-            <Box flexShrink={1}>
-              <Text wrap="truncate-end">
-                <Text color={part.ink}>●</Text> {part.label}
-                {part.note === undefined ? '' : <Text dimColor>{part.note}</Text>}
-              </Text>
-            </Box>
-            <Text>{n(part.value)}</Text>
-          </Box>
-        ))}
-      </Box>
-    )
-    const stack = (parts: Part[], width: number) => {
-      const cells = splitCells(parts.map(part => part.value), width)
-      if (Svg !== undefined) {
-        return <Svg source={svgStack(parts.map((part, i) => ({ cells: cells[i] ?? 0, fill: part.fill })))} alt={parts.map(part => `${part.label} ${n(part.value)}`).join(', ')} width={width * 8} height={8} />
-      }
-
-      return (
-        <Text>
-          {parts.map((part, i) => ((cells[i] ?? 0) === 0 ? '' : <Text backgroundColor={part.ink}>{' '.repeat(cells[i] ?? 0)}</Text>))}
-        </Text>
       )
     }
 
@@ -749,7 +814,7 @@ export const register: Register = (on, options) => {
                 'spawns',
                 pick(lang, { en: 'Spawns', 'zh-TW': '派出' }),
                 <Text dimColor>{pick(lang, { en: 'where the model came from', 'zh-TW': '模型怎麼來' })}</Text>,
-                pick(lang, { en: String(s.all), 'zh-TW': `${s.all} 次` }),
+                pick(lang, { en: String(report.spawned.all), 'zh-TW': `${report.spawned.all} 次` }),
                 kindParts,
                 'spawned',
               )}

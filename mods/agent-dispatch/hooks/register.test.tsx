@@ -556,6 +556,30 @@ describe('usage ledger', () => {
     expect(await pane.find({ key: 'detail:a1:type' })).toBeUndefined()
     await pane.unmount()
   })
+  test('an opened row sums its own tokens and spawns in two cards', async ($, on) => {
+    await busyDay($, on)
+    const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
+    await pane.select({ key: 'group', value: 'model' })
+    await pane.press({ key: 'row:claude-haiku-4-5' })
+    const text = async (key: string) => (await pane.find({ key }))?.text ?? ''
+    expect(await text('card:tokens')).toMatch(/78,000 token.*by subagents 100%/)
+    expect(await text('card:spawns')).toMatch(/12 spawns/)
+    expect(await text('card:spawns')).toMatch(/named 6 \(Opus: 0\).*default 6.*fork 0/)
+    await pane.unmount()
+  })
+
+  test('the main session row of the type grouping lists each session\'s own tokens', async ($, on) => {
+    await twoWeeks($, on)
+    await stats($, 'stats')
+    const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
+    await pane.select({ key: 'group', value: 'type' })
+    await pane.press({ key: 'row:main' })
+    expect(await pane.find({ key: 'card:spawns' })).toBeUndefined()
+    expect(await pane.find({ key: 'sort' })).toBeUndefined()
+    expect((await pane.find({ key: 'card:tokens' }))?.text).toMatch(/160 token/)
+    expect((await pane.find({ type: 'Text', text: /Oct 12 12:00 \(no prompt\)/ }))).toBeDefined()
+    await pane.unmount()
+  })
   test('the desktop pane draws its bars as Svg', async ($, on) => {
     await twoWeeks($, on, 'desktop')
     await stats($, 'stats')
