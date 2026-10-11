@@ -147,6 +147,13 @@ export function stamp(lang: Lang, ms: number): string {
   return `${monthDay(lang, d.getMonth() + 1, d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`
 }
 
+// The local day of a time: `Oct 12`, `10/12`.
+export function dayLabel(lang: Lang, ms: number): string {
+  const d = new Date(ms)
+
+  return monthDay(lang, d.getMonth() + 1, d.getDate())
+}
+
 // The days a report covers: `Sep 13 – Oct 12`, `9/13 至 10/12`.
 export function range(lang: Lang, report: Report): string {
   const label = (day: string) => {

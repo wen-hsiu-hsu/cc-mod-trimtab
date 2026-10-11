@@ -6,6 +6,7 @@ import { configCommand, LANGUAGE, loadConfig, pick, type ConfigIO, type Lang, ty
 import {
   applyMeta,
   buildReport,
+  dayLabel,
   DEFAULT_DAYS,
   GROUP_BYS,
   groups,
@@ -15,6 +16,8 @@ import {
   sessionName,
   share,
   spawnParts,
+  tokens,
+  type Spawn,
   emptyText,
   emptyLedger,
   isLedger,
@@ -32,10 +35,14 @@ import {
   type SessionMeta,
 } from './ledger'
 
+// An opened row lists this many spawns, and this many more at each "more".
+const PAGE = 10
+
 const running = atom({ plugin: 'agent-dispatch', key: 'running' } as const, [])
 const stopped = atom({ plugin: 'agent-dispatch', key: 'stopped' } as const, [])
-// What the stats pane shows: the period, the grouping and the row opened to its spawns.
-const view = atom({ plugin: 'agent-dispatch', key: 'view' } as const, { days: 30, by: 'repo', item: '' })
+// What the stats pane shows: the period, the grouping, the row opened to its spawns and how
+// many of them are listed.
+const view = atom({ plugin: 'agent-dispatch', key: 'view' } as const, { days: 30, by: 'repo', item: '', limit: PAGE })
 
 const MOD = 'agent-dispatch'
 const REDISPATCH = 'redispatch'
@@ -262,6 +269,16 @@ function svgStack(parts: { cells: number; fill: string }[]): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${x * unit}" height="8">${rects.join('')}</svg>`
 }
 
+// A spawn's key in the pane: its agent id, or for one recorded without, when it started.
+function spawnId(spawn: Spawn): string {
+  return spawn.agentId ?? String(spawn.at)
+}
+
+// Where a spawn's model came from: forked, named, or the default.
+function kindColor(spawn: Spawn): { ink: string; fill: string } {
+  return spawn.fork ? COLORS.fork : spawn.requested !== undefined ? COLORS.named : COLORS.default
+}
+
 function clamp(value: number, low: number, high: number): number {
   return Math.min(high, Math.max(low, value))
 }
@@ -483,16 +500,22 @@ export const register: Register = (on, options) => {
       type: pick(lang, { en: 'type', 'zh-TW': '種類' }),
     }
     const spawnCount = (count: number) => pick(lang, { en: `${count} spawns`, 'zh-TW': `${count} 次` })
-    const bar = (part: number) => {
-      const cells = barCells(part, most, barWidth)
+    const cellBar = (part: number, whole: number, width: number) => {
+      const cells = barCells(part, whole, width)
       if (Svg !== undefined) {
-        return <Svg source={svgBar(cells, barWidth)} alt={n(part)} width={barWidth * 8} height={10} />
+        return <Svg source={svgBar(cells, width)} alt={n(part)} width={width * 8} height={10} />
       }
 
       return cells === 0 ? <Text> </Text> : <Text backgroundColor="cyan">{' '.repeat(cells)}</Text>
     }
+    const bar = (part: number) => cellBar(part, most, barWidth)
 
     if (open !== undefined) {
+      const listed = open.detail.flatMap(part => part.spawns.map(spawn => ({ spawn, session: part.session }))).sort((a, b) => tokens(b.spawn) - tokens(a.spawn))
+      const limit = Math.max(PAGE, Number(shown.limit) || PAGE)
+      const top = Math.max(1, ...listed.map(item => tokens(item.spawn)))
+      const rowBar = wide ? 16 : 8
+
       return (
         <Box flexDirection="column">
           <Box flexDirection="row" gap={1}>
@@ -515,31 +538,51 @@ export const register: Register = (on, options) => {
               'zh-TW': `${n(open.tokens)} token · 派出 ${open.spawns} 次 · ${shown.days} 天`,
             })}
           </Text>
-          {open.detail.map(part => (
-            <Box key={`detail-${part.session.repo}-${part.session.started}`} flexDirection="column" marginTop={1}>
-              <Text bold wrap="truncate-end">
-                {sessionName(lang, part.session)}
-              </Text>
-              <Text dimColor wrap="truncate-end">
-                {repoName(lang, part.session.repo)} · {pick(lang, { en: `main session ${n(part.main)}`, 'zh-TW': `主 session ${n(part.main)}` })}
-              </Text>
-              {part.spawns.map(spawn => {
-                const [title, what, how] = spawnParts(lang, spawn)
-
-                return (
-                  <Box flexDirection="column" paddingLeft={2} marginTop={1}>
-                    <Text wrap="wrap">{title}</Text>
-                    <Text dimColor wrap="wrap">
-                      {what}
-                    </Text>
-                    <Text dimColor wrap="wrap">
-                      {how}
-                    </Text>
-                  </Box>
-                )
-              })}
+          <Box flexDirection="row" gap={1} marginTop={1}>
+            <Box width={1} flexShrink={0} />
+            <Box flexGrow={1} flexShrink={1}>
+              <Text dimColor>{pick(lang, { en: 'Spawns', 'zh-TW': '派出' })}</Text>
             </Box>
-          ))}
+            <Box width={rowBar} flexShrink={0} />
+            <Box width={9} flexShrink={0} justifyContent="flex-end">
+              <Text dimColor>token</Text>
+            </Box>
+            <Box width={6} flexShrink={0} justifyContent="flex-end">
+              <Text dimColor>{pick(lang, { en: 'date', 'zh-TW': '日期' })}</Text>
+            </Box>
+          </Box>
+          {listed.slice(0, limit).map(({ spawn }) => {
+            const id = spawnId(spawn)
+
+            return (
+              <Box key={`line:${id}`} flexDirection="row" gap={1}>
+                <Box key={`dot:${id}`} width={1} flexShrink={0}>
+                  <Text color={kindColor(spawn).ink}>●</Text>
+                </Box>
+                <Box flexGrow={1} flexShrink={1}>
+                  <Button key={`spawn:${id}`} plain onPress={() => undefined}>
+                    <Text wrap="truncate-end">{spawnParts(lang, spawn)[0]}</Text>
+                  </Button>
+                </Box>
+                <Box width={rowBar} flexShrink={0}>
+                  {cellBar(tokens(spawn), top, rowBar)}
+                </Box>
+                <Box width={9} flexShrink={0} justifyContent="flex-end">
+                  <Text>{n(tokens(spawn))}</Text>
+                </Box>
+                <Box width={6} flexShrink={0} justifyContent="flex-end">
+                  <Text dimColor>{dayLabel(lang, spawn.at)}</Text>
+                </Box>
+              </Box>
+            )
+          })}
+          {listed.length > limit ? (
+            <Box paddingLeft={2}>
+              <Button key="more" plain onPress={() => void update($, view, current => ({ ...current, limit: limit + PAGE }))}>
+                <Text color="yellow">{pick(lang, { en: `${listed.length - limit} more ▸`, 'zh-TW': `還有 ${listed.length - limit} 筆 ▸` })}</Text>
+              </Button>
+            </Box>
+          ) : null}
           <Box marginTop={1}>
             <Text dimColor wrap="wrap">
               {pick(lang, { en: '‹ Back (b) returns · Esc closes', 'zh-TW': '‹ 返回（b）回總覽 · Esc 關閉' })}
@@ -667,7 +710,7 @@ export const register: Register = (on, options) => {
               // A Button holds only text, so the name is the button and the bar sits beside it.
               const name = (
                 <Box flexGrow={1} flexShrink={1}>
-                  <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key }))}>
+                  <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key, limit: PAGE }))}>
                     <Text wrap="truncate-end">{row.label}</Text>
                   </Button>
                 </Box>

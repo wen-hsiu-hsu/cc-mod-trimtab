@@ -399,7 +399,6 @@ describe('usage ledger', () => {
     await pane.select({ key: 'group', value: 'model' })
     await pane.press({ key: 'row:claude-opus-4' })
     expect(await pane.find({ type: 'Text', text: 'deep review' })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /general-purpose · opus → claude-opus-4/ })).toBeDefined()
     expect(await pane.find({ type: 'Text', text: /old task/ })).toBeUndefined()
     expect(await pane.find({ key: 'row:claude-opus-4' })).toBeUndefined()
 
@@ -462,6 +461,61 @@ describe('usage ledger', () => {
       expect(await text('cache-read')).toContain('Plus 2,000 tokens read from cache')
       await pane.unmount()
     }
+  })
+
+  // One session today with twelve haiku spawns: task i used (i + 1) thousand tokens, started i
+  // minutes after 10:00 and ran 12 - i minutes; the even ones named their model.
+  async function busyDay($: T, on: On): Promise<World> {
+    const world = newWorld()
+    const nine = new Date(2026, 9, 12, 9).getTime()
+    const spawns = Array.from({ length: 12 }, (_, i) => {
+      const at = nine + 3_600_000 + i * 60_000
+
+      return {
+        agentId: `a${i}`,
+        at,
+        last: at + (12 - i) * 60_000,
+        description: `task ${i}`,
+        type: 'general-purpose',
+        model: 'claude-haiku-4-5',
+        ...(i % 2 === 0 ? { requested: 'haiku' } : {}),
+        fork: false,
+        background: i === 0,
+        input: (i + 1) * 1000,
+        cacheWrite: 0,
+        cacheRead: 0,
+        output: 0,
+        steps: 3,
+      }
+    })
+    world.store = { 'ledger:s9': { updated: world.now, repo: '/repo', started: nine, prompt: 'a busy day', main: {}, spawns } }
+    engine(on, { value: 'running' }, '', world)
+    await start($)
+    await stats($, 'stats')
+
+    return world
+  }
+
+  const tasks = async (pane: { findAll: (query: object) => Promise<{ text: string }[]> }) =>
+    (await pane.findAll({ type: 'Text', text: /^task \d+$/ })).map(found => found.text)
+
+  test('an opened row lists its spawns as a table, most tokens first, ten before "more"', async ($, on) => {
+    await busyDay($, on)
+    const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 52 }, surface: 'terminal' } as never)
+    await pane.select({ key: 'group', value: 'model' })
+    await pane.press({ key: 'row:claude-haiku-4-5' })
+    expect(await tasks(pane)).toEqual(['task 11', 'task 10', 'task 9', 'task 8', 'task 7', 'task 6', 'task 5', 'task 4', 'task 3', 'task 2'])
+    // A dot in the color of where its model came from, and the day it ran.
+    const dot = async (id: string) => (await pane.find({ key: `dot:${id}` }))?.children[0] as { props: { color?: string } } | undefined
+    expect((await dot('a10'))?.props.color).toBe('yellow')
+    expect((await dot('a9'))?.props.color).toBe('gray')
+    expect((await pane.find({ key: 'line:a9' }))?.text).toMatch(/task 9.*10,000.*Oct 12/)
+    expect((await pane.find({ key: 'more' }))?.text).toContain('2 more')
+
+    await pane.press({ key: 'more' })
+    expect(await tasks(pane)).toHaveLength(12)
+    expect(await pane.find({ key: 'more' })).toBeUndefined()
+    await pane.unmount()
   })
 
   test('the desktop pane draws its bars as Svg', async ($, on) => {
