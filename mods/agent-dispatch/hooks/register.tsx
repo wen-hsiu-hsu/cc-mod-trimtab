@@ -248,7 +248,7 @@ export const register: Register = (on, options) => {
 
   on('agent.spawn', async ($, e, next) => {
     const spawned = await next(e)
-    if ('deny' in spawned) {
+    if (spawned.deny !== undefined) {
       return spawned
     }
     await record($, ledger, 'agent.spawn', (entries, at) =>
