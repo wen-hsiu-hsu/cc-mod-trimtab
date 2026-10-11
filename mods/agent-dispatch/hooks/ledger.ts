@@ -1,29 +1,47 @@
 import { pick, type KeySpec, type Lang } from './config'
 
 // What one session wrote under `ledger:<sessionId>` in $.store. Each session writes only its
-// own key, so concurrent sessions never overwrite each other; `stats` sums every key.
+// own key, so concurrent sessions never overwrite each other; `stats` reads every key.
 export type Tally = { input: number; cacheWrite: number; cacheRead: number; output: number; steps: number }
+
+// One Agent spawn and the tokens its steps used. `type` is `fork` for a fork and `unknown`
+// for steps of an agent id the ledger never saw spawn (one spawned before a hot reload).
+export type Spawn = Tally & {
+  agentId?: string
+  // ms of the spawn and of its last step: the duration is `last - at`.
+  at: number
+  last: number
+  description: string
+  type: string
+  // The Agent tool's `model` as given; absent when the spawn took the default.
+  requested?: string
+  // The model the spawn resolved to.
+  model: string
+  fork: boolean
+  background: boolean
+}
 
 export type Ledger = {
   // ms of the last write; keys not written for 90 days are deleted at session start.
   updated: number
-  // Local day `YYYY-MM-DD` -> `<who>|<model>` -> tokens. `who` is `main`, the agent type
-  // (`fork` for a fork) or `unknown` (an agent id the ledger never saw spawn).
-  steps: Record<string, Record<string, Tally>>
-  // Local day -> `<type>|<model>` -> spawns; the model is the one the spawn resolved to.
-  spawns: Record<string, Record<string, number>>
-  // Local day -> spawns that named a model, named an Opus one (not a fork), and forks.
-  counts: Record<string, { explicit: number; opus: number; forks: number }>
-  // The explicit-Opus spawns, oldest first, at most OPUS_CAP.
-  opus: { day: string; type: string; description: string }[]
-  // agentId -> what it was spawned as, so steps after a hot reload are still attributed.
-  agents: Record<string, { type: string; model: string }>
+  // The main working tree's root, so worktrees of one repo group together.
+  repo: string
+  started: number
+  // The first 40 characters of the session's first prompt.
+  prompt: string
+  // model -> the main session's own tokens.
+  main: Record<string, Tally>
+  // Oldest first, at most SPAWN_CAP.
+  spawns: Spawn[]
 }
+
+// What the session knows before anything is written; merged into the ledger on each write.
+export type SessionMeta = { repo: string; started: number; prompt: string }
 
 export const LEDGER_PREFIX = 'ledger:'
 export const RETENTION_MS = 90 * 86_400_000
-export const OPUS_CAP = 200
-export const AGENTS_CAP = 500
+export const SPAWN_CAP = 500
+export const PROMPT_CHARS = 40
 export const DEFAULT_DAYS = 30
 export const MAX_DAYS = 90
 
@@ -33,49 +51,52 @@ export const LEDGER_SPEC: KeySpec = {
   default: true,
   repo: 'never',
   description: {
-    en: 'Record token use by the main session and each subagent in a local ledger, for /agent-dispatch stats. Off records nothing; existing records stay',
-    'zh-TW': '把主 session 與各 subagent 的 token 用量記進本機帳本，供 /agent-dispatch stats 使用。關閉後不再記錄，已有的紀錄保留',
+    en: 'Record each spawn and the token use of the main session and every subagent in a local ledger, for /agent-dispatch stats. Off records nothing; existing records stay',
+    'zh-TW': '把每次派出，以及主 session 與各 subagent 的 token 用量記進本機帳本，供 /agent-dispatch stats 使用。關閉後不再記錄，已有的紀錄保留',
   },
 }
 
 export function emptyLedger(): Ledger {
-  return { updated: 0, steps: {}, spawns: {}, counts: {}, opus: [], agents: {} }
+  return { updated: 0, repo: '', started: 0, prompt: '', main: {}, spawns: [] }
 }
 
-// The local calendar day of a time, the key the ledger buckets by.
-export function dayOf(ms: number): string {
-  const d = new Date(ms)
+export function promptSummary(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim()
 
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return flat.length > PROMPT_CHARS ? `${flat.slice(0, PROMPT_CHARS)}…` : flat
+}
+
+// Fills what the ledger does not have yet: a resumed session keeps its first start and prompt.
+export function applyMeta(ledger: Ledger, meta: SessionMeta): void {
+  ledger.repo ||= meta.repo
+  ledger.started ||= meta.started
+  ledger.prompt ||= meta.prompt
+}
+
+function zero(): Tally {
+  return { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, steps: 0 }
 }
 
 export function recordSpawn(
   ledger: Ledger,
   at: number,
-  spawn: { agentId?: string; type: string; model: string; requested?: string; fork: boolean; description: string },
+  spawn: { agentId?: string; type: string; model: string; requested?: string; fork: boolean; background: boolean; description: string },
 ): void {
-  const day = dayOf(at)
-  const type = spawn.fork ? 'fork' : spawn.type
-  const key = `${type}|${spawn.model}`
-  const spawns = (ledger.spawns[day] ??= {})
-  spawns[key] = (spawns[key] ?? 0) + 1
-  const counts = (ledger.counts[day] ??= { explicit: 0, opus: 0, forks: 0 })
-  if (spawn.requested !== undefined) {
-    counts.explicit += 1
-  }
-  if (spawn.fork) {
-    counts.forks += 1
-  } else if (spawn.requested?.toLowerCase().includes('opus')) {
-    counts.opus += 1
-    ledger.opus = [...ledger.opus, { day, type, description: spawn.description }].slice(-OPUS_CAP)
-  }
-  if (spawn.agentId !== undefined) {
-    delete ledger.agents[spawn.agentId]
-    ledger.agents[spawn.agentId] = { type, model: spawn.model }
-    for (const old of Object.keys(ledger.agents).slice(0, -AGENTS_CAP)) {
-      delete ledger.agents[old]
-    }
-  }
+  ledger.spawns = [
+    ...ledger.spawns,
+    {
+      ...zero(),
+      ...(spawn.agentId === undefined ? {} : { agentId: spawn.agentId }),
+      at,
+      last: at,
+      description: spawn.description,
+      type: spawn.fork ? 'fork' : spawn.type,
+      ...(spawn.requested === undefined || spawn.fork ? {} : { requested: spawn.requested }),
+      model: spawn.model,
+      fork: spawn.fork,
+      background: spawn.background,
+    },
+  ].slice(-SPAWN_CAP)
   ledger.updated = at
 }
 
@@ -84,9 +105,18 @@ export function recordStep(
   at: number,
   step: { agentId?: string; model: string; input: number; cacheWrite: number; cacheRead: number; output: number },
 ): void {
-  const who = step.agentId === undefined ? 'main' : (ledger.agents[step.agentId]?.type ?? 'unknown')
-  const day = (ledger.steps[dayOf(at)] ??= {})
-  const tally = (day[`${who}|${step.model}`] ??= { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, steps: 0 })
+  let tally: Tally
+  if (step.agentId === undefined) {
+    tally = ledger.main[step.model] ??= zero()
+  } else {
+    let spawn = ledger.spawns.findLast(item => item.agentId === step.agentId)
+    if (spawn === undefined) {
+      spawn = { ...zero(), agentId: step.agentId, at, last: at, description: '', type: 'unknown', model: step.model, fork: false, background: false }
+      ledger.spawns = [...ledger.spawns, spawn].slice(-SPAWN_CAP)
+    }
+    spawn.last = at
+    tally = spawn
+  }
   tally.input += step.input
   tally.cacheWrite += step.cacheWrite
   tally.cacheRead += step.cacheRead
@@ -95,7 +125,22 @@ export function recordStep(
   ledger.updated = at
 }
 
-// The first day `stats` covers: `days` local days ending today, today included.
+// The local calendar day of a time.
+export function dayOf(ms: number): string {
+  const d = new Date(ms)
+
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// `MM-DD HH:mm` in local time: how a session is named, with its prompt.
+export function stamp(ms: number): string {
+  const d = new Date(ms)
+  const two = (value: number) => String(value).padStart(2, '0')
+
+  return `${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`
+}
+
+// The first day a report covers: `days` local days ending today, today included.
 function firstDay(now: number, days: number): string {
   const d = new Date(now)
   d.setDate(d.getDate() - (days - 1))
@@ -103,136 +148,209 @@ function firstDay(now: number, days: number): string {
   return dayOf(d.getTime())
 }
 
-function tokens(t: Tally): number {
+export function tokens(t: Tally): number {
   return t.input + t.cacheWrite + t.output
 }
 
-const n = (value: number): string => value.toLocaleString('en-US')
+export type SessionRow = { repo: string; started: number; prompt: string; main: number; mainByModel: [string, number][]; cacheRead: number; spawns: Spawn[] }
 
-function share(part: number, whole: number): string {
-  return whole === 0 ? '0%' : `${Math.round((part / whole) * 100)}%`
+export type Report = {
+  days: number
+  from: string
+  to: string
+  main: number
+  sub: number
+  cacheRead: number
+  spawned: { all: number; explicit: number; opus: number; forks: number; defaults: number }
+  // Newest session first.
+  sessions: SessionRow[]
 }
 
 function isLedger(value: unknown): value is Ledger {
-  return typeof value === 'object' && value !== null && typeof (value as Ledger).steps === 'object' && (value as Ledger).steps !== null
+  return typeof value === 'object' && value !== null && Array.isArray((value as Ledger).spawns) && typeof (value as Ledger).main === 'object'
 }
 
-// `/agent-dispatch stats [days]`: the ledgers of every session summed over the window.
-export function renderStats(lang: Lang, stored: unknown[], days: number, now: number): string {
+// Every session written to in the window, with its spawns in the window. A session's main
+// tokens count whole once it is in the window: they are not kept per day.
+export function buildReport(stored: unknown[], days: number, now: number): Report {
   const from = firstDay(now, days)
   const to = dayOf(now)
-  const inWindow = (day: string): boolean => day >= from && day <= to
-  const total = { main: 0, sub: 0, cacheRead: 0 }
-  const byModel = new Map<string, number>()
-  const byAgent = new Map<string, { type: string; model: string; spawns: number; tokens: number }>()
-  const spawned = { all: 0, explicit: 0, opus: 0, forks: 0 }
-  const opus: Ledger['opus'] = []
-  const agentRow = (type: string, model: string) => {
-    const key = `${type}|${model}`
-    let row = byAgent.get(key)
-    if (row === undefined) {
-      row = { type, model, spawns: 0, tokens: 0 }
-      byAgent.set(key, row)
-    }
-
-    return row
-  }
-  let any = false
+  const report: Report = { days, from, to, main: 0, sub: 0, cacheRead: 0, spawned: { all: 0, explicit: 0, opus: 0, forks: 0, defaults: 0 }, sessions: [] }
   for (const ledger of stored.filter(isLedger)) {
-    for (const [day, buckets] of Object.entries(ledger.steps)) {
-      if (!inWindow(day)) {
+    if (dayOf(ledger.updated) < from) {
+      continue
+    }
+    const spawns = ledger.spawns.filter(spawn => dayOf(spawn.last) >= from)
+    const mainByModel = Object.entries(ledger.main).map(([model, tally]) => [model, tokens(tally)] as [string, number])
+    const row: SessionRow = {
+      repo: ledger.repo,
+      started: ledger.started || ledger.updated,
+      prompt: ledger.prompt,
+      main: mainByModel.reduce((sum, [, count]) => sum + count, 0),
+      mainByModel,
+      cacheRead: Object.values(ledger.main).reduce((sum, tally) => sum + tally.cacheRead, 0),
+      spawns,
+    }
+    if (row.main === 0 && spawns.length === 0) {
+      continue
+    }
+    report.sessions.push(row)
+    report.main += row.main
+    report.cacheRead += row.cacheRead
+    for (const spawn of spawns) {
+      report.sub += tokens(spawn)
+      report.cacheRead += spawn.cacheRead
+      if (spawn.type === 'unknown') {
         continue
       }
-      for (const [key, tally] of Object.entries(buckets)) {
-        const [who, model] = key.split('|') as [string, string]
-        any = true
-        total.cacheRead += tally.cacheRead
-        byModel.set(model, (byModel.get(model) ?? 0) + tokens(tally))
-        if (who === 'main') {
-          total.main += tokens(tally)
-        } else {
-          total.sub += tokens(tally)
-          agentRow(who, model).tokens += tokens(tally)
-        }
+      report.spawned.all += 1
+      if (spawn.requested !== undefined) {
+        report.spawned.explicit += 1
+      } else {
+        report.spawned.defaults += 1
+      }
+      if (spawn.fork) {
+        report.spawned.forks += 1
+      } else if (spawn.requested?.toLowerCase().includes('opus')) {
+        report.spawned.opus += 1
       }
     }
-    for (const [day, buckets] of Object.entries(ledger.spawns ?? {})) {
-      if (!inWindow(day)) {
-        continue
-      }
-      for (const [key, count] of Object.entries(buckets)) {
-        const [type, model] = key.split('|') as [string, string]
-        any = true
-        spawned.all += count
-        agentRow(type, model).spawns += count
-      }
-    }
-    for (const [day, c] of Object.entries(ledger.counts ?? {})) {
-      if (inWindow(day)) {
-        spawned.explicit += c.explicit
-        spawned.opus += c.opus
-        spawned.forks += c.forks
-      }
-    }
-    opus.push(...(ledger.opus ?? []).filter(item => inWindow(item.day)))
   }
-  if (!any) {
-    return pick(lang, {
-      en: 'No usage recorded yet (recording starts once the ledger setting is on and agent-dispatch is loaded).',
-      'zh-TW': '還沒有用量紀錄（ledger 設定開啟且載入 agent-dispatch 後才開始記）。',
-    })
+  report.sessions.sort((a, b) => b.started - a.started)
+
+  return report
+}
+
+// Tokens per model over the report: the main session's by the model each step named, a
+// spawn's by the model it resolved to.
+export function byModel(report: Report): [string, number][] {
+  const totals = new Map<string, number>()
+  for (const session of report.sessions) {
+    for (const [model, count] of session.mainByModel) {
+      totals.set(model, (totals.get(model) ?? 0) + count)
+    }
+    for (const spawn of session.spawns) {
+      totals.set(spawn.model, (totals.get(spawn.model) ?? 0) + tokens(spawn))
+    }
   }
-  const all = total.main + total.sub
-  const models = [...byModel].sort((a, b) => b[1] - a[1])
-  const agents = [...byAgent.values()].sort((a, b) => b.tokens - a.tokens || b.spawns - a.spawns)
-  // Newest first: reverse the oldest-first lists, then a stable sort on the day.
-  const latest = opus
-    .reverse()
-    .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
-    .slice(0, 10)
-  const lines: string[] = [
-    pick(lang, {
-      en: `agent-dispatch usage, ${days} day(s): ${from} to ${to}`,
-      'zh-TW': `agent-dispatch 用量，${days} 天：${from} 到 ${to}`,
-    }),
-    '',
+
+  return [...totals].sort((a, b) => b[1] - a[1])
+}
+
+// The report's sessions grouped by repo, the repo of the newest session first.
+export function byRepo(report: Report): [string, SessionRow[]][] {
+  const groups = new Map<string, SessionRow[]>()
+  for (const session of report.sessions) {
+    groups.set(session.repo, [...(groups.get(session.repo) ?? []), session])
+  }
+
+  return [...groups]
+}
+
+export const n = (value: number): string => value.toLocaleString('en-US')
+
+export function share(part: number, whole: number): string {
+  return whole === 0 ? '0%' : `${Math.round((part / whole) * 100)}%`
+}
+
+export function elapsed(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  if (s < 60) {
+    return `${s}s`
+  }
+  const m = Math.floor(s / 60)
+  if (m < 60) {
+    return `${m}m${String(s % 60).padStart(2, '0')}s`
+  }
+
+  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}m`
+}
+
+export function sessionName(lang: Lang, session: SessionRow): string {
+  return `${stamp(session.started)} ${session.prompt || pick(lang, { en: '(no prompt)', 'zh-TW': '（沒有 prompt）' })}`
+}
+
+export function spawnLine(lang: Lang, spawn: Spawn): string {
+  const parts = [
+    spawn.description || pick(lang, { en: '(spawned before the ledger saw it)', 'zh-TW': '（派出時帳本沒看到）' }),
+    spawn.type,
+    `${spawn.requested ?? pick(lang, { en: 'default', 'zh-TW': '預設' })} → ${spawn.model}`,
+    ...(spawn.background ? [pick(lang, { en: 'background', 'zh-TW': '背景' })] : []),
+    pick(lang, { en: `${n(tokens(spawn))} tokens`, 'zh-TW': `${n(tokens(spawn))} token` }),
+    pick(lang, { en: `${spawn.steps} steps`, 'zh-TW': `${spawn.steps} 步` }),
+    elapsed(spawn.last - spawn.at),
+  ]
+
+  return parts.join(' · ')
+}
+
+export function emptyText(lang: Lang): string {
+  return pick(lang, {
+    en: 'No usage recorded yet (recording starts once the ledger setting is on and agent-dispatch is loaded).',
+    'zh-TW': '還沒有用量紀錄（ledger 設定開啟且載入 agent-dispatch 後才開始記）。',
+  })
+}
+
+export function summaryLines(lang: Lang, report: Report): string[] {
+  const all = report.main + report.sub
+  const s = report.spawned
+
+  return [
     pick(lang, {
       en: `Tokens (input + cache write + output): ${n(all)}`,
       'zh-TW': `Token（input + cache write + output）：${n(all)}`,
     }),
-    pick(lang, { en: `  main session  ${n(total.main)}`, 'zh-TW': `  主 session  ${n(total.main)}` }),
+    pick(lang, { en: `  main session  ${n(report.main)}`, 'zh-TW': `  主 session  ${n(report.main)}` }),
     pick(lang, {
-      en: `  subagents     ${n(total.sub)} (${share(total.sub, all)} of all tokens)`,
-      'zh-TW': `  subagent    ${n(total.sub)}（佔全部 ${share(total.sub, all)}）`,
+      en: `  subagents     ${n(report.sub)} (${share(report.sub, all)} of all tokens)`,
+      'zh-TW': `  subagent    ${n(report.sub)}（佔全部 ${share(report.sub, all)}）`,
     }),
-    pick(lang, { en: `Cache read (not counted above): ${n(total.cacheRead)}`, 'zh-TW': `Cache read（不含在上面）：${n(total.cacheRead)}` }),
-    '',
-    pick(lang, { en: 'Tokens per model', 'zh-TW': '各模型 token' }),
-    ...models.map(([model, count]) => `  ${model.padEnd(28)}${n(count)} (${share(count, all)})`),
-    '',
-    pick(lang, { en: 'Agent type x model', 'zh-TW': 'agent 種類 × 模型' }),
-    ...agents.map(
-      row =>
-        `  ${`${row.type} / ${row.model}`.padEnd(44)}` +
-        pick(lang, { en: `${row.spawns} spawn(s)  ${n(row.tokens)} tokens`, 'zh-TW': `${row.spawns} 次  ${n(row.tokens)} token` }),
-    ),
-    '',
+    pick(lang, { en: `Cache read (not counted above): ${n(report.cacheRead)}`, 'zh-TW': `Cache read（不含在上面）：${n(report.cacheRead)}` }),
     pick(lang, {
-      en: `Spawns: ${spawned.all} (explicit model ${spawned.explicit}/${spawned.all}, explicit Opus ${spawned.opus}, forks ${spawned.forks})`,
-      'zh-TW': `派出：${spawned.all} 次（指定模型 ${spawned.explicit}/${spawned.all}，指定 Opus ${spawned.opus}，fork ${spawned.forks}）`,
+      en: `Spawns: ${s.all} (explicit model ${s.explicit}/${s.all}, explicit Opus ${s.opus}, forks ${s.forks}, default model ${share(s.defaults, s.all)})`,
+      'zh-TW': `派出：${s.all} 次（指定模型 ${s.explicit}/${s.all}，指定 Opus ${s.opus}，fork ${s.forks}，沿用預設 ${share(s.defaults, s.all)}）`,
     }),
   ]
-  if (latest.length > 0) {
-    lines.push(pick(lang, { en: 'Latest explicit-Opus spawns:', 'zh-TW': '最近指定 Opus 的派出：' }))
-    lines.push(...latest.map(item => `  ${item.day} ${item.type}: ${item.description}`))
+}
+
+export const NOT_INCLUDED: Record<Lang, string> = {
+  en: "Not included: mods' own model calls ($.model.fork/complete), cloud sessions, and anything before the ledger was installed.",
+  'zh-TW': '不含：各 mod 自己呼叫模型（$.model.fork/complete）的用量、雲端 session，以及安裝帳本之前的紀錄。',
+}
+
+// `/agent-dispatch stats --text [days]`, and what `stats` prints where no pane can be placed.
+export function renderStats(lang: Lang, report: Report): string {
+  if (report.sessions.length === 0) {
+    return emptyText(lang)
   }
-  lines.push(
-    '',
+  const all = report.main + report.sub
+  const lines: string[] = [
     pick(lang, {
-      en: "Not included: mods' own model calls ($.model.fork/complete), cloud sessions, and anything before the ledger was installed.",
-      'zh-TW': '不含：各 mod 自己呼叫模型（$.model.fork/complete）的用量、雲端 session，以及安裝帳本之前的紀錄。',
+      en: `agent-dispatch usage, ${report.days} day(s): ${report.from} to ${report.to}`,
+      'zh-TW': `agent-dispatch 用量，${report.days} 天：${report.from} 到 ${report.to}`,
     }),
-  )
+    '',
+    ...summaryLines(lang, report),
+    '',
+    pick(lang, { en: 'Tokens per model', 'zh-TW': '各模型 token' }),
+    ...byModel(report).map(([model, count]) => `  ${model.padEnd(28)}${n(count)} (${share(count, all)})`),
+    '',
+    pick(lang, { en: 'Sessions', 'zh-TW': '各 session' }),
+  ]
+  for (const [repo, sessions] of byRepo(report)) {
+    lines.push(repo || pick(lang, { en: '(no repo)', 'zh-TW': '（沒有 repo）' }))
+    for (const session of sessions) {
+      lines.push(
+        `  ${sessionName(lang, session)}  ` +
+          pick(lang, {
+            en: `main ${n(session.main)} · ${session.spawns.length} spawn(s)`,
+            'zh-TW': `主 ${n(session.main)} · 派出 ${session.spawns.length} 次`,
+          }),
+      )
+      lines.push(...session.spawns.map(spawn => `    - ${spawnLine(lang, spawn)}`))
+    }
+  }
+  lines.push('', NOT_INCLUDED[lang])
 
   return lines.join('\n')
 }

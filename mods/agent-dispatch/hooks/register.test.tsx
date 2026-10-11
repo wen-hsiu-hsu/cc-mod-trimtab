@@ -1,7 +1,8 @@
 import type { AgentStatus, On } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { elapsed, redispatchPrompt } from './register'
+import { elapsed } from './ledger'
+import { redispatchPrompt } from './register'
 
 describe('helpers', () => {
   test('formats elapsed time', () => {
@@ -27,6 +28,7 @@ function newWorld() {
     now: new Date(2026, 9, 12, 12).getTime(),
     spawnModel: 'claude-sonnet-4-6',
     agentId: 'a1' as string | undefined,
+    repo: null as { root: string; remote: null; internal: false; name: null } | null,
     usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 1000, cache_creation_input_tokens: 10 },
   }
 }
@@ -45,7 +47,7 @@ function engine(on: On, status: { value: AgentStatus }, userFile = '{"*":{"langu
   mock.env(on, {})
   on('session.id', () => ({ value: world.sid }))
   on('session.root', () => ({ value: '/repo' }))
-  on('session.repo', () => ({ value: null }))
+  on('session.repo', () => ({ value: world.repo }))
   on('fs.read', ($, e) => {
     if (e.path === '/.claude/cc-mod-trimtab.json') {
       return { value: userFile }
@@ -120,90 +122,112 @@ test('the wording is English by default', async ($, on) => {
   expect(await after.find({ key: 'redispatch', text: 'Redispatch' })).toBeDefined()
   await after.unmount()
   const run = (args: string) => $.command.run({ command: 'agent-dispatch', args } as never)
-  expect((await run('')).text).toBe('Usage: /agent-dispatch redispatch, /agent-dispatch stats [days], /agent-dispatch status')
+  expect((await run('')).text).toBe('Usage: /agent-dispatch redispatch, /agent-dispatch stats [--text] [days], /agent-dispatch status')
 })
 
 describe('usage ledger', () => {
   const DAY = 86_400_000
-  const TODAY = '2026-10-12'
   type World = ReturnType<typeof newWorld>
+  type T = Parameters<Parameters<typeof test>[1]>[0]
 
-  async function spawn($: Parameters<Parameters<typeof test>[1]>[0], world: World, args: Record<string, unknown>, agentId: string): Promise<void> {
+  async function spawn($: T, world: World, args: Record<string, unknown>, agentId: string): Promise<void> {
     world.agentId = agentId
     world.spawnModel = typeof args.model === 'string' ? `claude-${args.model}-4` : 'claude-sonnet-4-6'
-    await $.agent.spawn({ prompt: 'p', description: 'd', subagentType: 'general-purpose', ...args } as never)
+    await $.agent.spawn({ prompt: 'p', description: 'd', subagentType: 'general-purpose', background: false, fork: false, ...args } as never)
   }
 
-  async function step($: Parameters<Parameters<typeof test>[1]>[0], model: string, agentId?: string): Promise<void> {
+  async function step($: T, model: string, agentId?: string): Promise<void> {
     for await (const _ of $.turn.step({ turnId: 't1', index: 0, model, messageCount: 1, ...(agentId ? { agentId } : {}) })) {
       // drain the stream
     }
   }
 
-  type Stored = { updated: number; steps: Record<string, Record<string, Record<string, number>>>; spawns: Record<string, Record<string, number>>; counts: Record<string, Record<string, number>>; opus: { day: string; type: string; description: string }[]; agents: Record<string, { type: string; model: string }> }
-  const read = (world: World, id: string) => world.store[`ledger:${id}`] as Stored
+  const start = ($: T) => $.session.start({ cwd: '/repo/wt', surface: 'terminal', isInteractive: true })
+  const stats = async ($: T, args = 'stats --text') => (await $.command.run({ command: 'agent-dispatch', args } as never)).text as string
+  const line = (text: string, has: string) => text.split('\n').find(row => row.includes(has)) ?? ''
 
-  test('attributes steps to the main thread, a spawned type and unknown agents', async ($, on) => {
+  test('stats --text lists each spawn under its session and repo', async ($, on) => {
     const world = newWorld()
-    engine(on, { value: 'running' }, '', world)
-    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+    const clock = engine(on, { value: 'running' }, '', world)
+    world.repo = { root: '/repo', remote: null, internal: false, name: null }
+    on('prompt.submit', ($, e) => ({ text: e.text }))
+    await start($)
+    await $.prompt.submit({ text: 'review the diff and fix the flaky ledger test please', origin: { kind: 'composer' } } as never)
+    await $.prompt.submit({ text: 'a later prompt', origin: { kind: 'composer' } } as never)
     await step($, 'claude-opus-4')
-    await spawn($, world, { subagentType: 'Explore' }, 'x1')
+    await spawn($, world, { description: 'deep review', model: 'opus', background: true }, 'a1')
+    await clock.advance(5_000)
+    await step($, 'claude-opus-4', 'a1')
+    await clock.advance(60_000)
+    await step($, 'claude-opus-4', 'a1')
+    await spawn($, world, { description: 'find usages', subagentType: 'Explore' }, 'x1')
     await step($, 'claude-sonnet-4-6', 'x1')
     await step($, 'claude-sonnet-4-6', 'never-seen')
 
-    const ledger = read(world, 's1')
-    expect(ledger.updated).toBe(world.now)
-    expect(ledger.steps[TODAY]['main|claude-opus-4']).toEqual({ input: 100, cacheWrite: 10, cacheRead: 1000, output: 50, steps: 1 })
-    expect(ledger.steps[TODAY]['Explore|claude-sonnet-4-6']?.steps).toBe(1)
-    expect(ledger.steps[TODAY]['unknown|claude-sonnet-4-6']?.steps).toBe(1)
-    expect(ledger.spawns[TODAY]['Explore|claude-sonnet-4-6']).toBe(1)
-    expect(ledger.agents.x1).toEqual({ type: 'Explore', model: 'claude-sonnet-4-6' })
+    const text = await stats($)
+    expect(text).toContain('/repo')
+    expect(text).not.toContain('/repo/wt')
+    expect(text).toContain('10-12 12:00 review the diff and fix the flaky ledger…')
+    expect(text).not.toContain('a later prompt')
+    const deep = line(text, 'deep review')
+    expect(deep).toContain('general-purpose')
+    expect(deep).toContain('opus → claude-opus-4')
+    expect(deep).toContain('background')
+    expect(deep).toContain('320 tokens')
+    expect(deep).toContain('2 steps')
+    expect(deep).toContain('1m05s')
+    expect(line(text, 'find usages')).toContain('Explore')
+    expect(line(text, 'find usages')).toContain('default → claude-sonnet-4-6')
+    expect(text).toContain('unknown')
   })
 
-  test('counts explicit models, explicit Opus and forks', async ($, on) => {
+  test('stats --text counts explicit models, explicit Opus, forks and defaults', async ($, on) => {
     const world = newWorld()
     engine(on, { value: 'running' }, '', world)
-    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+    await start($)
     await spawn($, world, { description: 'deep review', model: 'opus' }, 'a1')
     await spawn($, world, { description: 'quick', model: 'haiku' }, 'a2')
     await spawn($, world, { description: 'default' }, 'a3')
-    await spawn($, world, { subagentType: 'fork', description: 'forked' }, 'a4')
+    await spawn($, world, { subagentType: 'fork', description: 'forked', fork: true }, 'a4')
     await step($, 'claude-sonnet-4-6', 'a4')
 
-    const ledger = read(world, 's1')
-    expect(ledger.counts[TODAY]).toEqual({ explicit: 2, opus: 1, forks: 1 })
-    expect(ledger.opus).toEqual([{ day: TODAY, type: 'general-purpose', description: 'deep review' }])
-    expect(ledger.steps[TODAY]['fork|claude-sonnet-4-6']?.steps).toBe(1)
+    const text = await stats($)
+    expect(text).toContain('Spawns: 4 (explicit model 2/4, explicit Opus 1, forks 1, default model 50%)')
+    expect(line(text, 'forked')).toContain('fork')
+    expect(line(text, 'forked')).toContain('160 tokens')
   })
 
-  test('two sessions keep their own keys', async ($, on) => {
+  test('two sessions and parallel steps each keep every step', async ($, on) => {
     const world = newWorld()
     engine(on, { value: 'running' }, '', world)
-    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-    await step($, 'claude-opus-4')
+    await start($)
+    await Promise.all([step($, 'claude-opus-4'), step($, 'claude-opus-4'), step($, 'claude-opus-4')])
     world.sid = 's2'
     await step($, 'claude-opus-4')
-    await step($, 'claude-opus-4')
 
-    expect(read(world, 's1').steps[TODAY]['main|claude-opus-4']?.steps).toBe(1)
-    expect(read(world, 's2').steps[TODAY]['main|claude-opus-4']?.steps).toBe(2)
+    const text = await stats($)
+    expect(text).toContain('main session  640')
+    expect(line(text, 'claude-opus-4')).toContain('640')
   })
 
-  test('parallel subagent steps do not lose updates', async ($, on) => {
+  test('keeps at most 500 spawns per session, newest kept', async ($, on) => {
     const world = newWorld()
     engine(on, { value: 'running' }, '', world)
-    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-    await Promise.all([step($, 'claude-opus-4'), step($, 'claude-opus-4'), step($, 'claude-opus-4')])
-
-    expect(read(world, 's1').steps[TODAY]['main|claude-opus-4']?.steps).toBe(3)
+    await start($)
+    for (let i = 0; i < 502; i++) {
+      await spawn($, world, { description: `task ${i}` }, `a${i}`)
+    }
+    const spawns = (world.store['ledger:s1'] as { spawns: { description: string }[] }).spawns
+    expect(spawns.length).toBe(500)
+    expect(spawns[0]?.description).toBe('task 2')
+    expect(spawns[499]?.description).toBe('task 501')
   })
 
   test('prunes ledgers older than 90 days at session start', async ($, on) => {
     const world = newWorld()
     world.store = { 'ledger:old': { updated: world.now - 91 * DAY }, 'ledger:recent': { updated: world.now - 89 * DAY }, other: { updated: 0 } }
     engine(on, { value: 'running' }, '', world)
-    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+    await start($)
 
     expect(world.store['ledger:old']).toBeUndefined()
     expect(world.store['ledger:recent']).toBeDefined()
@@ -213,7 +237,7 @@ describe('usage ledger', () => {
   test('records nothing when ledger is false', async ($, on) => {
     const world = newWorld()
     engine(on, { value: 'running' }, '', world)
-    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+    await start($)
     await $.command.run({ command: 'agent-dispatch', args: 'set ledger false' } as never)
     await step($, 'claude-opus-4')
     await spawn($, world, { model: 'opus' }, 'a1')
@@ -221,51 +245,44 @@ describe('usage ledger', () => {
     expect(world.store['ledger:s1']).toBeUndefined()
   })
 
-  test('/agent-dispatch stats sums every session in the window', async ($, on) => {
+  test('stats --text sums every session in the window', async ($, on) => {
     const world = newWorld()
+    const tally = { input: 1000, cacheWrite: 0, cacheRead: 0, output: 0, steps: 1 }
     // Seven days ago: inside 30 days, outside 3.
+    const then = new Date(2026, 9, 5, 9).getTime()
     world.store = {
       'ledger:s3': {
-        updated: new Date(2026, 9, 5).getTime(),
-        steps: { '2026-10-05': { 'main|claude-haiku-4-5': { input: 1000, cacheWrite: 0, cacheRead: 0, output: 0, steps: 1 } } },
-        spawns: {},
-        counts: {},
-        opus: [],
-        agents: {},
+        updated: then,
+        repo: '/old',
+        started: then,
+        prompt: 'last week',
+        main: { 'claude-haiku-4-5': tally },
+        spawns: [{ at: then, last: then, description: 'old task', type: 'Explore', model: 'claude-haiku-4-5', fork: false, background: false, ...tally }],
       },
     }
     engine(on, { value: 'running' }, '', world)
-    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+    await start($)
     await step($, 'claude-opus-4')
     await spawn($, world, { model: 'opus', description: 'deep review' }, 'a1')
     await step($, 'claude-opus-4', 'a1')
-    await step($, 'claude-opus-4', 'a1')
-    world.sid = 's2'
-    await spawn($, world, { subagentType: 'fork' }, 'f1')
-    await step($, 'claude-sonnet-4-6', 'f1')
 
-    const run = (args: string) => $.command.run({ command: 'agent-dispatch', args } as never)
-    const text = (await run('stats')).text as string
-    // 4 steps of 160 tokens plus 1000 of haiku; subagents are 3 of the 160-token steps
-    expect(text).toContain('1,640')
-    expect(text).toContain('claude-haiku-4-5')
-    expect(text).toContain('general-purpose')
-    expect(text).toContain('explicit model 1/2')
-    expect(text).toContain('explicit Opus 1')
-    expect(text).toContain('forks 1')
-    expect(text).toContain('deep review')
+    const text = await stats($)
+    // 2 steps of 160 tokens plus 2000 of haiku
+    expect(text).toContain('2,320')
+    expect(text).toContain('old task')
+    expect(text).toContain('/old')
 
-    const short = (await run('stats 3')).text as string
-    expect(short).not.toContain('claude-haiku-4-5')
-    expect(short).toContain('480')
-    expect(short).toContain('75%')
-    expect((await run('stats 0')).text).toMatch(/1.*90/)
-    expect((await run('stats abc')).text).toMatch(/1.*90/)
+    const short = await stats($, 'stats --text 3')
+    expect(short).not.toContain('old task')
+    expect(short).toContain('320')
+    expect(short).toContain('50%')
+    expect(await stats($, 'stats --text 0')).toMatch(/1.*90/)
+    expect(await stats($, 'stats --text abc')).toMatch(/1.*90/)
   })
 
-  test('stats says so when the ledger is empty, in the set language', async ($, on) => {
+  test('stats --text says so when the ledger is empty, in the set language', async ($, on) => {
     engine(on, { value: 'running' })
-    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-    expect((await $.command.run({ command: 'agent-dispatch', args: 'stats' } as never)).text).toMatch(/^還沒有用量紀錄/)
+    await start($)
+    expect(await stats($)).toMatch(/^還沒有用量紀錄/)
   })
 })
