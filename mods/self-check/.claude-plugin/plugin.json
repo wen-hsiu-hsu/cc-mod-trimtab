@@ -1,6 +1,6 @@
 {
   "name": "self-check",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Guard-rail reminders for Claude: when the same tool fails twice in a row for the same reason it is asked to find the cause first; when it says done after editing code without verifying, the stop is blocked once",
   "author": {
     "name": "wen-hsiu hsu"

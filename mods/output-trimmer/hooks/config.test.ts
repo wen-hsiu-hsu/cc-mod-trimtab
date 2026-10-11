@@ -164,12 +164,16 @@ test('the trimmed note follows the language', () => {
 
 // ---------- through the engine ----------
 
-function world(on: On) {
+// A test that moves time mocks the clock itself and says so with `ownClock`.
+function world(on: On, session = { id: 's1' }, ownClock = false) {
   const files = new Map<string, string>([['/home/.claude/cc-mod-trimtab.json', ZH_FILE]])
+  if (!ownClock) {
+    mock.clock(on)
+  }
   mock.store(on)
   mock.env(on, { HOME: '/home' })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('session.id', () => ({ value: 's1' }))
+  on('session.id', () => ({ value: session.id }))
   on('session.root', () => ({ value: '/repo' }))
   on('session.repo', () => ({ value: { root: '/repo', remote: null, internal: false, name: null } }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
@@ -213,6 +217,40 @@ test('/output-trimmer set writes the chosen layer and status shows it', async ($
   expect((await $.command.run(run('set constructor 1'))).text).toMatch(/沒有 constructor 這個設定/)
   expect((await $.command.run(run(''))).text).toMatch(/^用法/)
   expect(Object.keys(SPECS)).toEqual(['max_lines', 'max_chars', 'language'])
+})
+
+test('each session keeps its own session values', async ($, on) => {
+  const session = { id: 'a' }
+  world(on, session)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+
+  await $.command.run(run('set max_lines 250'))
+  session.id = 'b'
+  await $.command.run(run('set max_lines 300'))
+  session.id = 'a'
+  expect((await $.command.run(run('status'))).text).toMatch(/max_lines = 250 {2}\[session\]/)
+  session.id = 'b'
+  expect((await $.command.run(run('status'))).text).toMatch(/max_lines = 300 {2}\[session\]/)
+})
+
+test('session values untouched for a week are dropped when another session writes', async ($, on) => {
+  const session = { id: 'a' }
+  const clock = mock.clock(on)
+  world(on, session, true)
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+
+  await $.command.run(run('set max_lines 250'))
+  await clock.advance(6 * 86_400_000)
+  session.id = 'b'
+  await $.command.run(run('set max_lines 300'))
+  session.id = 'a'
+  expect((await $.command.run(run('status'))).text).toMatch(/max_lines = 250 {2}\[session\]/)
+
+  await clock.advance(8 * 86_400_000)
+  session.id = 'c'
+  await $.command.run(run('set max_lines 400'))
+  session.id = 'a'
+  expect((await $.command.run(run('status'))).text).toMatch(/max_lines = 150 {2}\[預設\]/)
 })
 
 test('a broken settings file is reported and skipped', async ($, on) => {

@@ -218,6 +218,7 @@ test('a Stop hook beneath that keeps the turn going is passed on, and the record
 // A session whose user settings file says `userFile`; the suite asserts zh-TW wording, so that is the default.
 async function begin($: Engine, on: On, userFile = '{"*":{"language":"zh-TW"}}') {
   mock.store(on)
+  mock.clock(on)
   mock.env(on, {})
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('session.id', () => ({ value: 's1' }))

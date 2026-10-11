@@ -29,7 +29,6 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 
 ## 已知問題
 
-- **session 層的值會被同一個 mod 的其他 session 蓋掉**（2026-10-11 讀程式發現，未實測）：`/<mod> set --session` 與 `/<mod> on` 的值存在 `$.store` 的單一 key（`config-session`），只記一個 sessionId；`$.store` 是 plugin 自己的一個 JSON 檔，所有 session 共用。A 開了 `/session-keeper on keep_warm`，B 之後對同一個 mod `set`／`on`／`off`，就把 A 的值換成 B 的；A 下次重讀設定（`status`、到期計時器、下個指令）時臨時開啟就不見了，但灰字提示列要等重讀才消失。修法方向：改成以 sessionId 為 key 存，過期的清掉。
 - 安裝時 CLI 提示「userConfig options not yet set」：沒設定的值用預設，不影響使用，README 沒寫。
 
 ## 待實測
@@ -41,12 +40,11 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 
 依實作順序。
 
-- [ ] **1. 修 session 層互蓋**（見「已知問題」）。改 `config.ts`，8 份複本一起改。
-- [ ] **2. 費用回報**（見下節）。
-- [ ] **3. `tool-guard`：加入 cmd-rewrite、學來的守門**。
+- [ ] **1. 費用回報**（見下節）。
+- [ ] **2. `tool-guard`：加入 cmd-rewrite、學來的守門**。
   - cmd-rewrite：CLAUDE.md 寫的指令規則常沒被遵守（例如 repo 已有 `npm run test:brief`，Claude 仍直接打 `npx vitest`）。`tool.call`（Bash）執行前依 repo 層設定的規則（`{ "match": "^npx vitest run", "replace": "npm run test:brief --" }`）改寫指令，改寫時提示一次。進版控的規則第一次生效前要使用者核准（見「設計原則」）。
   - 學來的守門：`/tool-guard suggest` 讀 memory 中出現 3 次以上的規則，由模型草擬工具呼叫前的比對式（擋下或只提醒），使用者核准才生效。上游：`guards.ts`。
-- [ ] **4. `agent-dispatch`：加入用量帳本與分派提醒**。2026-10-09 決定。
+- [ ] **3. `agent-dispatch`：加入用量帳本與分派提醒**。2026-10-09 決定。
   - 用量帳本：`agent.spawn` 記下 agentId 對應的 agent 種類、呼叫有沒有指定 model、description，以及 `next(e)` 回傳的實際模型（被其他 mod 改過的也記得到）；`turn.step` 依 `agentId` 把每步 usage 歸到主 session 或該 agent。依「日期 × 主 session／subagent × agent 種類 × 模型」累計 input、cache write、cache read、output、步數與派出次數，存 `$.store`（跨 repo 共用一份），保留 90 天。
   - 報表：`/agent-dispatch stats [天數]` 列出 subagent 佔總用量的比例、各模型用量、agent 種類 × 模型、指定 opus 與 fork 的次數，以及指定 opus 的 description 清單。
   - 分派提醒（只提醒，不擋也不改模型）：subagent 跑在 Opus 但 description 看不出理由、或同一個 session fork 次數偏多時跳 toast，並記進帳本。「看不出理由」的判斷與 fork 門檻實作時再定，先只記錄不提醒，看一段時間的誤判再開。
@@ -190,7 +188,7 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 2. usage：只有 `$.model.fork` 回傳；`complete`、`classify` 沒有（依 GitHub 上的 `mods/types/claude-code.d.ts`，可能比安裝版本舊，需在本機型別檔再確認）。→ 見「費用回報」。
 3. `cc-mod-trimtab` 重名：網路搜尋沒找到同名的 Claude Code、MCP 或 agent 專案；未做 GitHub 全站搜尋。
 4. 2026-10-06 已在 CLI 實測 output-trimmer 的結果改寫、agent-dispatch（原 agent-watch）的中斷偵測、tool-guard（原 shell-guard）的攔截與放行、secret-scrub 的遮蔽、open-items 的自動延後與 compact 行為。
-5. `$.store` 是 plugin 自己的一個 JSON 檔，放在使用者的 Claude Code 設定目錄，跨 session 與熱重載保留（2.1.296 型別檔）。所有 session 共用同一份，見「已知問題」。
+5. `$.store` 是 plugin 自己的一個 JSON 檔，放在使用者的 Claude Code 設定目錄，跨 session 與熱重載保留（2.1.296 型別檔）。所有 session 共用同一份，所以 session 層的值（`set --session`、`on`）以 sessionId 為 key 存，一週沒寫入的 session 在其他 session 寫入時清掉（0.1.1 起；2026-10-11 實測兩個 session 會互蓋）。
 6. 從 GitHub 安裝的 plugin 會複製到 `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`，plugin 資料夾外的檔案不會複製（[plugins/loading](https://code.claude.com/docs/en/plugins/loading)）；第三方 marketplace 預設不自動更新。2026-10-11 在隔離的 `CLAUDE_CONFIG_DIR` 從 GitHub 安裝 8 個 mod，`enabledPlugins` 順序照安裝順序，快取副本的測試通過。
 7. 2026-10-11 實測：`/reload-plugins` 後 `/<mod> status` 立刻讀到 `~/.claude/cc-mod-trimtab.json`（symlink 也讀得到）的 `"*".language`。
 8. 2026-10-11 實測 `--resume`：sessionId 不變，`session.start` 重讀設定，臨時開啟的灰字提示列與值都接得上（open-items o3）。

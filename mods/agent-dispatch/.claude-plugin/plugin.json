@@ -1,6 +1,6 @@
 {
   "name": "agent-dispatch",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shows the background agents that are running above the prompt box, and re-dispatches the ones that were interrupted in one press",
   "author": {
     "name": "wen-hsiu hsu"

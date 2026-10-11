@@ -3,6 +3,27 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [0.1.1] - 2026-10-11
+
+| Mod | Version |
+| --- | --- |
+| `agent-dispatch` | 0.1.1 |
+| `open-items` | 0.3.1 |
+| `output-trimmer` | 0.1.1 |
+| `project-memory` | 0.1.1 |
+| `secret-scrub` | 0.2.1 |
+| `self-check` | 0.1.1 |
+| `session-keeper` | 0.3.1 |
+| `tool-guard` | 0.2.1 |
+
+- Fixed: session values (`/<mod> set --session`, `/<mod> on`, `/<mod> off`)
+  set in one session were overwritten when another session changed a session
+  value of the same mod. They are now stored per session id; a session's values
+  are dropped once nothing wrote them for a week. Session values set before the
+  update are not carried over.
+- Fixed: the first-use notice could show again in a session after another
+  session of the same mod showed its own.
+
 ## [0.1.0] - 2026-10-11
 
 First public release.

@@ -1,6 +1,6 @@
 {
   "name": "output-trimmer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "When a Bash command prints too much, the model gets only the head, the tail and the error lines; the full output is saved to a file",
   "author": {
     "name": "wen-hsiu hsu"

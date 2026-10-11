@@ -1,6 +1,6 @@
 {
   "name": "secret-scrub",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Masks tokens, API keys and other secrets before a prompt is sent, so they stay out of the transcript and the prompt cache",
   "author": {
     "name": "wen-hsiu hsu"

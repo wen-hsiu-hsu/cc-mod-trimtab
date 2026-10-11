@@ -100,13 +100,16 @@ export type Layers = {
 export const REPO_FILE = '.claude/cc-mod-trimtab.json'
 export const LOCAL_FILE = '.claude/cc-mod-trimtab.local.json'
 const USER_FILE = 'cc-mod-trimtab.json'
-const SESSION_KEY = 'config-session'
-const NOTICED_KEY = 'config-noticed'
+// Both keyed by session id: `$.store` is one file every session of the mod shares.
+const SESSION_KEY = 'config-sessions'
+const NOTICED_KEY = 'config-noticed-sessions'
 // The settings files' section for what every mod shares.
 const SHARED = '*'
 
 const DEFAULT_ON_MS = 2 * 3_600_000
 const MAX_ON_MS = 24 * 3_600_000
+// A session's entries are dropped once nothing wrote them for this long.
+const KEEP_SESSION_MS = 7 * 86_400_000
 
 const LAYER_NAMES: Readonly<Record<Layer, Text>> = {
   default: { en: 'default', 'zh-TW': '預設' },
@@ -505,12 +508,33 @@ function readSection(text: string, path: string, mod: string, layer: Layer, brok
   }
 }
 
-type SessionStore = { sessionId: string; values: Raw; until?: Readonly<Record<string, number>> }
+type SessionEntry = { values: Raw; until?: Readonly<Record<string, number>> }
+type Sessions<T> = Readonly<Record<string, T & { written: number }>>
+
+// Every session's entry under `key`, with `id`'s replaced by `entry` and those not written for a
+// week dropped.
+async function writeSessions<T>(io: ConfigIO, key: string, id: string, entry: T): Promise<void> {
+  const now = await io.now()
+  const kept: Record<string, T & { written: number }> = {}
+  for (const [other, stored] of Object.entries(((await io.storeGet(key)) ?? {}) as Sessions<T>)) {
+    if (other !== id && now - stored.written < KEEP_SESSION_MS) {
+      kept[other] = stored
+    }
+  }
+  kept[id] = { ...entry, written: now }
+  await io.storeSet(key, kept)
+}
+
+async function sessionEntry<T>(io: ConfigIO, key: string, id: string): Promise<T | undefined> {
+  const stored = (await io.storeGet(key)) as Sessions<T> | undefined
+
+  return stored !== undefined && Object.hasOwn(stored, id) ? stored[id] : undefined
+}
 
 // This session's values; those `/<mod> on` set left out once they ran out.
 async function sessionValues(io: ConfigIO): Promise<{ values: Raw; until: Record<string, number> }> {
-  const stored = (await io.storeGet(SESSION_KEY)) as SessionStore | undefined
-  if (stored === undefined || stored.sessionId !== (await io.sessionId())) {
+  const stored = await sessionEntry<SessionEntry>(io, SESSION_KEY, await io.sessionId())
+  if (stored === undefined) {
     return { values: {}, until: {} }
   }
   const timed = Object.entries(stored.until ?? {})
@@ -541,18 +565,17 @@ async function writeSession(io: ConfigIO, key: string, value: Value | undefined,
   if (value !== undefined && until !== undefined) {
     times[key] = until
   }
-  await io.storeSet(SESSION_KEY, { sessionId: await io.sessionId(), values, until: times })
+  await writeSessions(io, SESSION_KEY, await io.sessionId(), { values, until: times })
 }
 
 // True the first time a feature does its work in this session, for the one notice it gets.
 export async function firstUse(io: ConfigIO, key: string): Promise<boolean> {
   const sessionId = await io.sessionId()
-  const stored = (await io.storeGet(NOTICED_KEY)) as { sessionId: string; keys: string[] } | undefined
-  const keys = stored !== undefined && stored.sessionId === sessionId ? stored.keys : []
+  const keys = (await sessionEntry<{ keys: string[] }>(io, NOTICED_KEY, sessionId))?.keys ?? []
   if (keys.includes(key)) {
     return false
   }
-  await io.storeSet(NOTICED_KEY, { sessionId, keys: [...keys, key] })
+  await writeSessions(io, NOTICED_KEY, sessionId, { keys: [...keys, key] })
 
   return true
 }

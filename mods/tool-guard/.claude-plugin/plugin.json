@@ -1,6 +1,6 @@
 {
   "name": "tool-guard",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Holds commands that lose work (git, rm, migrations), previews what they would change and lets you decide; checks commit subject format and removes the Claude trailer",
   "author": {
     "name": "wen-hsiu hsu"
