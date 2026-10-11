@@ -200,7 +200,7 @@ describe('usage ledger', () => {
     await step($, 'claude-sonnet-4-6', 'a4')
 
     const text = await stats($)
-    expect(text).toContain('Spawns: 4 (explicit model 2/4, explicit Opus 1, forks 1, default model 50%)')
+    expect(text).toContain('Spawns: 4 (named a model 2, Opus among them 1; default model 1; fork 1)')
     expect(line(text, 'forked')).toContain('fork')
     expect(line(text, 'forked')).toContain('160 tokens')
   })
@@ -436,11 +436,40 @@ describe('usage ledger', () => {
     expect(world.opened).toEqual([])
   })
 
+  test('the overview has a token card and a spawns card whose three kinds add up', async ($, on) => {
+    const world = newWorld()
+    engine(on, { value: 'running' }, '', world)
+    await start($)
+    await step($, 'claude-sonnet-4-6')
+    await spawn($, world, { description: 'deep review', model: 'opus' }, 'a1')
+    await spawn($, world, { description: 'quick', model: 'haiku' }, 'a2')
+    await spawn($, world, { description: 'default' }, 'a3')
+    await spawn($, world, { subagentType: 'fork', description: 'forked', fork: true }, 'a4')
+    await step($, 'claude-sonnet-4-6', 'a4')
+    await stats($, 'stats')
+
+    for (const bodyColumns of [52, 110]) {
+      const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' } as never)
+      const text = async (key: string) => (await pane.find({ key }))?.text ?? ''
+      expect(await text('card:tokens')).toContain('320')
+      expect(await text('card:tokens')).toContain('by subagents 50%')
+      expect(await text('share:main')).toMatch(/main session.*160$/)
+      expect(await text('share:sub')).toMatch(/subagent.*160$/)
+      expect(await text('card:spawns')).toContain('where the model came from')
+      expect(await text('spawned:named')).toMatch(/named a model \(Opus: 1\).*2$/)
+      expect(await text('spawned:default')).toMatch(/default model.*1$/)
+      expect(await text('spawned:fork')).toMatch(/fork \(main session's model\).*1$/)
+      expect(await text('cache-read')).toContain('Plus 2,000 tokens read from cache')
+      await pane.unmount()
+    }
+  })
+
   test('the desktop pane draws its bars as Svg', async ($, on) => {
     await twoWeeks($, on, 'desktop')
     await stats($, 'stats')
     const pane = await $.ui.mount({ ...PANE, surface: 'desktop' } as never)
-    expect(await pane.findAll({ type: 'Svg' })).toHaveLength(2)
+    // The two cards' bars and the two rows'.
+    expect(await pane.findAll({ type: 'Svg' })).toHaveLength(4)
     expect(await pane.find({ type: 'Text', text: /█/ })).toBeUndefined()
     await pane.unmount()
   })

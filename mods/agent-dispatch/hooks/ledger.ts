@@ -222,16 +222,18 @@ export function buildReport(stored: unknown[], days: number, now: number): Repor
       if (spawn.type === 'unknown') {
         continue
       }
+      // Three kinds that never overlap: a fork runs on the main session's model, so it named
+      // none and took no default.
       report.spawned.all += 1
-      if (spawn.requested !== undefined) {
-        report.spawned.explicit += 1
-      } else {
-        report.spawned.defaults += 1
-      }
       if (spawn.fork) {
         report.spawned.forks += 1
-      } else if (spawn.requested?.toLowerCase().includes('opus')) {
-        report.spawned.opus += 1
+      } else if (spawn.requested !== undefined) {
+        report.spawned.explicit += 1
+        if (spawn.requested.toLowerCase().includes('opus')) {
+          report.spawned.opus += 1
+        }
+      } else {
+        report.spawned.defaults += 1
       }
     }
   }
@@ -385,8 +387,8 @@ export function summaryLines(lang: Lang, report: Report): string[] {
     }),
     pick(lang, { en: `Cache read (not counted above): ${n(report.cacheRead)}`, 'zh-TW': `Cache read（不含在上面）：${n(report.cacheRead)}` }),
     pick(lang, {
-      en: `Spawns: ${s.all} (explicit model ${s.explicit}/${s.all}, explicit Opus ${s.opus}, forks ${s.forks}, default model ${share(s.defaults, s.all)})`,
-      'zh-TW': `派出：${s.all} 次（指定模型 ${s.explicit}/${s.all}，指定 Opus ${s.opus}，fork ${s.forks}，沿用預設 ${share(s.defaults, s.all)}）`,
+      en: `Spawns: ${s.all} (named a model ${s.explicit}, Opus among them ${s.opus}; default model ${s.defaults}; fork ${s.forks})`,
+      'zh-TW': `派出：${s.all} 次（指定模型 ${s.explicit}，其中 Opus ${s.opus}；沿用預設 ${s.defaults}；fork ${s.forks}）`,
     }),
   ]
 }

@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderNode } from 'claude-code'
 
 import type { WatchedAgent } from '../types'
 import { configCommand, LANGUAGE, loadConfig, pick, type ConfigIO, type Lang, type Specs } from './config'
@@ -221,6 +221,45 @@ function svgBar(cells: number, width: number): string {
   const unit = 8
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width * unit}" height="10"><rect width="${cells * unit}" height="10" rx="2" fill="#2f6fb5"/></svg>`
+}
+
+// One colored part of a card's bar and its legend line: `ink` on the terminal, `fill` on desktop.
+type Part = { key: string; label: string; note?: string; value: number; ink: string; fill: string }
+
+// main session purple, subagent cyan, named model yellow, default model gray, fork green.
+const COLORS = {
+  main: { ink: 'magenta', fill: '#8a5cc7' },
+  sub: { ink: 'cyan', fill: '#2f8fb0' },
+  named: { ink: 'yellow', fill: '#c98a12' },
+  default: { ink: 'gray', fill: '#8b8b93' },
+  fork: { ink: 'green', fill: '#3f9a4f' },
+} as const
+
+// `width` cells shared out by `values`, each part with any value at least one cell.
+function splitCells(values: number[], width: number): number[] {
+  const total = values.reduce((sum, value) => sum + value, 0)
+  if (total === 0) {
+    return values.map(() => 0)
+  }
+  const cells = values.map(value => (value > 0 ? Math.max(1, Math.round((value / total) * width)) : 0))
+  // Rounding can miss the width by a cell or two: the largest part takes the difference.
+  const largest = cells.indexOf(Math.max(...cells))
+  cells[largest] = (cells[largest] ?? 0) + width - cells.reduce((sum, cell) => sum + cell, 0)
+
+  return cells
+}
+
+function svgStack(parts: { cells: number; fill: string }[]): string {
+  const unit = 8
+  let x = 0
+  const rects = parts.map(part => {
+    const rect = part.cells === 0 ? '' : `<rect x="${x * unit}" width="${part.cells * unit}" height="8" fill="${part.fill}"/>`
+    x += part.cells
+
+    return rect
+  })
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${x * unit}" height="8">${rects.join('')}</svg>`
 }
 
 function clamp(value: number, low: number, high: number): number {
@@ -510,12 +549,64 @@ export const register: Register = (on, options) => {
       )
     }
 
-    const kpis = [
-      { label: pick(lang, { en: 'Tokens', 'zh-TW': '總 token' }), value: n(all) },
-      { label: pick(lang, { en: 'Subagents', 'zh-TW': 'subagent' }), value: share(report.sub, all) },
-      { label: pick(lang, { en: 'Spawns', 'zh-TW': '派出' }), value: String(report.spawned.all) },
-    ]
     const s = report.spawned
+    // Two cards, each a total over a bar of what it is made of: stacked in a dock, side by side
+    // from WIDE_COLUMNS. A card's border and padding take four of its columns.
+    const cardWidth = wide ? Math.floor((body - 2) / 2) : body
+    const tokenParts: Part[] = [
+      { key: 'main', label: pick(lang, { en: 'main session', 'zh-TW': '主 session' }), value: report.main, ...COLORS.main },
+      { key: 'sub', label: 'subagent', value: report.sub, ...COLORS.sub },
+    ]
+    const kindParts: Part[] = [
+      {
+        key: 'named',
+        label: pick(lang, { en: 'named a model', 'zh-TW': '指定模型' }),
+        note: pick(lang, { en: ` (Opus: ${s.opus})`, 'zh-TW': `（Opus ${s.opus}）` }),
+        value: s.explicit,
+        ...COLORS.named,
+      },
+      { key: 'default', label: pick(lang, { en: 'default model', 'zh-TW': '沿用預設' }), value: s.defaults, ...COLORS.default },
+      {
+        key: 'fork',
+        label: 'fork',
+        note: pick(lang, { en: " (main session's model)", 'zh-TW': '（用主 session 的模型）' }),
+        value: s.forks,
+        ...COLORS.fork,
+      },
+    ]
+    const card = (key: string, title: string, aside: RenderNode, total: string, parts: Part[], legendKey: string) => (
+      <Box key={`card:${key}`} flexDirection="column" width={cardWidth} flexShrink={0} borderStyle="round" borderDimColor paddingX={1}>
+        <Box flexDirection="row" justifyContent="space-between" gap={1}>
+          <Text dimColor>{title}</Text>
+          {aside}
+        </Box>
+        <Text bold>{total}</Text>
+        {stack(parts, cardWidth - 4)}
+        {parts.map(part => (
+          <Box key={`${legendKey}:${part.key}`} flexDirection="row" justifyContent="space-between" gap={1}>
+            <Box flexShrink={1}>
+              <Text wrap="truncate-end">
+                <Text color={part.ink}>●</Text> {part.label}
+                {part.note === undefined ? '' : <Text dimColor>{part.note}</Text>}
+              </Text>
+            </Box>
+            <Text>{n(part.value)}</Text>
+          </Box>
+        ))}
+      </Box>
+    )
+    const stack = (parts: Part[], width: number) => {
+      const cells = splitCells(parts.map(part => part.value), width)
+      if (Svg !== undefined) {
+        return <Svg source={svgStack(parts.map((part, i) => ({ cells: cells[i] ?? 0, fill: part.fill })))} alt={parts.map(part => `${part.label} ${n(part.value)}`).join(', ')} width={width * 8} height={8} />
+      }
+
+      return (
+        <Text>
+          {parts.map((part, i) => ((cells[i] ?? 0) === 0 ? '' : <Text backgroundColor={part.ink}>{' '.repeat(cells[i] ?? 0)}</Text>))}
+        </Text>
+      )
+    }
 
     return (
       <Box flexDirection="column">
@@ -537,26 +628,32 @@ export const register: Register = (on, options) => {
           </Box>
         ) : (
           <Box flexDirection="column">
-            <Box flexDirection="row" marginTop={1}>
-              {kpis.map(kpi => (
-                <Box key={`kpi-${kpi.label}`} flexDirection="column" width={wide ? 22 : Math.floor(body / 3)} flexShrink={0}>
-                  <Text dimColor>{kpi.label}</Text>
-                  <Text bold>{kpi.value}</Text>
-                </Box>
-              ))}
+            <Box flexDirection={wide ? 'row' : 'column'} marginTop={1} gap={wide ? 2 : 0}>
+              {card(
+                'tokens',
+                pick(lang, { en: 'Tokens', 'zh-TW': '總 token' }),
+                <Text color={COLORS.sub.ink}>{pick(lang, { en: `by subagents ${share(report.sub, all)}`, 'zh-TW': `subagent 佔 ${share(report.sub, all)}` })}</Text>,
+                n(all),
+                tokenParts,
+                'share',
+              )}
+              {card(
+                'spawns',
+                pick(lang, { en: 'Spawns', 'zh-TW': '派出' }),
+                <Text dimColor>{pick(lang, { en: 'where the model came from', 'zh-TW': '模型怎麼來' })}</Text>,
+                pick(lang, { en: String(s.all), 'zh-TW': `${s.all} 次` }),
+                kindParts,
+                'spawned',
+              )}
             </Box>
-            <Text dimColor wrap="wrap">
-              {pick(lang, {
-                en: `main ${n(report.main)} · sub ${n(report.sub)} · cache read ${n(report.cacheRead)}`,
-                'zh-TW': `主 ${n(report.main)} · sub ${n(report.sub)} · cache read ${n(report.cacheRead)}`,
-              })}
-            </Text>
-            <Text dimColor wrap="wrap">
-              {pick(lang, {
-                en: `named model ${s.explicit}/${s.all} · Opus ${s.opus} · fork ${s.forks} · default ${share(s.defaults, s.all)}`,
-                'zh-TW': `指定模型 ${s.explicit}/${s.all} · Opus ${s.opus} · fork ${s.forks} · 預設 ${share(s.defaults, s.all)}`,
-              })}
-            </Text>
+            <Box key="cache-read">
+              <Text dimColor wrap="wrap">
+                {pick(lang, {
+                  en: `Plus ${n(report.cacheRead)} tokens read from cache: cheap, not counted`,
+                  'zh-TW': `另有 ${n(report.cacheRead)} token 讀自快取，費用低，不計入總 token`,
+                })}
+              </Text>
+            </Box>
             <Box marginTop={1} marginBottom={1}>
               <Select
                 key="group"
