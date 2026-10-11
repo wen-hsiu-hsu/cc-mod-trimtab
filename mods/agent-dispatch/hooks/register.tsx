@@ -495,7 +495,7 @@ export const register: Register = (on, options) => {
   // Each row is a button that opens it to its sessions and spawns; Back returns.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const parts = $.ui.resolve(e)
-    const { Box, Button, Select, Text } = parts
+    const { Box, Button, Text } = parts
     // Desktop draws the bars as Svg; the terminal has no Svg and gets colored spaces. The runtime
     // hands every constructor over, so the surface decides, not their presence.
     const Svg = e.surface !== 'terminal' && 'Svg' in parts ? parts.Svg : undefined
@@ -515,6 +515,37 @@ export const register: Register = (on, options) => {
       model: pick(lang, { en: 'model', 'zh-TW': '模型' }),
       type: pick(lang, { en: 'type', 'zh-TW': '種類' }),
     }
+    // Switches in place, so nothing below moves: in the terminal one button that steps to the
+    // next value (its hotkey too) and wraps, elsewhere a segment per value.
+    const switcher = (key: string, label: string, hotkey: string, options: { value: string; label: string }[], value: string, onPick: (value: string) => void) => {
+      if (e.surface === 'terminal') {
+        const at = Math.max(0, options.findIndex(option => option.value === value))
+        const next = options[(at + 1) % options.length]!.value
+
+        return (
+          <Box key={`switch:${key}`} flexDirection="row" flexShrink={0}>
+            <Text dimColor>{label}</Text>
+            <Button key={key} plain hotkey={hotkey} onPress={() => onPick(next)}>
+              <Text color="yellow">‹ {options[at]?.label ?? value} ›</Text>
+            </Button>
+          </Box>
+        )
+      }
+
+      return (
+        <Box key={`switch:${key}`} flexDirection="row" gap={1} flexShrink={0}>
+          <Text dimColor>{label}</Text>
+          {options.map(option => (
+            <Button
+              key={`${key}:${option.value}`}
+              label={option.label}
+              {...(option.value === value ? { variant: 'primary' as const } : { dimColor: true })}
+              onPress={() => onPick(option.value)}
+            />
+          ))}
+        </Box>
+      )
+    }
     const spawnCount = (count: number) => pick(lang, { en: `${count} spawns`, 'zh-TW': `${count} 次` })
     const cellBar = (part: number, whole: number, width: number) => {
       const cells = barCells(part, whole, width)
@@ -526,23 +557,21 @@ export const register: Register = (on, options) => {
     }
     const bar = (part: number) => cellBar(part, most, barWidth)
 
-    const periodSelect = (
-      <Select
-        key="days"
-        label={pick(lang, { en: 'Period ', 'zh-TW': '期間 ' })}
-        options={PERIODS.map(days => ({ value: String(days), label: pick(lang, { en: `${days} days`, 'zh-TW': `${days} 天` }) }))}
-        value={String(shown.days)}
-        onSelect={value => void update($, view, current => ({ ...current, days: Number(value), item: '' }))}
-      />
+    const periodSwitch = switcher(
+      'days',
+      pick(lang, { en: 'Period ', 'zh-TW': '期間 ' }),
+      'p',
+      PERIODS.map(days => ({ value: String(days), label: pick(lang, { en: `${days} days`, 'zh-TW': `${days} 天` }) })),
+      String(shown.days),
+      value => void update($, view, current => ({ ...current, days: Number(value), item: '' })),
     )
-    const groupSelect = (
-      <Select
-        key="group"
-        label={pick(lang, { en: 'Group by ', 'zh-TW': '分組 ' })}
-        options={GROUP_BYS.map(value => ({ value, label: byLabel[value] }))}
-        value={by}
-        onSelect={value => void update($, view, current => ({ ...current, by: value, item: '' }))}
-      />
+    const groupSwitch = switcher(
+      'group',
+      pick(lang, { en: 'Group by ', 'zh-TW': '分組 ' }),
+      'g',
+      GROUP_BYS.map(value => ({ value, label: byLabel[value] })),
+      by,
+      value => void update($, view, current => ({ ...current, by: value, item: '' })),
     )
     // Two cards, each a total over a bar of what it is made of: stacked in a dock, side by side
     // from CARD_COLUMNS. A card's border and padding take four of its columns.
@@ -702,17 +731,18 @@ export const register: Register = (on, options) => {
           ) : (
           <Box flexDirection="column">
           <Box marginTop={1}>
-            <Select
-              key="sort"
-              label={pick(lang, { en: 'Sort ', 'zh-TW': '排序 ' })}
-              options={[
+            {switcher(
+              'sort',
+              pick(lang, { en: 'Sort ', 'zh-TW': '排序 ' }),
+              's',
+              [
                 { value: 'tokens', label: pick(lang, { en: 'most tokens', 'zh-TW': 'token 多到少' }) },
                 { value: 'time', label: pick(lang, { en: 'time', 'zh-TW': '時間' }) },
                 { value: 'duration', label: pick(lang, { en: 'duration', 'zh-TW': '耗時' }) },
-              ]}
-              value={sort}
-              onSelect={value => void update($, view, current => ({ ...current, sort: value, limit: PAGE }))}
-            />
+              ],
+              sort,
+              value => void update($, view, current => ({ ...current, sort: value, limit: PAGE })),
+            )}
           </Box>
           <Box flexDirection="row" gap={1}>
             <Box width={1} flexShrink={0} />
@@ -803,7 +833,7 @@ export const register: Register = (on, options) => {
           )}
           <Box marginTop={1}>
             <Text dimColor wrap="wrap">
-              {pick(lang, { en: '‹ Back (b) returns · Esc closes', 'zh-TW': '‹ 返回（b）回總覽 · Esc 關閉' })}
+              {pick(lang, { en: 'Enter opens a spawn · s sorts · ‹ Back (b) returns · Esc closes', 'zh-TW': 'Enter 展開一筆 · s 排序 · ‹ 返回（b）回總覽 · Esc 關閉' })}
             </Text>
           </Box>
         </Box>
@@ -816,15 +846,15 @@ export const register: Register = (on, options) => {
           // A wide pane: the period and its days on the left, the grouping on the right.
           <Box key="header" flexDirection="row" justifyContent="space-between" gap={2}>
             <Box flexDirection="row" gap={2}>
-              {periodSelect}
+              {periodSwitch}
               <Text dimColor>{range(lang, report)}</Text>
             </Box>
-            {report.sessions.length === 0 ? <Box /> : groupSelect}
+            {report.sessions.length === 0 ? <Box /> : groupSwitch}
           </Box>
         ) : (
           <Box key="header" flexDirection="row" justifyContent="space-between" gap={2}>
             <Text dimColor>{range(lang, report)}</Text>
-            {periodSelect}
+            {periodSwitch}
           </Box>
         )}
         {report.sessions.length === 0 ? (
@@ -879,7 +909,7 @@ export const register: Register = (on, options) => {
               </Box>
             ) : (
               <Box key="group-line" marginTop={1} marginBottom={1}>
-                {groupSelect}
+                {groupSwitch}
               </Box>
             )}
             {rows.map(row => {
@@ -926,7 +956,7 @@ export const register: Register = (on, options) => {
             })}
             <Box marginTop={1}>
               <Text dimColor wrap="wrap">
-                {pick(lang, { en: 'Tab moves · Enter opens a row · Esc closes', 'zh-TW': 'Tab 移動 · Enter 打開一列 · Esc 關閉' })}
+                {pick(lang, { en: 'Tab moves · Enter opens a row · p period · g group · Esc closes', 'zh-TW': 'Tab 移動 · Enter 打開一列 · p 期間 · g 分組 · Esc 關閉' })}
               </Text>
             </Box>
           </Box>

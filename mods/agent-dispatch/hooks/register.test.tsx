@@ -351,6 +351,13 @@ describe('usage ledger', () => {
     expect(await stats($)).toMatch(/^還沒有用量紀錄/)
   })
 
+  // Presses a terminal switch until it shows `label`.
+  async function choose(pane: { find: (query: object) => Promise<{ text: string } | undefined>; press: (query: object) => Promise<unknown> }, key: string, label: string): Promise<void> {
+    for (let i = 0; i < 5 && !(await pane.find({ key }))?.text.includes(`‹ ${label} ›`); i++) {
+      await pane.press({ key })
+    }
+  }
+
   const PANE = { plugin: 'agent-dispatch', component: 'Pane', requestId: 'agent-dispatch-stats', props: { title: 'stats', isFocused: true, bodyColumns: 100, placement: 'dock' } } as const
 
   // Today: a main step and an Opus review in /repo; a week ago: a haiku Explore in /old.
@@ -396,7 +403,7 @@ describe('usage ledger', () => {
     }
 
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    await pane.select({ key: 'group', value: 'model' })
+    await choose(pane, 'group', 'model')
     await pane.press({ key: 'row:claude-opus-4' })
     expect(await pane.find({ type: 'Text', text: 'deep review' })).toBeDefined()
     expect(await pane.find({ type: 'Text', text: /old task/ })).toBeUndefined()
@@ -404,15 +411,15 @@ describe('usage ledger', () => {
 
     await pane.press({ key: 'back' })
     expect(await pane.find({ type: 'Text', text: 'deep review' })).toBeUndefined()
-    await pane.select({ key: 'group', value: 'type' })
+    await choose(pane, 'group', 'type')
     await pane.press({ key: 'row:Explore' })
     expect(await pane.find({ type: 'Text', text: 'old task' })).toBeDefined()
 
     await pane.press({ key: 'back' })
-    await pane.select({ key: 'days', value: '7' })
+    await choose(pane, 'days', '7 days')
     expect(await pane.find({ key: 'row:Explore' })).toBeUndefined()
-    await pane.select({ key: 'days', value: '30' })
-    await pane.select({ key: 'group', value: 'session' })
+    await choose(pane, 'days', '30 days')
+    await choose(pane, 'group', 'session')
     expect(await pane.find({ type: 'Text', text: /Oct 5 09:00 last week/ })).toBeDefined()
     await pane.unmount()
   })
@@ -502,7 +509,7 @@ describe('usage ledger', () => {
   test('an opened row lists its spawns as a table, most tokens first, ten before "more"', async ($, on) => {
     await busyDay($, on)
     const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 52 }, surface: 'terminal' } as never)
-    await pane.select({ key: 'group', value: 'model' })
+    await choose(pane, 'group', 'model')
     await pane.press({ key: 'row:claude-haiku-4-5' })
     expect(await tasks(pane)).toEqual(['task 11', 'task 10', 'task 9', 'task 8', 'task 7', 'task 6', 'task 5', 'task 4', 'task 3', 'task 2'])
     // A dot in the color of where its model came from, and the day it ran.
@@ -521,24 +528,24 @@ describe('usage ledger', () => {
   test('an opened row sorts by time or by how long a spawn ran', async ($, on) => {
     await busyDay($, on)
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    await pane.select({ key: 'group', value: 'model' })
+    await choose(pane, 'group', 'model')
     await pane.press({ key: 'row:claude-haiku-4-5' })
-    await pane.select({ key: 'sort', value: 'time' })
+    await choose(pane, 'sort', 'time')
     expect((await tasks(pane)).slice(0, 2)).toEqual(['task 11', 'task 10'])
-    await pane.select({ key: 'sort', value: 'duration' })
+    await choose(pane, 'sort', 'duration')
     expect((await tasks(pane)).slice(0, 2)).toEqual(['task 0', 'task 1'])
     // Back and into the row again starts from most tokens.
     await pane.press({ key: 'back' })
     await pane.press({ key: 'row:claude-haiku-4-5' })
-    expect((await pane.find({ key: 'sort' }))?.props.value).toBe('tokens')
+    expect((await pane.find({ key: 'sort' }))?.text).toContain('‹ most tokens ›')
     await pane.unmount()
   })
   test('a spawn opens in place to its type, model, run and session, one at a time', async ($, on) => {
     await busyDay($, on)
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    await pane.select({ key: 'group', value: 'model' })
+    await choose(pane, 'group', 'model')
     await pane.press({ key: 'row:claude-haiku-4-5' })
-    await pane.select({ key: 'sort', value: 'duration' })
+    await choose(pane, 'sort', 'duration')
     expect(await pane.find({ key: 'detail:a0' })).toBeUndefined()
 
     await pane.press({ key: 'spawn:a0' })
@@ -559,7 +566,7 @@ describe('usage ledger', () => {
   test('an opened row sums its own tokens and spawns in two cards', async ($, on) => {
     await busyDay($, on)
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    await pane.select({ key: 'group', value: 'model' })
+    await choose(pane, 'group', 'model')
     await pane.press({ key: 'row:claude-haiku-4-5' })
     const text = async (key: string) => (await pane.find({ key }))?.text ?? ''
     expect(await text('card:tokens')).toMatch(/78,000 token.*by subagents 100%/)
@@ -572,7 +579,7 @@ describe('usage ledger', () => {
     await twoWeeks($, on)
     await stats($, 'stats')
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    await pane.select({ key: 'group', value: 'type' })
+    await choose(pane, 'group', 'type')
     await pane.press({ key: 'row:main' })
     expect(await pane.find({ key: 'card:spawns' })).toBeUndefined()
     expect(await pane.find({ key: 'sort' })).toBeUndefined()
@@ -598,13 +605,13 @@ describe('usage ledger', () => {
     await step($, 'claude-sonnet-4-6')
     await stats($, 'stats')
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    await pane.select({ key: 'group', value: 'session' })
+    await choose(pane, 'group', 'session')
     await pane.press({ key: `row:/repo|${world.now}` })
     const card = (await pane.find({ key: 'card:tokens' }))?.text ?? ''
     expect(card).toMatch(/claude-sonnet-4-6 320.*claude-opus-4 160.*subagent 160/)
     // Every other grouping keeps one main session part.
     await pane.press({ key: 'back' })
-    await pane.select({ key: 'group', value: 'repo' })
+    await choose(pane, 'group', 'repo')
     await pane.press({ key: 'row:/repo' })
     expect((await pane.find({ key: 'card:tokens' }))?.text).toMatch(/main session 480.*subagent 160/)
     await pane.unmount()
@@ -613,8 +620,8 @@ describe('usage ledger', () => {
   test('a wide pane puts the grouping in the header and names the table columns', async ($, on) => {
     await busyDay($, on)
     const wide = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 110 }, surface: 'terminal' } as never)
-    await wide.select({ key: 'group', value: 'model' })
-    expect(((await wide.find({ key: 'header' }))?.children[1] as { props: { key?: string } } | undefined)?.props.key).toBe('group')
+    await choose(wide, 'group', 'model')
+    expect(((await wide.find({ key: 'header' }))?.children[1] as { props: { key?: string } } | undefined)?.props.key).toBe('switch:group')
     expect(await wide.find({ key: 'group-line' })).toBeUndefined()
     expect((await wide.find({ key: 'columns' }))?.text).toMatch(/model.*token.*share.*spawns/)
     await wide.unmount()
@@ -623,6 +630,36 @@ describe('usage ledger', () => {
     expect(await dock.find({ key: 'group-line' })).toBeDefined()
     expect(await dock.find({ key: 'columns' })).toBeUndefined()
     await dock.unmount()
+  })
+
+  test('period, grouping and sort switch in place: one cycling button in the terminal, segments on desktop', async ($, on) => {
+    await twoWeeks($, on, 'desktop')
+    await stats($, 'stats')
+    const term = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
+    const days = await term.find({ key: 'days' })
+    expect(days?.type).toBe('Button')
+    expect(days?.props.hotkey).toBe('p')
+    expect(days?.text).toContain('‹ 30 days ›')
+    await term.press({ key: 'days' })
+    expect((await term.find({ key: 'days' }))?.text).toContain('‹ 90 days ›')
+    await term.press({ key: 'days' })
+    expect((await term.find({ key: 'days' }))?.text).toContain('‹ 7 days ›')
+    expect(await term.find({ key: 'row:/old' })).toBeUndefined()
+    expect((await term.find({ key: 'group' }))?.props.hotkey).toBe('g')
+    await term.press({ key: 'group' })
+    expect((await term.find({ key: 'group' }))?.text).toContain('‹ session ›')
+    await term.unmount()
+
+    const desk = await $.ui.mount({ ...PANE, surface: 'desktop' } as never)
+    expect((await desk.find({ key: 'days:7' }))?.props.variant).toBe('primary')
+    await desk.press({ key: 'days:30' })
+    expect((await desk.find({ key: 'days:30' }))?.props.variant).toBe('primary')
+    expect((await desk.find({ key: 'days:7' }))?.props.variant).toBeUndefined()
+    await desk.press({ key: 'group:model' })
+    await desk.press({ key: 'row:claude-opus-4' })
+    await desk.press({ key: 'sort:time' })
+    expect((await desk.find({ key: 'sort:time' }))?.props.variant).toBe('primary')
+    await desk.unmount()
   })
 
   test('the desktop pane draws its bars as Svg', async ($, on) => {

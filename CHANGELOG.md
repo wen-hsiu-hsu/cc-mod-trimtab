@@ -32,6 +32,11 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
   `--text` summary says the same). An opened row heads with its own cards and
   lists its spawns as a table, most tokens first (or newest, or longest run),
   ten at a time; a spawn opens in place to its type, model, run and session.
+  The cards sit side by side from 60 body columns; an opened session splits its
+  token card by the main session's models; a wide pane puts the period and
+  grouping on its top line and names the table columns. Period, grouping and
+  sort switch in place (one cycling button with `p`, `g`, `s` in the terminal,
+  segments on desktop), so nothing below them moves.
 
 ## [0.1.1] - 2026-10-11
 
