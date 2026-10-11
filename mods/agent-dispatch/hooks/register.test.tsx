@@ -216,6 +216,39 @@ describe('usage ledger', () => {
     expect(line(text, 'claude-opus-4')).toContain('640')
   })
 
+  test('a session after /clear is named after its own start and first prompt', async ($, on) => {
+    const world = newWorld()
+    const clock = engine(on, { value: 'running' }, '', world)
+    on('prompt.submit', ($, e) => ({ text: e.text }))
+    await start($)
+    await $.prompt.submit({ text: 'first task', origin: { kind: 'composer' } } as never)
+    await step($, 'claude-opus-4')
+    // /clear: a new session id in the same process, with no session.start.
+    world.sid = 's2'
+    await clock.advance(5 * 60_000)
+    await $.prompt.submit({ text: 'second task', origin: { kind: 'composer' } } as never)
+    await step($, 'claude-opus-4')
+
+    const text = await stats($)
+    expect(text).toContain('10-12 12:00 first task')
+    expect(text).toContain('10-12 12:05 second task')
+    expect(text).not.toContain('12:00 second task')
+    expect(text).not.toContain('12:05 first task')
+  })
+
+  test('steps of an agent that outlives /clear stay on its spawn', async ($, on) => {
+    const world = newWorld()
+    engine(on, { value: 'running' }, '', world)
+    await start($)
+    await spawn($, world, { description: 'long review', background: true }, 'a1')
+    world.sid = 's2'
+    await step($, 'claude-sonnet-4-6', 'a1')
+
+    const text = await stats($)
+    expect(line(text, 'long review')).toContain('1 steps')
+    expect(text).not.toContain('unknown')
+  })
+
   test('keeps at most 500 spawns per session, newest kept', async ($, on) => {
     const world = newWorld()
     engine(on, { value: 'running' }, '', world)

@@ -120,21 +120,44 @@ async function fillRedispatch($: EngineInterface, lang: Lang): Promise<string> {
   })
 }
 
-type LedgerState = { recording: boolean; writing: Promise<void>; meta: SessionMeta }
+// `meta` belongs to session `sid`; `agents` maps an agent id to the ledger key it was spawned
+// under, at most AGENT_KEYS of them.
+type LedgerState = { recording: boolean; writing: Promise<void>; sid: string; meta: SessionMeta; agents: Map<string, string> }
 
-// Applies `change` to this session's own ledger key. Parallel subagents step at the same time and
-// each write reads the ledger back, so they take turns. Bookkeeping must never break the engine's call.
-function record($: EngineInterface, state: LedgerState, where: string, change: (ledger: Ledger, at: number) => void): Promise<void> {
+const AGENT_KEYS = 500
+
+// `/clear` starts a new session id in the same process without a session.start: the new
+// session starts now and is named after its own first prompt.
+async function sessionKey($: EngineInterface, state: LedgerState): Promise<string> {
+  const sid = await $.session.id()
+  if (state.sid !== sid) {
+    if (state.sid !== '') {
+      state.meta = { ...state.meta, started: await $.clock.now(), prompt: '' }
+    }
+    state.sid = sid
+  }
+
+  return `${LEDGER_PREFIX}${sid}`
+}
+
+// Applies `change` to this session's own ledger key, or for a step of an agent spawned under an
+// earlier session id (one that outlived /clear) to that session's. Parallel subagents step at
+// the same time and each write reads the ledger back, so they take turns. Bookkeeping must
+// never break the engine's call.
+function record($: EngineInterface, state: LedgerState, where: string, change: (ledger: Ledger, at: number) => void, agentId?: string): Promise<void> {
   if (!state.recording) {
     return Promise.resolve()
   }
   state.writing = state.writing.then(async () => {
     try {
-      const key = `${LEDGER_PREFIX}${await $.session.id()}`
+      const own = await sessionKey($, state)
+      const key = (agentId === undefined ? undefined : state.agents.get(agentId)) ?? own
       const stored = await $.store.get(key)
       const ledger = isLedger(stored) ? { ...emptyLedger(), ...stored } : emptyLedger()
       change(ledger, await $.clock.now())
-      applyMeta(ledger, state.meta)
+      if (key === own) {
+        applyMeta(ledger, state.meta)
+      }
       await $.store.set(key, ledger)
     } catch (error) {
       $.ui.log(`${where}: ledger not written: ${String(error)}`, { to: 'debug' })
@@ -225,7 +248,7 @@ export const register: Register = (on, options) => {
   let lang: Lang = 'en'
   // A `-p` run has no pane: `stats` prints its report there.
   let interactive = true
-  const ledger: LedgerState = { recording: true, writing: Promise.resolve(), meta: { repo: '', started: 0, prompt: '' } }
+  const ledger: LedgerState = { recording: true, writing: Promise.resolve(), sid: '', meta: { repo: '', started: 0, prompt: '' }, agents: new Map() }
 
   on('session.start', async ($, e, next) => {
     interactive = e.isInteractive
@@ -303,12 +326,19 @@ export const register: Register = (on, options) => {
         description: e.description,
       }),
     )
+    if (spawned.agentId !== undefined && ledger.recording) {
+      ledger.agents.set(spawned.agentId, await sessionKey($, ledger))
+      for (const old of [...ledger.agents.keys()].slice(0, -AGENT_KEYS)) {
+        ledger.agents.delete(old)
+      }
+    }
 
     return spawned
   })
 
   // The session is named after its first prompt; a resumed one keeps the name it has.
   on('prompt.submit', async ($, e, next) => {
+    await sessionKey($, ledger).catch(() => undefined)
     if (ledger.meta.prompt === '' && ['composer', 'bridge', 'sdk'].includes(e.origin.kind)) {
       ledger.meta = { ...ledger.meta, prompt: promptSummary(e.text) }
     }
@@ -329,6 +359,7 @@ export const register: Register = (on, options) => {
           cacheRead: usage.cache_read_input_tokens,
           output: usage.output_tokens,
         }),
+        e.agentId,
       )
     }
 
