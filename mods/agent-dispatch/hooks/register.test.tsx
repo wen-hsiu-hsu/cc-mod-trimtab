@@ -610,6 +610,21 @@ describe('usage ledger', () => {
     await pane.unmount()
   })
 
+  test('a wide pane puts the grouping in the header and names the table columns', async ($, on) => {
+    await busyDay($, on)
+    const wide = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 110 }, surface: 'terminal' } as never)
+    await wide.select({ key: 'group', value: 'model' })
+    expect(((await wide.find({ key: 'header' }))?.children[1] as { props: { key?: string } } | undefined)?.props.key).toBe('group')
+    expect(await wide.find({ key: 'group-line' })).toBeUndefined()
+    expect((await wide.find({ key: 'columns' }))?.text).toMatch(/model.*token.*share.*spawns/)
+    await wide.unmount()
+
+    const dock = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 52 }, surface: 'terminal' } as never)
+    expect(await dock.find({ key: 'group-line' })).toBeDefined()
+    expect(await dock.find({ key: 'columns' })).toBeUndefined()
+    await dock.unmount()
+  })
+
   test('the desktop pane draws its bars as Svg', async ($, on) => {
     await twoWeeks($, on, 'desktop')
     await stats($, 'stats')

@@ -526,6 +526,24 @@ export const register: Register = (on, options) => {
     }
     const bar = (part: number) => cellBar(part, most, barWidth)
 
+    const periodSelect = (
+      <Select
+        key="days"
+        label={pick(lang, { en: 'Period ', 'zh-TW': '期間 ' })}
+        options={PERIODS.map(days => ({ value: String(days), label: pick(lang, { en: `${days} days`, 'zh-TW': `${days} 天` }) }))}
+        value={String(shown.days)}
+        onSelect={value => void update($, view, current => ({ ...current, days: Number(value), item: '' }))}
+      />
+    )
+    const groupSelect = (
+      <Select
+        key="group"
+        label={pick(lang, { en: 'Group by ', 'zh-TW': '分組 ' })}
+        options={GROUP_BYS.map(value => ({ value, label: byLabel[value] }))}
+        value={by}
+        onSelect={value => void update($, view, current => ({ ...current, by: value, item: '' }))}
+      />
+    )
     // Two cards, each a total over a bar of what it is made of: stacked in a dock, side by side
     // from CARD_COLUMNS. A card's border and padding take four of its columns.
     const paired = body >= CARD_COLUMNS
@@ -794,16 +812,21 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="column">
-        <Box flexDirection="row" justifyContent="space-between" gap={2}>
-          <Text dimColor>{range(lang, report)}</Text>
-          <Select
-            key="days"
-            label={pick(lang, { en: 'Period ', 'zh-TW': '期間 ' })}
-            options={PERIODS.map(days => ({ value: String(days), label: pick(lang, { en: `${days} days`, 'zh-TW': `${days} 天` }) }))}
-            value={String(shown.days)}
-            onSelect={value => void update($, view, current => ({ ...current, days: Number(value), item: '' }))}
-          />
-        </Box>
+        {wide ? (
+          // A wide pane: the period and its days on the left, the grouping on the right.
+          <Box key="header" flexDirection="row" justifyContent="space-between" gap={2}>
+            <Box flexDirection="row" gap={2}>
+              {periodSelect}
+              <Text dimColor>{range(lang, report)}</Text>
+            </Box>
+            {report.sessions.length === 0 ? <Box /> : groupSelect}
+          </Box>
+        ) : (
+          <Box key="header" flexDirection="row" justifyContent="space-between" gap={2}>
+            <Text dimColor>{range(lang, report)}</Text>
+            {periodSelect}
+          </Box>
+        )}
         {report.sessions.length === 0 ? (
           <Box marginTop={1}>
             <Text dimColor wrap="wrap">
@@ -838,15 +861,27 @@ export const register: Register = (on, options) => {
                 })}
               </Text>
             </Box>
-            <Box marginTop={1} marginBottom={1}>
-              <Select
-                key="group"
-                label={pick(lang, { en: 'Group by ', 'zh-TW': '分組 ' })}
-                options={GROUP_BYS.map(value => ({ value, label: byLabel[value] }))}
-                value={by}
-                onSelect={value => void update($, view, current => ({ ...current, by: value, item: '' }))}
-              />
-            </Box>
+            {wide ? (
+              <Box key="columns" flexDirection="row" gap={1} marginTop={1}>
+                <Box flexGrow={1} flexShrink={1}>
+                  <Text dimColor>{byLabel[by]}</Text>
+                </Box>
+                <Box width={barWidth} flexShrink={0} />
+                <Box width={10} flexShrink={0} justifyContent="flex-end">
+                  <Text dimColor>token</Text>
+                </Box>
+                <Box width={5} flexShrink={0} justifyContent="flex-end">
+                  <Text dimColor>{pick(lang, { en: 'share', 'zh-TW': '佔比' })}</Text>
+                </Box>
+                <Box width={10} flexShrink={0} justifyContent="flex-end">
+                  <Text dimColor>{pick(lang, { en: 'spawns', 'zh-TW': '派出' })}</Text>
+                </Box>
+              </Box>
+            ) : (
+              <Box key="group-line" marginTop={1} marginBottom={1}>
+                {groupSelect}
+              </Box>
+            )}
             {rows.map(row => {
               // A Button holds only text, so the name is the button and the bar sits beside it.
               const name = (
