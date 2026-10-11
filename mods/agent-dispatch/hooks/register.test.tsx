@@ -349,5 +349,32 @@ describe('usage ledger', () => {
     expect(await pane.find({ type: 'Text', text: /10-05 09:00 last week/ })).toBeDefined()
     await pane.unmount()
   })
+
+  test('stats prints the text report where the pane cannot be placed, and closes it', async ($, on) => {
+    const world = newWorld()
+    world.placed = false
+    engine(on, { value: 'running' }, '', world)
+    await start($)
+    await step($, 'claude-opus-4')
+    const text = await stats($, 'stats')
+    expect(text).toContain('Sessions')
+    expect(world.opened).toEqual(['agent-dispatch-stats'])
+    expect(world.closed).toEqual(['agent-dispatch-stats'])
+  })
+
+  test('stats prints the text report in a -p run without opening a pane', async ($, on) => {
+    const world = await twoWeeks($, on, 'terminal', false)
+    expect(await stats($, 'stats')).toContain('old task')
+    expect(world.opened).toEqual([])
+  })
+
+  test('the desktop pane draws its bars as Svg', async ($, on) => {
+    await twoWeeks($, on, 'desktop')
+    await stats($, 'stats')
+    const pane = await $.ui.mount({ ...PANE, surface: 'desktop' } as never)
+    expect(await pane.findAll({ type: 'Svg' })).toHaveLength(2)
+    expect(await pane.find({ type: 'Text', text: /█/ })).toBeUndefined()
+    await pane.unmount()
+  })
 })
 
