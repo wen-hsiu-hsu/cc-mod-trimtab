@@ -9,11 +9,17 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 | --- | --- |
 | `agent-dispatch` | 0.2.0 |
 
-- Added: `agent-dispatch` records token use per session in a local ledger (main
-  session vs each subagent, per model, plus spawn counts, explicit-Opus spawns
-  and forks) and reports it with `/agent-dispatch stats [days]`. The `ledger`
-  setting (default on) turns recording off. Records older than 90 days are
-  deleted at session start.
+- Added: `agent-dispatch` records each spawn and the main session's token use
+  in a local ledger, one key per session (repo, start time, first prompt, and
+  per spawn the description, type, named and resolved model, fork, background,
+  tokens, steps and duration; the latest 500 spawns per session).
+  `/agent-dispatch stats [days]` opens a pane with a summary and rows grouped by
+  repo, session, model or agent type down to each spawn, over 7, 30 or 90 days.
+  `--text`, a `-p` run, or a pane that cannot be placed prints it as text. The
+  `ledger` setting (default on) turns recording off. Ledgers not written to for
+  90 days are deleted at session start.
+- Changed: `agent-dispatch` no longer lists running background agents above the
+  input box; it shows only interrupted ones, with `[Redispatch]` and `[Dismiss]`.
 
 ## [0.1.1] - 2026-10-11
 

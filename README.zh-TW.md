@@ -14,7 +14,7 @@ Claude Code 的 function-hook plugin（mod）：減少出錯、節省 token、�
 | `secret-scrub` | 送出 prompt 前遮蔽 `token=`、`Bearer`、`sk-…`、`ghp_…`、JWT、私鑰、`*_TOKEN=` 等密鑰；prompt 含 `#noscrub`（`bypass_marker` 可改）時原樣送出；可加自訂規則（`custom_rules`）與例外（`allow`）；輸入框歷史（`history.jsonl`）也改寫成遮蔽後的內容，`/secret-scrub history` 清理所有 session 的舊紀錄 | 否 | 是 | 否 |
 | `tool-guard` | 攔下會丟失工作的指令，先量出影響範圍：`reset --hard`、`checkout --`、`restore`（會丟掉的未 commit 檔案）、`clean -f`（會刪的未追蹤檔案）、force push（遠端會被蓋掉的 commit）、`stash drop/clear`、`--no-verify`、`rm -r/-f`（會刪的檔案數與大小，`$TMPDIR`、`/tmp`、`/var/folders` 與 `rm_skip_paths` 底下的不算）、資料庫 migration（待執行的項目）。不會造成損失的直接放行（工作區乾淨、force push 不丟 commit 且不是 main/master、rm 沒有符合的檔案、沒有待執行的 migration）；要確認時開面板列出影響，按 `1` 執行、`2` 取消；終端機太窄放不下面板時改用內建的詢問對話框（同樣列出影響，選「執行」或「取消」，也可以打字回覆給 Claude）。`-p` 等非互動模式無人可問，直接擋下並把影響寫進原因，由使用者輸入 `/tool-guard allow` 放行一次（10 分鐘內）。另外可檢查 commit 標題格式（`commit_format`，預設關；`commit_pattern` 自訂格式），並移除 Claude 署名（`strip_attribution`，預設開） | 否 | 是 | 否 |
 | `output-trimmer` | Bash 輸出超過 150 行或 15k 字元（`max_lines`、`max_chars`）時，只給模型開頭、結尾與錯誤行，完整輸出存到 `$TMPDIR/claude-output-trimmer/`；讀檔類指令不處理，指令加 `# notrim` 取得完整輸出 | 否 | 是 | 否 |
-| `agent-dispatch` | 輸入框上方顯示執行中的背景 agent 與 Esc 會中斷的提醒；被中斷時按 `[重派]` 或 `/agent-dispatch redispatch` 把重派指示放進輸入框；`/agent-dispatch stats [天數]` 依本機帳本列出主 session、subagent 與各模型的 token 用量 | 否 | 是（手機只有狀態列） | 否 |
+| `agent-dispatch` | 背景 agent 被中斷時在輸入框上方顯示：按 `[重派]`（`r`）或 `/agent-dispatch redispatch` 把重派指示放進輸入框，或按 `[略過]`（`d`）；agent 執行中不顯示。`/agent-dispatch stats [天數]` 依本機帳本開 pane，列出每次派出，以及主 session、subagent 與各模型的 token 用量（`--text` 改印文字） | 否 | 是（手機只有狀態列） | 否 |
 | `open-items` | 追蹤待決定、未解決、延後的項目：Claude 用 `track` 工具登記，與未完成項目相同或互相包含的文字不重複新增；你只選部分選項時（「A＋B，C 先寫成觀察項」）沒選的自動列為延後，toast 顯示延後了哪些，下一則 prompt 前可按 `[復原延後]`（`u`）或 `/open-items undo` 取消（只解析回答結尾、或後面接問句的選項清單）。輸入框上方顯示計數，按 `[開啟]`（`o`）或 `/open-items` 開面板（完成／不做／引用／複製成 markdown，列出建立時間與 branch，超過 7 天變淡）；在面板關掉的項目會隨下一則 prompt 告知 Claude。決策帶理由完成、或標為不做的項目另存一份不過期的紀錄，`/open-items log [關鍵字]` 或 `track` 的 `history` 可查。依 repo 跨 session 保存（同 repo 的 worktree 共用），每次變動就合併寫入，並行的 session 不會互相覆寫；載入後的第一則 prompt 會把清單附給 Claude，toast 註明幾個在其他 branch、幾個超過 7 天。`/open-items copy` 複製清單，`/open-items stats` 看漏抓率（回答以問句結尾卻沒呼叫 `track` 的比例，逐筆記在 debug log） | 否 | 是（手機只有狀態列） | 否 |
 | `session-keeper` | desktop 的輸入框上方常駐一行 prompt cache 狀態（desktop 不執行 status line）：`cache  warm 1h [16:44] 23m left  ·  kept 1/3  ·  hit 91%  ·  miss 2 +150.2k (ttl? +1)`；快過期變黃、過期變紅並顯示下次要重寫的量（`cold, next +184.3k`）；失效原因是推測的。保持快取：TTL 為 1h、context 超過 30k 時，最後一次用到快取後閒置 55 分鐘送一次只回覆 OK 的 fork 讀快取，每段閒置最多 3 次，CLI 也會送。交接：context 超過門檻（`CLAUDE_CTX_GUARD_TOKENS`，預設 150k）時，Haiku 判斷 prompt 是無關的新任務、或快取已過期，就在輸入框上方提議 `[交接並開新 session]`（`h`）／`[仍在這裡做]`（`k`）；交接時摘要寫進 `.claude/progress.md`，`/clear` 後放進輸入框當草稿；`/session-keeper handoff [目標]` 隨時交接。新 session 的第一則 prompt 附上 24 小時內的進度。見下方「session-keeper」 | 保持快取與交接時（fork 主對話）、判斷新任務時（Haiku）；預設關，`/session-keeper on` 開啟 | cache 狀態只在 desktop 顯示；其餘都有 | 否 |
 | `self-check` | 給 Claude 的防呆提醒，不擋使用者：同一個工具連續兩次因同樣原因失敗（錯誤文字去掉路徑與數字後相同）時，在第二次的結果後面請 Claude 先找出原因、不要原樣重試；這一輪改過程式檔（Edit／Write，不含 `.md` `.txt` 等文件、不含子代理改的）、之後沒跑測試、建置或檢查，回覆卻說完成時，擋下這次停止一次請 Claude 驗證（回覆已說明沒驗證的不擋）。兩項各自可關閉（`retry_nudge`、`done_check`，見「設定」）。出錯時跳過，不影響工具呼叫與停止 | 否 | 是 | 否 |
@@ -269,13 +269,20 @@ context 大的時候，接無關的新任務、或快取過期後繼續，成本
 
 ### 用量帳本
 
-每一步模型呼叫依「主 session 或發出它的 subagent」記帳，每次派 agent 依 agent 種類記帳，存在 plugin 自己的 `$.store`（每個 session 一個 key，跨 repo 共用）。超過 90 天的紀錄在 session 開始時刪除。
+每個 session 在 plugin 自己的 `$.store` 寫自己的帳本（每個 session 一個 key，跨 repo 共用），記下：
 
-`/agent-dispatch stats [天數]`（1–90，預設 30，含今天）加總所有 session，列出：
+- session：所屬 repo（用主工作樹，同 repo 的 worktree 歸在一起）、開始時間與第一則 prompt 的前 40 字（兩者合起來當 session 名稱），以及主 session 各模型的 token。
+- 每次派出（每個 session 保留最近 500 筆）：description、agent 種類、呼叫指定的模型（或預設）與實際的模型、是不是 fork、是不是背景、input／cache write／cache read／output token、步數與耗時。帳本沒看到派出的 agent（例如熱重載前派的）列為 `unknown`。
 
-- 主 session 與 subagent 的 token（input + cache write + output）與 subagent 佔比；cache read 另列一行。
-- 各模型 token，以及 agent 種類 × 模型的派出次數與 token。
-- 派出總次數、指定模型的次數（`n/N`）、指定 Opus 的次數、fork 的次數，以及最近 10 筆指定 Opus 的 description。
+90 天沒有寫入的帳本在 session 開始時刪除。
+
+`/agent-dispatch stats [天數]`（1–90，預設 30，含今天）開 pane，涵蓋所有 session：
+
+- 摘要：主 session 與 subagent 的 token（input + cache write + output）與 subagent 佔比，cache read 另列一行；派出總次數、指定模型的次數（`n/N`）、指定 Opus 的次數、fork 的次數，以及沿用預設模型的比例。
+- 依 repo、session、模型或 agent 種類分組（`分組`），每列有長條（desktop 用 Svg，終端機用字元）、token 與派出次數。`看明細` 打開一列，看它的各 session 與每次派出。
+- `期間` 切換 7、30、90 天。
+
+`/agent-dispatch stats --text [天數]` 印出同樣內容的文字版；`-p` 執行或 pane 放不下（終端機太窄）時，`stats` 也改印文字版。
 
 不含：各 mod 自己呼叫模型（`$.model.fork` / `$.model.complete`）的用量、雲端 session（不載入 mod）、安裝之前的紀錄。
 
