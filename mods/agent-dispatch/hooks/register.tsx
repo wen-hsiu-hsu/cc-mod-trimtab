@@ -40,9 +40,17 @@ const PAGE = 10
 
 const running = atom({ plugin: 'agent-dispatch', key: 'running' } as const, [])
 const stopped = atom({ plugin: 'agent-dispatch', key: 'stopped' } as const, [])
-// What the stats pane shows: the period, the grouping, the row opened to its spawns and how
-// many of them are listed.
-const view = atom({ plugin: 'agent-dispatch', key: 'view' } as const, { days: 30, by: 'repo', item: '', limit: PAGE })
+// What the stats pane shows: the period, the grouping, the row opened to its spawns, their
+// order and how many of them are listed.
+const view = atom({ plugin: 'agent-dispatch', key: 'view' } as const, { days: 30, by: 'repo', item: '', sort: 'tokens', limit: PAGE })
+
+// How an opened row orders its spawns: most tokens, newest, or longest run first.
+type SortBy = 'tokens' | 'time' | 'duration'
+const SORTS: Record<SortBy, (spawn: Spawn) => number> = {
+  tokens: spawn => tokens(spawn),
+  time: spawn => spawn.at,
+  duration: spawn => spawn.last - spawn.at,
+}
 
 const MOD = 'agent-dispatch'
 const REDISPATCH = 'redispatch'
@@ -511,7 +519,10 @@ export const register: Register = (on, options) => {
     const bar = (part: number) => cellBar(part, most, barWidth)
 
     if (open !== undefined) {
-      const listed = open.detail.flatMap(part => part.spawns.map(spawn => ({ spawn, session: part.session }))).sort((a, b) => tokens(b.spawn) - tokens(a.spawn))
+      const sort: SortBy = shown.sort in SORTS ? (shown.sort as SortBy) : 'tokens'
+      const listed = open.detail
+        .flatMap(part => part.spawns.map(spawn => ({ spawn, session: part.session })))
+        .sort((a, b) => SORTS[sort](b.spawn) - SORTS[sort](a.spawn))
       const limit = Math.max(PAGE, Number(shown.limit) || PAGE)
       const top = Math.max(1, ...listed.map(item => tokens(item.spawn)))
       const rowBar = wide ? 16 : 8
@@ -538,7 +549,20 @@ export const register: Register = (on, options) => {
               'zh-TW': `${n(open.tokens)} token · 派出 ${open.spawns} 次 · ${shown.days} 天`,
             })}
           </Text>
-          <Box flexDirection="row" gap={1} marginTop={1}>
+          <Box marginTop={1}>
+            <Select
+              key="sort"
+              label={pick(lang, { en: 'Sort ', 'zh-TW': '排序 ' })}
+              options={[
+                { value: 'tokens', label: pick(lang, { en: 'most tokens', 'zh-TW': 'token 多到少' }) },
+                { value: 'time', label: pick(lang, { en: 'time', 'zh-TW': '時間' }) },
+                { value: 'duration', label: pick(lang, { en: 'duration', 'zh-TW': '耗時' }) },
+              ]}
+              value={sort}
+              onSelect={value => void update($, view, current => ({ ...current, sort: value, limit: PAGE }))}
+            />
+          </Box>
+          <Box flexDirection="row" gap={1}>
             <Box width={1} flexShrink={0} />
             <Box flexGrow={1} flexShrink={1}>
               <Text dimColor>{pick(lang, { en: 'Spawns', 'zh-TW': '派出' })}</Text>
@@ -710,7 +734,7 @@ export const register: Register = (on, options) => {
               // A Button holds only text, so the name is the button and the bar sits beside it.
               const name = (
                 <Box flexGrow={1} flexShrink={1}>
-                  <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key, limit: PAGE }))}>
+                  <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key, sort: 'tokens', limit: PAGE }))}>
                     <Text wrap="truncate-end">{row.label}</Text>
                   </Button>
                 </Box>

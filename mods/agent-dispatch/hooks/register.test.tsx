@@ -518,6 +518,21 @@ describe('usage ledger', () => {
     await pane.unmount()
   })
 
+  test('an opened row sorts by time or by how long a spawn ran', async ($, on) => {
+    await busyDay($, on)
+    const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
+    await pane.select({ key: 'group', value: 'model' })
+    await pane.press({ key: 'row:claude-haiku-4-5' })
+    await pane.select({ key: 'sort', value: 'time' })
+    expect((await tasks(pane)).slice(0, 2)).toEqual(['task 11', 'task 10'])
+    await pane.select({ key: 'sort', value: 'duration' })
+    expect((await tasks(pane)).slice(0, 2)).toEqual(['task 0', 'task 1'])
+    // Back and into the row again starts from most tokens.
+    await pane.press({ key: 'back' })
+    await pane.press({ key: 'row:claude-haiku-4-5' })
+    expect((await pane.find({ key: 'sort' }))?.props.value).toBe('tokens')
+    await pane.unmount()
+  })
   test('the desktop pane draws its bars as Svg', async ($, on) => {
     await twoWeeks($, on, 'desktop')
     await stats($, 'stats')
