@@ -22,6 +22,7 @@ import {
   LEDGER_SPEC,
   MAX_DAYS,
   promptSummary,
+  range,
   recordSpawn,
   recordStep,
   renderStats,
@@ -435,7 +436,7 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column">
         <Box flexDirection="row" gap={2}>
           <Text bold>
-            {pick(lang, { en: `${report.from} to ${report.to}`, 'zh-TW': `${report.from} 到 ${report.to}` })}
+            {range(lang, report)}
           </Text>
           <Select
             key="days"

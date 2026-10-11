@@ -174,7 +174,8 @@ describe('usage ledger', () => {
     const text = await stats($)
     expect(text).toContain('/repo')
     expect(text).not.toContain('/repo/wt')
-    expect(text).toContain('10-12 12:00 review the diff and fix the flaky ledger…')
+    expect(text).toContain('Sep 13 – Oct 12')
+    expect(text).toContain('Oct 12 12:00 review the diff and fix the flaky ledger…')
     expect(text).not.toContain('a later prompt')
     const deep = line(text, 'deep review')
     expect(deep).toContain('general-purpose')
@@ -231,8 +232,8 @@ describe('usage ledger', () => {
     await step($, 'claude-opus-4')
 
     const text = await stats($)
-    expect(text).toContain('10-12 12:00 first task')
-    expect(text).toContain('10-12 12:05 second task')
+    expect(text).toContain('Oct 12 12:00 first task')
+    expect(text).toContain('Oct 12 12:05 second task')
     expect(text).not.toContain('12:00 second task')
     expect(text).not.toContain('12:05 first task')
   })
@@ -331,6 +332,19 @@ describe('usage ledger', () => {
     expect(await stats($, 'stats --text abc')).toMatch(/1.*90/)
   })
 
+  test('stats --text writes dates the zh-TW way', async ($, on) => {
+    const world = newWorld()
+    engine(on, { value: 'running' }, undefined, world)
+    on('prompt.submit', ($, e) => ({ text: e.text }))
+    await start($)
+    await $.prompt.submit({ text: 'first task', origin: { kind: 'composer' } } as never)
+    await step($, 'claude-opus-4')
+
+    const text = await stats($)
+    expect(text).toContain('9/13 至 10/12')
+    expect(text).toContain('10/12 12:00 first task')
+  })
+
   test('stats --text says so when the ledger is empty, in the set language', async ($, on) => {
     engine(on, { value: 'running' })
     await start($)
@@ -391,7 +405,7 @@ describe('usage ledger', () => {
     expect(await pane.find({ type: 'Text', text: /old task/ })).toBeUndefined()
     await pane.select({ key: 'days', value: '30' })
     await pane.select({ key: 'group', value: 'session' })
-    expect(await pane.find({ type: 'Text', text: /10-05 09:00 last week/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /Oct 5 09:00 last week/ })).toBeDefined()
     await pane.unmount()
   })
 

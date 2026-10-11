@@ -132,12 +132,30 @@ export function dayOf(ms: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-// `MM-DD HH:mm` in local time: how a session is named, with its prompt.
-export function stamp(ms: number): string {
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+// A local day without the year: `Oct 12`, `10/12`.
+function monthDay(lang: Lang, month: number, day: number): string {
+  return pick(lang, { en: `${MONTHS[month - 1]} ${day}`, 'zh-TW': `${month}/${day}` })
+}
+
+// A session's start in local time, named with its prompt: `Oct 12 02:11`, `10/12 02:11`.
+export function stamp(lang: Lang, ms: number): string {
   const d = new Date(ms)
   const two = (value: number) => String(value).padStart(2, '0')
 
-  return `${two(d.getMonth() + 1)}-${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`
+  return `${monthDay(lang, d.getMonth() + 1, d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`
+}
+
+// The days a report covers: `Sep 13 – Oct 12`, `9/13 至 10/12`.
+export function range(lang: Lang, report: Report): string {
+  const label = (day: string) => {
+    const [, month, date] = day.split('-').map(Number) as [number, number, number]
+
+    return monthDay(lang, month, date)
+  }
+
+  return pick(lang, { en: `${label(report.from)} – ${label(report.to)}`, 'zh-TW': `${label(report.from)} 至 ${label(report.to)}` })
 }
 
 // The first day a report covers: `days` local days ending today, today included.
@@ -318,7 +336,7 @@ export function elapsed(ms: number): string {
 }
 
 export function sessionName(lang: Lang, session: SessionRow): string {
-  return `${stamp(session.started)} ${session.prompt || pick(lang, { en: '(no prompt)', 'zh-TW': '（沒有 prompt）' })}`
+  return `${stamp(lang, session.started)} ${session.prompt || pick(lang, { en: '(no prompt)', 'zh-TW': '（沒有 prompt）' })}`
 }
 
 export function spawnLine(lang: Lang, spawn: Spawn): string {
@@ -377,8 +395,8 @@ export function renderStats(lang: Lang, report: Report): string {
   const all = report.main + report.sub
   const lines: string[] = [
     pick(lang, {
-      en: `agent-dispatch usage, ${report.days} day(s): ${report.from} to ${report.to}`,
-      'zh-TW': `agent-dispatch 用量，${report.days} 天：${report.from} 到 ${report.to}`,
+      en: `agent-dispatch usage, ${report.days} days: ${range(lang, report)}`,
+      'zh-TW': `agent-dispatch 用量，${report.days} 天：${range(lang, report)}`,
     }),
     '',
     ...summaryLines(lang, report),
