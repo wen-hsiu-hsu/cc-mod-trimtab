@@ -29,6 +29,10 @@ function newWorld() {
     spawnModel: 'claude-sonnet-4-6',
     agentId: 'a1' as string | undefined,
     repo: null as { root: string; remote: null; internal: false; name: null } | null,
+    // What ui.open answers, and the panes opened and closed.
+    placed: true,
+    opened: [] as string[],
+    closed: [] as string[],
     usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 1000, cache_creation_input_tokens: 10 },
   }
 }
@@ -59,6 +63,8 @@ function engine(on: On, status: { value: AgentStatus }, userFile = '{"*":{"langu
   on('ui.toast', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))
   on('session.surface', () => ({ value: 'terminal' }))
+  on('ui.open', ($, e) => (world.opened.push(e.id), { value: world.placed ? { isPlaced: true } : { isPlaced: false, reason: 'narrow' } }) as never)
+  on('ui.close', ($, e) => (world.closed.push(e.id), { value: undefined }))
   on('tool.call', { tool: 'Agent' }, ($, e) => ({
     result: { status: 'async_launched', agentId: 'a1', description: e.description, prompt: e.prompt, outputFile: '/tmp/a1' },
   }))
@@ -285,4 +291,63 @@ describe('usage ledger', () => {
     await start($)
     expect(await stats($)).toMatch(/^還沒有用量紀錄/)
   })
+
+  const PANE = { plugin: 'agent-dispatch', component: 'Pane', requestId: 'agent-dispatch-stats', props: { title: 'stats', isFocused: true, bodyColumns: 100, placement: 'dock' } } as const
+
+  // Today: a main step and an Opus review in /repo; a week ago: a haiku Explore in /old.
+  async function twoWeeks($: T, on: On, surface: 'terminal' | 'desktop' = 'terminal', isInteractive = true): Promise<World> {
+    const world = newWorld()
+    const then = new Date(2026, 9, 5, 9).getTime()
+    const tally = { input: 1000, cacheWrite: 0, cacheRead: 0, output: 0, steps: 1 }
+    world.store = {
+      'ledger:s3': {
+        updated: then,
+        repo: '/old',
+        started: then,
+        prompt: 'last week',
+        main: {},
+        spawns: [{ at: then, last: then, description: 'old task', type: 'Explore', model: 'claude-haiku-4-5', fork: false, background: false, ...tally }],
+      },
+    }
+    world.repo = { root: '/repo', remote: null, internal: false, name: null }
+    engine(on, { value: 'running' }, '', world)
+    await $.session.start({ cwd: '/repo', surface, isInteractive })
+    await step($, 'claude-opus-4')
+    await spawn($, world, { model: 'opus', description: 'deep review' }, 'a1')
+    await step($, 'claude-opus-4', 'a1')
+
+    return world
+  }
+
+  test('stats opens a pane: summary, groups down to each spawn, and the period', async ($, on) => {
+    const world = await twoWeeks($, on)
+    await stats($, 'stats')
+    expect(world.opened).toEqual(['agent-dispatch-stats'])
+
+    const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
+    expect(await pane.find({ type: 'Text', text: /1,320/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /Spawns: 2/ })).toBeDefined()
+    // Grouped by repo by default, each with a character bar.
+    expect(await pane.find({ type: 'Text', text: /\/repo/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /\/old/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /█/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /deep review/ })).toBeUndefined()
+
+    await pane.select({ key: 'group', value: 'model' })
+    await pane.select({ key: 'item', value: 'claude-opus-4' })
+    expect(await pane.find({ type: 'Text', text: /deep review · general-purpose · opus → claude-opus-4/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /old task/ })).toBeUndefined()
+
+    await pane.select({ key: 'group', value: 'type' })
+    await pane.select({ key: 'item', value: 'Explore' })
+    expect(await pane.find({ type: 'Text', text: /old task/ })).toBeDefined()
+
+    await pane.select({ key: 'days', value: '7' })
+    expect(await pane.find({ type: 'Text', text: /old task/ })).toBeUndefined()
+    await pane.select({ key: 'days', value: '30' })
+    await pane.select({ key: 'group', value: 'session' })
+    expect(await pane.find({ type: 'Text', text: /10-05 09:00 last week/ })).toBeDefined()
+    await pane.unmount()
+  })
 })
+

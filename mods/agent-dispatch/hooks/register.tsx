@@ -7,6 +7,15 @@ import {
   applyMeta,
   buildReport,
   DEFAULT_DAYS,
+  GROUP_BYS,
+  groups,
+  type GroupBy,
+  n,
+  NOT_INCLUDED,
+  sessionName,
+  spawnLine,
+  summaryLines,
+  emptyText,
   emptyLedger,
   LEDGER_PREFIX,
   LEDGER_SPEC,
@@ -23,10 +32,15 @@ import {
 
 const running = atom({ plugin: 'agent-dispatch', key: 'running' } as const, [])
 const stopped = atom({ plugin: 'agent-dispatch', key: 'stopped' } as const, [])
+// What the stats pane shows: the period, the grouping and the row opened to its spawns.
+const view = atom({ plugin: 'agent-dispatch', key: 'view' } as const, { days: 30, by: 'repo', item: '' })
 
 const MOD = 'agent-dispatch'
 const REDISPATCH = 'redispatch'
 const STATS = 'stats'
+const PANE = 'agent-dispatch-stats'
+const PERIODS = [7, 30, 90]
+const BAR_CELLS = 20
 const SPECS: Specs = { ledger: LEDGER_SPEC, language: LANGUAGE }
 const POLL_MS = 3000
 const STOPPED = new Set(['killed', 'failed'])
@@ -139,8 +153,16 @@ async function pruneLedgers($: EngineInterface): Promise<void> {
   }
 }
 
-// `stats [--text] [days]`: the report, or a usage line when the days are not 1 to MAX_DAYS.
-async function statsReport($: EngineInterface, lang: Lang, args: string[]): Promise<{ report: Report; text: boolean } | string> {
+async function loadReport($: EngineInterface, days: number): Promise<Report> {
+  const keys = (await $.store.keys()).filter(name => name.startsWith(LEDGER_PREFIX))
+  const stored = await Promise.all(keys.map(key => $.store.get(key)))
+
+  return buildReport(stored, days, await $.clock.now())
+}
+
+// `stats [--text] [days]`: opens the pane, or prints the report with `--text`, in a `-p` run
+// or where the pane cannot be placed (a narrow terminal).
+async function stats($: EngineInterface, lang: Lang, args: string[], interactive: boolean): Promise<string> {
   const text = args.includes('--text')
   const rest = args.filter(arg => arg !== '--text')
   const days = rest[0] === undefined ? DEFAULT_DAYS : Number(rest[0])
@@ -150,10 +172,27 @@ async function statsReport($: EngineInterface, lang: Lang, args: string[]): Prom
       'zh-TW': `用法：/${MOD} ${STATS} [--text] [天數]，天數 1 到 ${MAX_DAYS}（預設 ${DEFAULT_DAYS}）`,
     })
   }
-  const keys = (await $.store.keys()).filter(name => name.startsWith(LEDGER_PREFIX))
-  const stored = await Promise.all(keys.map(key => $.store.get(key)))
+  if (!text && interactive) {
+    await update($, view, current => ({ ...current, days }))
+    const opened = await $.ui.open({ id: PANE, title: pick(lang, { en: 'agent-dispatch usage', 'zh-TW': 'agent-dispatch 用量' }), focus: true, closeOnEscape: true })
+    if (opened.isPlaced) {
+      return pick(lang, { en: 'Opened the usage pane (Esc closes it).', 'zh-TW': '已開啟用量 pane（Esc 關閉）。' })
+    }
+    $.ui.log(`stats: pane not placed (${opened.reason}), printing the text report`, { to: 'debug' })
+    await $.ui.close({ id: PANE }).catch(() => undefined)
+  }
 
-  return { report: buildReport(stored, days, await $.clock.now()), text }
+  return renderStats(lang, await loadReport($, days))
+}
+
+function terminalBar(part: number, most: number): string {
+  return part <= 0 ? '' : '█'.repeat(Math.max(1, Math.round((part / most) * BAR_CELLS)))
+}
+
+function svgBar(part: number, most: number): string {
+  const width = part <= 0 ? 0 : Math.max(2, Math.round((part / most) * 160))
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="10"><rect width="${width}" height="10" rx="2" fill="#5b8def"/></svg>`
 }
 
 // --- configIO: the same block in every mod (scripts/check-copies.sh) ---
@@ -182,9 +221,12 @@ function configIO($: EngineInterface): ConfigIO {
 export const register: Register = (on, options) => {
   // Re-read at session start and after `/agent-dispatch set`.
   let lang: Lang = 'en'
+  // A `-p` run has no pane: `stats` prints its report there.
+  let interactive = true
   const ledger: LedgerState = { recording: true, writing: Promise.resolve(), meta: { repo: '', started: 0, prompt: '' } }
 
   on('session.start', async ($, e, next) => {
+    interactive = e.isInteractive
     try {
       const config = await loadConfig(configIO($), MOD, SPECS, options)
       lang = config.lang
@@ -226,9 +268,7 @@ export const register: Register = (on, options) => {
     }
     const [command, ...rest] = e.args.trim().split(/\s+/)
     if (command === STATS) {
-      const stats = await statsReport($, lang, rest)
-
-      return { text: typeof stats === 'string' ? stats : renderStats(lang, stats.report) }
+      return { text: await stats($, lang, rest, interactive) }
     }
     const text = await configCommand(configIO($), MOD, SPECS, options, e.args, resolved => {
       lang = resolved.lang
@@ -334,6 +374,93 @@ export const register: Register = (on, options) => {
           <Button key="dismiss" label={pick(lang, { en: 'Dismiss', 'zh-TW': '略過' })} hotkey="d" onPress={() => void update($, stopped, () => [])} />
         </Box>
         {below}
+      </Box>
+    )
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const parts = $.ui.resolve(e)
+    const { Box, Select, Text } = parts
+    // Desktop draws the bars as Svg; the terminal has no Svg and gets character bars. The runtime
+    // hands every constructor over, so the surface decides, not their presence.
+    const Svg = e.surface !== 'terminal' && 'Svg' in parts ? parts.Svg : undefined
+    const shown = await read($, view)
+    const by = (GROUP_BYS as readonly string[]).includes(shown.by) ? (shown.by as GroupBy) : 'repo'
+    const report = await loadReport($, shown.days)
+    const rows = groups(lang, report, by)
+    const most = Math.max(1, ...rows.map(row => row.tokens))
+    const open = rows.find(row => row.key === shown.item)
+    const byLabel: Record<GroupBy, string> = {
+      repo: 'repo',
+      session: 'session',
+      model: pick(lang, { en: 'model', 'zh-TW': '模型' }),
+      type: pick(lang, { en: 'agent type', 'zh-TW': 'agent 種類' }),
+    }
+
+    return (
+      <Box flexDirection="column">
+        <Box flexDirection="row" gap={2}>
+          <Text bold>
+            {pick(lang, { en: `${report.from} to ${report.to}`, 'zh-TW': `${report.from} 到 ${report.to}` })}
+          </Text>
+          <Select
+            key="days"
+            label={pick(lang, { en: 'Period: ', 'zh-TW': '期間：' })}
+            options={PERIODS.map(days => ({ value: String(days), label: pick(lang, { en: `${days} days`, 'zh-TW': `${days} 天` }) }))}
+            value={String(shown.days)}
+            onSelect={value => void update($, view, current => ({ ...current, days: Number(value) }))}
+          />
+        </Box>
+        {report.sessions.length === 0 ? (
+          <Text dimColor>{emptyText(lang)}</Text>
+        ) : (
+          <Box flexDirection="column">
+            <Box flexDirection="column" borderStyle="round" paddingX={1}>
+              {summaryLines(lang, report).map(line => (
+                <Text>{line}</Text>
+              ))}
+            </Box>
+            <Select
+              key="group"
+              label={pick(lang, { en: 'Group by: ', 'zh-TW': '分組：' })}
+              options={GROUP_BYS.map(value => ({ value, label: byLabel[value] }))}
+              value={by}
+              onSelect={value => void update($, view, current => ({ ...current, by: value, item: '' }))}
+            />
+            {rows.map(row => (
+              <Box key={`row-${row.key}`} flexDirection="row" gap={1}>
+                <Text wrap="truncate-end">{row.label.padEnd(28)}</Text>
+                {Svg !== undefined ? (
+                  <Svg source={svgBar(row.tokens, most)} alt={`${n(row.tokens)}`} width={160} height={10} />
+                ) : (
+                  <Text color="cyan">{terminalBar(row.tokens, most).padEnd(BAR_CELLS)}</Text>
+                )}
+                <Text dimColor>
+                  {pick(lang, { en: `${n(row.tokens)} · ${row.spawns} spawn(s)`, 'zh-TW': `${n(row.tokens)} · 派出 ${row.spawns} 次` })}
+                </Text>
+              </Box>
+            ))}
+            <Select
+              key="item"
+              label={pick(lang, { en: 'Spawns of: ', 'zh-TW': '看明細：' })}
+              options={rows.map(row => ({ value: row.key, label: row.label }))}
+              {...(open === undefined ? {} : { value: open.key })}
+              onSelect={value => void update($, view, current => ({ ...current, item: value }))}
+            />
+            {open?.detail.map(part => (
+              <Box key={`detail-${part.session.repo}-${part.session.started}`} flexDirection="column">
+                <Text bold wrap="truncate-end">
+                  {sessionName(lang, part.session)}
+                  {part.main > 0 ? pick(lang, { en: ` · main ${n(part.main)}`, 'zh-TW': ` · 主 ${n(part.main)}` }) : ''}
+                </Text>
+                {part.spawns.map(spawn => (
+                  <Text wrap="truncate-end">  {spawnLine(lang, spawn)}</Text>
+                ))}
+              </Box>
+            ))}
+            <Text dimColor>{NOT_INCLUDED[lang]}</Text>
+          </Box>
+        )}
       </Box>
     )
   })

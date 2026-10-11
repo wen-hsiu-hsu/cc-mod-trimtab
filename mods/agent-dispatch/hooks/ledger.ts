@@ -247,6 +247,56 @@ export function byRepo(report: Report): [string, SessionRow[]][] {
   return [...groups]
 }
 
+export type GroupBy = 'repo' | 'session' | 'model' | 'type'
+export const GROUP_BYS: readonly GroupBy[] = ['repo', 'session', 'model', 'type']
+
+// One row of the pane's grouping, and what it opens to: per session, the main tokens that
+// fall in the group and the spawns that do.
+export type Group = { key: string; label: string; tokens: number; spawns: number; detail: { session: SessionRow; main: number; spawns: Spawn[] }[] }
+
+export function groups(lang: Lang, report: Report, by: GroupBy): Group[] {
+  const found = new Map<string, Group>()
+  const add = (key: string, label: string, session: SessionRow, main: number, spawns: Spawn[]) => {
+    let group = found.get(key)
+    if (group === undefined) {
+      group = { key, label, tokens: 0, spawns: 0, detail: [] }
+      found.set(key, group)
+    }
+    group.tokens += main + spawns.reduce((sum, spawn) => sum + tokens(spawn), 0)
+    group.spawns += spawns.filter(spawn => spawn.type !== 'unknown').length
+    const last = group.detail.at(-1)
+    if (last?.session === session) {
+      last.main += main
+      last.spawns.push(...spawns)
+    } else {
+      group.detail.push({ session, main, spawns: [...spawns] })
+    }
+  }
+  for (const session of report.sessions) {
+    if (by === 'repo') {
+      add(session.repo, session.repo || pick(lang, { en: '(no repo)', 'zh-TW': '（沒有 repo）' }), session, session.main, session.spawns)
+    } else if (by === 'session') {
+      add(`${session.repo}|${session.started}`, sessionName(lang, session), session, session.main, session.spawns)
+    } else if (by === 'model') {
+      for (const [model, count] of session.mainByModel) {
+        add(model, model, session, count, [])
+      }
+      for (const spawn of session.spawns) {
+        add(spawn.model, spawn.model, session, 0, [spawn])
+      }
+    } else {
+      if (session.main > 0) {
+        add('main', pick(lang, { en: 'main session', 'zh-TW': '主 session' }), session, session.main, [])
+      }
+      for (const spawn of session.spawns) {
+        add(spawn.type, spawn.type, session, 0, [spawn])
+      }
+    }
+  }
+
+  return [...found.values()].sort((a, b) => b.tokens - a.tokens)
+}
+
 export const n = (value: number): string => value.toLocaleString('en-US')
 
 export function share(part: number, whole: number): string {
