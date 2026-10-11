@@ -336,10 +336,11 @@ export const register: Register = (on, options) => {
     return spawned
   })
 
-  // The session is named after its first prompt; a resumed one keeps the name it has.
+  // The session is named after its first prompt that is not a slash command; a resumed one
+  // keeps the name it has. Mods cannot read the session's own title.
   on('prompt.submit', async ($, e, next) => {
     await sessionKey($, ledger).catch(() => undefined)
-    if (ledger.meta.prompt === '' && ['composer', 'bridge', 'sdk'].includes(e.origin.kind)) {
+    if (ledger.meta.prompt === '' && ['composer', 'bridge', 'sdk'].includes(e.origin.kind) && !e.text.trimStart().startsWith('/')) {
       ledger.meta = { ...ledger.meta, prompt: promptSummary(e.text) }
     }
 

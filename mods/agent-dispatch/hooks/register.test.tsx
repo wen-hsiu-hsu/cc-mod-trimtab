@@ -158,6 +158,7 @@ describe('usage ledger', () => {
     world.repo = { root: '/repo', remote: null, internal: false, name: null }
     on('prompt.submit', ($, e) => ({ text: e.text }))
     await start($)
+    await $.prompt.submit({ text: '/agent-dispatch stats', origin: { kind: 'composer' } } as never)
     await $.prompt.submit({ text: 'review the diff and fix the flaky ledger test please', origin: { kind: 'composer' } } as never)
     await $.prompt.submit({ text: 'a later prompt', origin: { kind: 'composer' } } as never)
     await step($, 'claude-opus-4')
