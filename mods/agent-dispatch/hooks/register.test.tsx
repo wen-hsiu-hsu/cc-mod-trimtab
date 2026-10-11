@@ -229,6 +229,17 @@ describe('usage ledger', () => {
     expect(spawns[499]?.description).toBe('task 501')
   })
 
+  test('replaces a ledger of the old 0.2.0 format under its own key', async ($, on) => {
+    const world = newWorld()
+    world.store = { 'ledger:s1': { updated: world.now, steps: {}, spawns: { '2026-10-12': { 'general-purpose|claude-haiku-4-5': 2 } }, counts: {}, opus: [], agents: {} } }
+    engine(on, { value: 'running' }, '', world)
+    await start($)
+    await spawn($, world, { description: 'after the upgrade' }, 'a1')
+    await step($, 'claude-sonnet-4-6', 'a1')
+
+    expect(line(await stats($), 'after the upgrade')).toContain('1 steps')
+  })
+
   test('prunes ledgers older than 90 days at session start', async ($, on) => {
     const world = newWorld()
     world.store = { 'ledger:old': { updated: world.now - 91 * DAY }, 'ledger:recent': { updated: world.now - 89 * DAY }, other: { updated: 0 } }

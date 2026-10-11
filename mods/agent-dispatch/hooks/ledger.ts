@@ -166,7 +166,8 @@ export type Report = {
   sessions: SessionRow[]
 }
 
-function isLedger(value: unknown): value is Ledger {
+// False for anything else, such as a ledger of the unreleased first format (spawns per day).
+export function isLedger(value: unknown): value is Ledger {
   return typeof value === 'object' && value !== null && Array.isArray((value as Ledger).spawns) && typeof (value as Ledger).main === 'object'
 }
 

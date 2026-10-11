@@ -17,6 +17,7 @@ import {
   summaryLines,
   emptyText,
   emptyLedger,
+  isLedger,
   LEDGER_PREFIX,
   LEDGER_SPEC,
   MAX_DAYS,
@@ -130,7 +131,8 @@ function record($: EngineInterface, state: LedgerState, where: string, change: (
   state.writing = state.writing.then(async () => {
     try {
       const key = `${LEDGER_PREFIX}${await $.session.id()}`
-      const ledger = { ...emptyLedger(), ...((await $.store.get(key)) as Partial<Ledger> | undefined) }
+      const stored = await $.store.get(key)
+      const ledger = isLedger(stored) ? { ...emptyLedger(), ...stored } : emptyLedger()
       change(ledger, await $.clock.now())
       applyMeta(ledger, state.meta)
       await $.store.set(key, ledger)
