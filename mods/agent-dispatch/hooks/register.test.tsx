@@ -533,6 +533,29 @@ describe('usage ledger', () => {
     expect((await pane.find({ key: 'sort' }))?.props.value).toBe('tokens')
     await pane.unmount()
   })
+  test('a spawn opens in place to its type, model, run and session, one at a time', async ($, on) => {
+    await busyDay($, on)
+    const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
+    await pane.select({ key: 'group', value: 'model' })
+    await pane.press({ key: 'row:claude-haiku-4-5' })
+    await pane.select({ key: 'sort', value: 'duration' })
+    expect(await pane.find({ key: 'detail:a0' })).toBeUndefined()
+
+    await pane.press({ key: 'spawn:a0' })
+    const detail = async (id: string, line: string) => (await pane.find({ key: `detail:${id}:${line}` }))?.text ?? ''
+    expect(await detail('a0', 'type')).toMatch(/Type\s*general-purpose/)
+    expect(await detail('a0', 'model')).toMatch(/Model\s*named haiku → claude-haiku-4-5/)
+    expect(await detail('a0', 'run')).toMatch(/Run\s*background · 3 steps · 12m00s/)
+    expect(await detail('a0', 'session')).toMatch(/session\s*Oct 12 09:00 a busy day/)
+
+    await pane.press({ key: 'spawn:a1' })
+    expect(await pane.find({ key: 'detail:a0:type' })).toBeUndefined()
+    expect(await detail('a1', 'model')).toMatch(/Model\s*default → claude-haiku-4-5/)
+    expect(await detail('a1', 'run')).toMatch(/Run\s*3 steps · 11m00s/)
+    await pane.press({ key: 'spawn:a1' })
+    expect(await pane.find({ key: 'detail:a1:type' })).toBeUndefined()
+    await pane.unmount()
+  })
   test('the desktop pane draws its bars as Svg', async ($, on) => {
     await twoWeeks($, on, 'desktop')
     await stats($, 'stats')

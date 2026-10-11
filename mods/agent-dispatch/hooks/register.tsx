@@ -7,6 +7,7 @@ import {
   applyMeta,
   buildReport,
   dayLabel,
+  elapsed,
   DEFAULT_DAYS,
   GROUP_BYS,
   groups,
@@ -41,8 +42,8 @@ const PAGE = 10
 const running = atom({ plugin: 'agent-dispatch', key: 'running' } as const, [])
 const stopped = atom({ plugin: 'agent-dispatch', key: 'stopped' } as const, [])
 // What the stats pane shows: the period, the grouping, the row opened to its spawns, their
-// order and how many of them are listed.
-const view = atom({ plugin: 'agent-dispatch', key: 'view' } as const, { days: 30, by: 'repo', item: '', sort: 'tokens', limit: PAGE })
+// order, how many of them are listed and the one opened in place.
+const view = atom({ plugin: 'agent-dispatch', key: 'view' } as const, { days: 30, by: 'repo', item: '', sort: 'tokens', limit: PAGE, spawn: '' })
 
 // How an opened row orders its spawns: most tokens, newest, or longest run first.
 type SortBy = 'tokens' | 'time' | 'duration'
@@ -575,16 +576,39 @@ export const register: Register = (on, options) => {
               <Text dimColor>{pick(lang, { en: 'date', 'zh-TW': '日期' })}</Text>
             </Box>
           </Box>
-          {listed.slice(0, limit).map(({ spawn }) => {
+          {listed.slice(0, limit).map(({ spawn, session }) => {
             const id = spawnId(spawn)
+            const color = kindColor(spawn)
+            const how = spawn.fork ? 'fork' : spawn.requested === undefined ? pick(lang, { en: 'default', 'zh-TW': '預設' }) : pick(lang, { en: 'named', 'zh-TW': '指定' })
+            const lines: [string, string, RenderNode][] = [
+              ['type', pick(lang, { en: 'Type', 'zh-TW': '種類' }), spawn.type],
+              [
+                'model',
+                pick(lang, { en: 'Model', 'zh-TW': '模型' }),
+                <Text wrap="truncate-end">
+                  <Text color={color.ink}>{how}</Text>
+                  {spawn.requested === undefined || spawn.fork ? '' : ` ${spawn.requested}`} → {spawn.model}
+                </Text>,
+              ],
+              [
+                'run',
+                pick(lang, { en: 'Run', 'zh-TW': '執行' }),
+                [
+                  ...(spawn.background ? [pick(lang, { en: 'background', 'zh-TW': '背景' })] : []),
+                  pick(lang, { en: `${spawn.steps} steps`, 'zh-TW': `${spawn.steps} 步` }),
+                  elapsed(spawn.last - spawn.at),
+                ].join(' · '),
+              ],
+              ['session', 'session', sessionName(lang, session)],
+            ]
 
-            return (
+            return [
               <Box key={`line:${id}`} flexDirection="row" gap={1}>
                 <Box key={`dot:${id}`} width={1} flexShrink={0}>
                   <Text color={kindColor(spawn).ink}>●</Text>
                 </Box>
                 <Box flexGrow={1} flexShrink={1}>
-                  <Button key={`spawn:${id}`} plain onPress={() => undefined}>
+                  <Button key={`spawn:${id}`} plain onPress={() => void update($, view, current => ({ ...current, spawn: current.spawn === id ? '' : id }))}>
                     <Text wrap="truncate-end">{spawnParts(lang, spawn)[0]}</Text>
                   </Button>
                 </Box>
@@ -597,8 +621,25 @@ export const register: Register = (on, options) => {
                 <Box width={6} flexShrink={0} justifyContent="flex-end">
                   <Text dimColor>{dayLabel(lang, spawn.at)}</Text>
                 </Box>
-              </Box>
-            )
+              </Box>,
+              shown.spawn === id ? (
+                // Opened in place: a line in the color of where its model came from runs down the left
+                // (a Box border cannot be drawn on one side only).
+                <Box key={`detail:${id}`} flexDirection="column" marginLeft={1} marginTop={1} marginBottom={1}>
+                  {lines.map(([key, name, value]) => (
+                    <Box key={`detail:${id}:${key}`} flexDirection="row" gap={1}>
+                      <Box width={2} flexShrink={0}>
+                        <Text color={color.ink}>│</Text>
+                      </Box>
+                      <Box width={8} flexShrink={0}>
+                        <Text dimColor>{name}</Text>
+                      </Box>
+                      <Box flexShrink={1}>{typeof value === 'string' ? <Text wrap="truncate-end">{value}</Text> : value}</Box>
+                    </Box>
+                  ))}
+                </Box>
+              ) : null,
+            ]
           })}
           {listed.length > limit ? (
             <Box paddingLeft={2}>
@@ -734,7 +775,7 @@ export const register: Register = (on, options) => {
               // A Button holds only text, so the name is the button and the bar sits beside it.
               const name = (
                 <Box flexGrow={1} flexShrink={1}>
-                  <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key, sort: 'tokens', limit: PAGE }))}>
+                  <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key, sort: 'tokens', limit: PAGE, spawn: '' }))}>
                     <Text wrap="truncate-end">{row.label}</Text>
                   </Button>
                 </Box>
