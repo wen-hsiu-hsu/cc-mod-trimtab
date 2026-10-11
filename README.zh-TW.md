@@ -278,8 +278,9 @@ context 大的時候，接無關的新任務、或快取過期後繼續，成本
 
 `/agent-dispatch stats [天數]`（1–90，預設 30，含今天）開 pane，涵蓋所有 session：
 
-- 摘要：主 session 與 subagent 的 token（input + cache write + output）與 subagent 佔比，cache read 另列一行；派出總次數、指定模型的次數（`n/N`）、指定 Opus 的次數、fork 的次數，以及沿用預設模型的比例。
-- 依 repo（顯示資料夾名稱）、session、模型或 agent 種類分組（`分組`），每列有長條（desktop 用 Svg，終端機用有底色的格子）、token、佔比與派出次數。pane 內容寬 80 欄以上時一列一行，較窄時長條換到第二行。按一列的名稱打開它的各 session 與每次派出，`‹ 返回`（`b`）回總覽。
+- 兩張卡，放在側邊時上下排，內容寬 80 欄以上時並排。**總 token**（input + cache write + output）附一條分成主 session（紫）與 subagent（青）的長條，以及 subagent 佔比。**派出**依模型怎麼來分成三類，相加等於總數：指定模型（黃，含指定 Opus 的次數）、沿用預設（灰）、fork（綠，用主 session 的模型）。cache read 在卡片下方另列一行。
+- 依 repo（顯示資料夾名稱）、session、模型或 agent 種類分組（`分組`），每列有長條（desktop 用 Svg，終端機用有底色的格子）、token、佔比與派出次數。pane 內容寬 80 欄以上時一列一行，較窄時長條換到第二行。
+- 按一列的名稱打開它：上方是這一列自己的兩張卡，下面用表格列出每次派出（圓點顏色表示模型怎麼來、description、長條、token、日期），預設 token 多的在前，`排序` 可改成時間新的在前或耗時長的在前。先列 10 筆，按 `還有 N 筆` 再列 10 筆。按一筆派出會在原地展開它的種類、模型、執行（背景、步數、耗時）與 session，一次展開一筆。種類分組的「主 session」那列沒有派出，改列各 session 自己的 token。`‹ 返回`（`b`）回總覽。
 - `期間` 切換 7、30、90 天。
 
 終端機較窄時 pane 會改放在輸入框上方。`/agent-dispatch stats --text [天數]` 印出同樣內容的文字版；`-p` 執行或無處放 pane 時，`stats` 也改印文字版。

@@ -26,6 +26,12 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
   is named after its first prompt that is not a slash command, and after
   `/clear` gets its own start and name; an agent that outlives `/clear` keeps
   its steps on its spawn.
+- The stats pane opens on two cards, tokens split into the main session and
+  subagents, and spawns split into named model, default model and fork, three
+  kinds that add up (a fork is no longer counted as taking the default; the
+  `--text` summary says the same). An opened row heads with its own cards and
+  lists its spawns as a table, most tokens first (or newest, or longest run),
+  ten at a time; a spawn opens in place to its type, model, run and session.
 
 ## [0.1.1] - 2026-10-11
 
