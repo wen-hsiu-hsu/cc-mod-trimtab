@@ -33,8 +33,7 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 
 ## 待實測
 
-1. `cost.usd` 前後相減能否準確反映 `$.model.complete` 的費用（見「費用回報」）。
-2. 本機產生的型別檔是否與 GitHub 版本一致（`complete` 是否仍只回傳文字）。
+1. 2.1.296 自己產生的型別檔與 2.1.288 版是否一致（見「查證結果」2；目前只拿得到 2.1.288 版）。
 
 ## 待辦
 
@@ -58,9 +57,8 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 - 一次性觸發：toast 顯示 token 數與估算金額。
 - 有模型參與的功能：輸入框上方常駐顯示各 mod 自己的累計（不跨 mod 加總），例如 `keep 3x 12.4k tok ~$0.04`。
 - 只有拿得到 API 回傳 usage 的功能才顯示；拿不到就不顯示。
-  - `$.model.fork`（保持快取、交接摘要）回傳四種 token 數，可顯示。
-  - `$.model.complete`、`$.model.classify`（Haiku 交接判斷、Sonnet 整理）只回傳文字，沒有 usage。
-  - 待實測：呼叫前後各讀一次 `$.session.usage().cost.usd` 相減。要確認 mod 的 `complete` 是否算進 session 總額，以及主對話同時進行時會不會混入；準確才採用，否則這兩項不顯示。
+  - `$.model.fork`（保持快取、交接摘要）與 `$.model.complete`（Haiku 交接判斷、Sonnet 整理）都回傳 `usage`（四種 token 數；失敗時是失敗前已花掉的量），可顯示。
+  - `$.model.classify` 只回傳標籤，沒有 usage；目前沒有 mod 用它。
 - 金額依價格表估算並標明「依 API 價格估算」與價格日期；訂閱制實際不依 token 計費。價格表裡沒有的模型只顯示 token 數。
 - 價格表在每個需要的 mod 各放一份，加進 `scripts/check-copies.sh`（比照 `scrub.ts`）。
 
@@ -185,7 +183,7 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 ## 查證結果
 
 1. `userConfig` 不能依專案設定：`pluginConfigs` 只從使用者或 managed 設定讀取（[mods reference](https://code.claude.com/docs/en/plugins/mods/reference)）；2026-10-09 在 2.1.295 實測，repo 的 `.claude/settings.json`、`.claude/settings.local.json` 不會生效（用 `--plugin-dir` 加 `claude -p`，正式安裝的互動模式沒測）。→ repo 層由 mod 自己讀檔。
-2. usage：只有 `$.model.fork` 回傳；`complete`、`classify` 沒有（依 GitHub 上的 `mods/types/claude-code.d.ts`，可能比安裝版本舊，需在本機型別檔再確認）。→ 見「費用回報」。
+2. usage：`$.model.fork` 與 `$.model.complete` 都回傳 `{ isAnswered, text, usage }`，`usage` 有 input、output、cache read、cache write 四種 token 數，沒有金額；`classify` 只回傳標籤。依本機 2.1.288 產生的型別檔（2026-10-11 確認；GitHub 上的 `mods/types/claude-code.d.ts` 是 2.1.277 寫的，`complete` 還只回傳文字）。repo 的 `session-keeper`、`project-memory` 已在 2.1.296 上用 `isAnswered`／`text`。→ 見「費用回報」。
 3. `cc-mod-trimtab` 重名：網路搜尋沒找到同名的 Claude Code、MCP 或 agent 專案；未做 GitHub 全站搜尋。
 4. 2026-10-06 已在 CLI 實測 output-trimmer 的結果改寫、agent-dispatch（原 agent-watch）的中斷偵測、tool-guard（原 shell-guard）的攔截與放行、secret-scrub 的遮蔽、open-items 的自動延後與 compact 行為。
 5. `$.store` 是 plugin 自己的一個 JSON 檔，放在使用者的 Claude Code 設定目錄，跨 session 與熱重載保留（2.1.296 型別檔）。所有 session 共用同一份，所以 session 層的值（`set --session`、`on`）以 sessionId 為 key 存，一週沒寫入的 session 在其他 session 寫入時清掉（0.1.1 起）。2026-10-11 實測：0.1.0 時 A 開 `keep_warm` 後 B `set`，A 的值被蓋回預設；0.1.1 後兩個 session 各自保留。
