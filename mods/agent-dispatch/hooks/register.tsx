@@ -11,10 +11,10 @@ import {
   groups,
   type GroupBy,
   n,
-  NOT_INCLUDED,
+  repoName,
   sessionName,
-  spawnLine,
-  summaryLines,
+  share,
+  spawnParts,
   emptyText,
   emptyLedger,
   isLedger,
@@ -42,7 +42,8 @@ const REDISPATCH = 'redispatch'
 const STATS = 'stats'
 const PANE = 'agent-dispatch-stats'
 const PERIODS = [7, 30, 90]
-const BAR_CELLS = 20
+// From this many body columns a row is one line; below, its bar goes on a second line.
+const WIDE_COLUMNS = 80
 const SPECS: Specs = { ledger: LEDGER_SPEC, language: LANGUAGE }
 const POLL_MS = 3000
 const STOPPED = new Set(['killed', 'failed'])
@@ -211,14 +212,19 @@ async function stats($: EngineInterface, lang: Lang, args: string[], interactive
   return renderStats(lang, await loadReport($, days))
 }
 
-function terminalBar(part: number, most: number): string {
-  return part <= 0 ? '' : '█'.repeat(Math.max(1, Math.round((part / most) * BAR_CELLS)))
+// How many cells of `width` a bar for `part` of `most` fills: at least one when there is any.
+function barCells(part: number, most: number, width: number): number {
+  return part <= 0 ? 0 : Math.max(1, Math.round((part / most) * width))
 }
 
-function svgBar(part: number, most: number): string {
-  const width = part <= 0 ? 0 : Math.max(2, Math.round((part / most) * 160))
+function svgBar(cells: number, width: number): string {
+  const unit = 8
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="10"><rect width="${width}" height="10" rx="2" fill="#5b8def"/></svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width * unit}" height="10"><rect width="${cells * unit}" height="10" rx="2" fill="#2f6fb5"/></svg>`
+}
+
+function clamp(value: number, low: number, high: number): number {
+  return Math.min(high, Math.max(low, value))
 }
 
 // --- configIO: the same block in every mod (scripts/check-copies.sh) ---
@@ -413,87 +419,200 @@ export const register: Register = (on, options) => {
     )
   })
 
+  // Laid out by the body's columns, never padded with spaces (a CJK character takes two cells).
+  // Each row is a button that opens it to its sessions and spawns; Back returns.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const parts = $.ui.resolve(e)
-    const { Box, Select, Text } = parts
-    // Desktop draws the bars as Svg; the terminal has no Svg and gets character bars. The runtime
+    const { Box, Button, Select, Text } = parts
+    // Desktop draws the bars as Svg; the terminal has no Svg and gets colored spaces. The runtime
     // hands every constructor over, so the surface decides, not their presence.
     const Svg = e.surface !== 'terminal' && 'Svg' in parts ? parts.Svg : undefined
     const shown = await read($, view)
     const by = (GROUP_BYS as readonly string[]).includes(shown.by) ? (shown.by as GroupBy) : 'repo'
     const report = await loadReport($, shown.days)
     const rows = groups(lang, report, by)
-    const most = Math.max(1, ...rows.map(row => row.tokens))
     const open = rows.find(row => row.key === shown.item)
+    const body = e.props.bodyColumns
+    const wide = body >= WIDE_COLUMNS
+    const all = report.main + report.sub
+    const most = Math.max(1, ...rows.map(row => row.tokens))
+    const barWidth = wide ? clamp(body - 60, 10, 40) : clamp(body - 22, 8, 30)
     const byLabel: Record<GroupBy, string> = {
       repo: 'repo',
       session: 'session',
       model: pick(lang, { en: 'model', 'zh-TW': '模型' }),
-      type: pick(lang, { en: 'agent type', 'zh-TW': 'agent 種類' }),
+      type: pick(lang, { en: 'type', 'zh-TW': '種類' }),
     }
+    const spawnCount = (count: number) => pick(lang, { en: `${count} spawns`, 'zh-TW': `${count} 次` })
+    const bar = (part: number) => {
+      const cells = barCells(part, most, barWidth)
+      if (Svg !== undefined) {
+        return <Svg source={svgBar(cells, barWidth)} alt={n(part)} width={barWidth * 8} height={10} />
+      }
+
+      return cells === 0 ? <Text> </Text> : <Text backgroundColor="cyan">{' '.repeat(cells)}</Text>
+    }
+
+    if (open !== undefined) {
+      return (
+        <Box flexDirection="column">
+          <Box flexDirection="row" gap={1}>
+            <Button
+              key="back"
+              label={pick(lang, { en: '‹ Back', 'zh-TW': '‹ 返回' })}
+              hotkey="b"
+              onPress={() => void update($, view, current => ({ ...current, item: '' }))}
+            />
+            <Text dimColor>{byLabel[by]} ›</Text>
+            <Box flexShrink={1}>
+              <Text bold wrap="truncate-end">
+                {open.label}
+              </Text>
+            </Box>
+          </Box>
+          <Text dimColor wrap="wrap">
+            {pick(lang, {
+              en: `${n(open.tokens)} tokens · ${open.spawns} spawns · ${shown.days} days`,
+              'zh-TW': `${n(open.tokens)} token · 派出 ${open.spawns} 次 · ${shown.days} 天`,
+            })}
+          </Text>
+          {open.detail.map(part => (
+            <Box key={`detail-${part.session.repo}-${part.session.started}`} flexDirection="column" marginTop={1}>
+              <Text bold wrap="truncate-end">
+                {sessionName(lang, part.session)}
+              </Text>
+              <Text dimColor wrap="truncate-end">
+                {repoName(lang, part.session.repo)} · {pick(lang, { en: `main session ${n(part.main)}`, 'zh-TW': `主 session ${n(part.main)}` })}
+              </Text>
+              {part.spawns.map(spawn => {
+                const [title, what, how] = spawnParts(lang, spawn)
+
+                return (
+                  <Box flexDirection="column" paddingLeft={2} marginTop={1}>
+                    <Text wrap="wrap">{title}</Text>
+                    <Text dimColor wrap="wrap">
+                      {what}
+                    </Text>
+                    <Text dimColor wrap="wrap">
+                      {how}
+                    </Text>
+                  </Box>
+                )
+              })}
+            </Box>
+          ))}
+          <Box marginTop={1}>
+            <Text dimColor wrap="wrap">
+              {pick(lang, { en: '‹ Back (b) returns · Esc closes', 'zh-TW': '‹ 返回（b）回總覽 · Esc 關閉' })}
+            </Text>
+          </Box>
+        </Box>
+      )
+    }
+
+    const kpis = [
+      { label: pick(lang, { en: 'Tokens', 'zh-TW': '總 token' }), value: n(all) },
+      { label: pick(lang, { en: 'Subagents', 'zh-TW': 'subagent' }), value: share(report.sub, all) },
+      { label: pick(lang, { en: 'Spawns', 'zh-TW': '派出' }), value: String(report.spawned.all) },
+    ]
+    const s = report.spawned
 
     return (
       <Box flexDirection="column">
-        <Box flexDirection="row" gap={2}>
-          <Text bold>
-            {range(lang, report)}
-          </Text>
+        <Box flexDirection="row" justifyContent="space-between" gap={2}>
+          <Text dimColor>{range(lang, report)}</Text>
           <Select
             key="days"
-            label={pick(lang, { en: 'Period: ', 'zh-TW': '期間：' })}
+            label={pick(lang, { en: 'Period ', 'zh-TW': '期間 ' })}
             options={PERIODS.map(days => ({ value: String(days), label: pick(lang, { en: `${days} days`, 'zh-TW': `${days} 天` }) }))}
             value={String(shown.days)}
-            onSelect={value => void update($, view, current => ({ ...current, days: Number(value) }))}
+            onSelect={value => void update($, view, current => ({ ...current, days: Number(value), item: '' }))}
           />
         </Box>
         {report.sessions.length === 0 ? (
-          <Text dimColor>{emptyText(lang)}</Text>
+          <Box marginTop={1}>
+            <Text dimColor wrap="wrap">
+              {emptyText(lang)}
+            </Text>
+          </Box>
         ) : (
           <Box flexDirection="column">
-            <Box flexDirection="column" borderStyle="round" paddingX={1}>
-              {summaryLines(lang, report).map(line => (
-                <Text>{line}</Text>
+            <Box flexDirection="row" marginTop={1}>
+              {kpis.map(kpi => (
+                <Box key={`kpi-${kpi.label}`} flexDirection="column" width={wide ? 22 : Math.floor(body / 3)} flexShrink={0}>
+                  <Text dimColor>{kpi.label}</Text>
+                  <Text bold>{kpi.value}</Text>
+                </Box>
               ))}
             </Box>
-            <Select
-              key="group"
-              label={pick(lang, { en: 'Group by: ', 'zh-TW': '分組：' })}
-              options={GROUP_BYS.map(value => ({ value, label: byLabel[value] }))}
-              value={by}
-              onSelect={value => void update($, view, current => ({ ...current, by: value, item: '' }))}
-            />
-            {rows.map(row => (
-              <Box key={`row-${row.key}`} flexDirection="row" gap={1}>
-                <Text wrap="truncate-end">{row.label.padEnd(28)}</Text>
-                {Svg !== undefined ? (
-                  <Svg source={svgBar(row.tokens, most)} alt={`${n(row.tokens)}`} width={160} height={10} />
-                ) : (
-                  <Text color="cyan">{terminalBar(row.tokens, most).padEnd(BAR_CELLS)}</Text>
-                )}
-                <Text dimColor>
-                  {pick(lang, { en: `${n(row.tokens)} · ${row.spawns} spawn(s)`, 'zh-TW': `${n(row.tokens)} · 派出 ${row.spawns} 次` })}
-                </Text>
-              </Box>
-            ))}
-            <Select
-              key="item"
-              label={pick(lang, { en: 'Spawns of: ', 'zh-TW': '看明細：' })}
-              options={rows.map(row => ({ value: row.key, label: row.label }))}
-              {...(open === undefined ? {} : { value: open.key })}
-              onSelect={value => void update($, view, current => ({ ...current, item: value }))}
-            />
-            {open?.detail.map(part => (
-              <Box key={`detail-${part.session.repo}-${part.session.started}`} flexDirection="column">
-                <Text bold wrap="truncate-end">
-                  {sessionName(lang, part.session)}
-                  {part.main > 0 ? pick(lang, { en: ` · main ${n(part.main)}`, 'zh-TW': ` · 主 ${n(part.main)}` }) : ''}
-                </Text>
-                {part.spawns.map(spawn => (
-                  <Text wrap="truncate-end">  {spawnLine(lang, spawn)}</Text>
-                ))}
-              </Box>
-            ))}
-            <Text dimColor>{NOT_INCLUDED[lang]}</Text>
+            <Text dimColor wrap="wrap">
+              {pick(lang, {
+                en: `main ${n(report.main)} · sub ${n(report.sub)} · cache read ${n(report.cacheRead)}`,
+                'zh-TW': `主 ${n(report.main)} · sub ${n(report.sub)} · cache read ${n(report.cacheRead)}`,
+              })}
+            </Text>
+            <Text dimColor wrap="wrap">
+              {pick(lang, {
+                en: `named model ${s.explicit}/${s.all} · Opus ${s.opus} · fork ${s.forks} · default ${share(s.defaults, s.all)}`,
+                'zh-TW': `指定模型 ${s.explicit}/${s.all} · Opus ${s.opus} · fork ${s.forks} · 預設 ${share(s.defaults, s.all)}`,
+              })}
+            </Text>
+            <Box marginTop={1} marginBottom={1}>
+              <Select
+                key="group"
+                label={pick(lang, { en: 'Group by ', 'zh-TW': '分組 ' })}
+                options={GROUP_BYS.map(value => ({ value, label: byLabel[value] }))}
+                value={by}
+                onSelect={value => void update($, view, current => ({ ...current, by: value, item: '' }))}
+              />
+            </Box>
+            {rows.map(row => {
+              // A Button holds only text, so the name is the button and the bar sits beside it.
+              const name = (
+                <Box flexGrow={1} flexShrink={1}>
+                  <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key }))}>
+                    <Text wrap="truncate-end">{row.label}</Text>
+                  </Button>
+                </Box>
+              )
+
+              return wide ? (
+                <Box key={`line-${row.key}`} flexDirection="row" gap={1}>
+                  {name}
+                  <Box width={barWidth} flexShrink={0}>
+                    {bar(row.tokens)}
+                  </Box>
+                  <Box width={10} flexShrink={0} justifyContent="flex-end">
+                    <Text>{n(row.tokens)}</Text>
+                  </Box>
+                  <Box width={5} flexShrink={0} justifyContent="flex-end">
+                    <Text dimColor>{share(row.tokens, all)}</Text>
+                  </Box>
+                  <Box width={10} flexShrink={0} justifyContent="flex-end">
+                    <Text dimColor>{spawnCount(row.spawns)}</Text>
+                  </Box>
+                </Box>
+              ) : (
+                <Box key={`line-${row.key}`} flexDirection="column">
+                  <Box flexDirection="row" gap={1}>
+                    {name}
+                    <Text dimColor>{spawnCount(row.spawns)}</Text>
+                  </Box>
+                  <Box flexDirection="row" gap={1}>
+                    <Box width={barWidth} flexShrink={0}>
+                      {bar(row.tokens)}
+                    </Box>
+                    <Text>{n(row.tokens)}</Text>
+                    <Text dimColor>{share(row.tokens, all)}</Text>
+                  </Box>
+                </Box>
+              )
+            })}
+            <Box marginTop={1}>
+              <Text dimColor wrap="wrap">
+                {pick(lang, { en: 'Tab moves · Enter opens a row · Esc closes', 'zh-TW': 'Tab 移動 · Enter 打開一列 · Esc 關閉' })}
+              </Text>
+            </Box>
           </Box>
         )}
       </Box>

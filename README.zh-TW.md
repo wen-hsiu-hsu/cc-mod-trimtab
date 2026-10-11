@@ -271,7 +271,7 @@ context 大的時候，接無關的新任務、或快取過期後繼續，成本
 
 每個 session 在 plugin 自己的 `$.store` 寫自己的帳本（每個 session 一個 key，跨 repo 共用），記下：
 
-- session：所屬 repo（用主工作樹，同 repo 的 worktree 歸在一起）、開始時間與第一則 prompt 的前 40 字（兩者合起來當 session 名稱），以及主 session 各模型的 token。
+- session：所屬 repo（用主工作樹，同 repo 的 worktree 歸在一起）、開始時間與第一則非 `/` 指令 prompt 的前 40 字（兩者合起來當 session 名稱，例如 `10/12 02:11 檢查 diff…`），以及主 session 各模型的 token。`/clear` 後的新 session 有自己的開始時間與名稱；mod 讀不到 session 本身的標題。
 - 每次派出（每個 session 保留最近 500 筆）：description、agent 種類、呼叫指定的模型（或預設）與實際的模型、是不是 fork、是不是背景、input／cache write／cache read／output token、步數與耗時。帳本沒看到派出的 agent（例如熱重載前派的）列為 `unknown`。
 
 90 天沒有寫入的帳本在 session 開始時刪除。
@@ -279,10 +279,10 @@ context 大的時候，接無關的新任務、或快取過期後繼續，成本
 `/agent-dispatch stats [天數]`（1–90，預設 30，含今天）開 pane，涵蓋所有 session：
 
 - 摘要：主 session 與 subagent 的 token（input + cache write + output）與 subagent 佔比，cache read 另列一行；派出總次數、指定模型的次數（`n/N`）、指定 Opus 的次數、fork 的次數，以及沿用預設模型的比例。
-- 依 repo、session、模型或 agent 種類分組（`分組`），每列有長條（desktop 用 Svg，終端機用字元）、token 與派出次數。`看明細` 打開一列，看它的各 session 與每次派出。
+- 依 repo（顯示資料夾名稱）、session、模型或 agent 種類分組（`分組`），每列有長條（desktop 用 Svg，終端機用有底色的格子）、token、佔比與派出次數。pane 內容寬 80 欄以上時一列一行，較窄時長條換到第二行。按一列的名稱打開它的各 session 與每次派出，`‹ 返回`（`b`）回總覽。
 - `期間` 切換 7、30、90 天。
 
-`/agent-dispatch stats --text [天數]` 印出同樣內容的文字版；`-p` 執行或 pane 放不下（終端機太窄）時，`stats` 也改印文字版。
+終端機較窄時 pane 會改放在輸入框上方。`/agent-dispatch stats --text [天數]` 印出同樣內容的文字版；`-p` 執行或無處放 pane 時，`stats` 也改印文字版。
 
 不含：各 mod 自己呼叫模型（`$.model.fork` / `$.model.complete`）的用量、雲端 session（不載入 mod）、安裝之前的紀錄。
 

@@ -271,7 +271,7 @@ Values from `/config` are stored in `pluginConfigs` in the user-level `~/.claude
 
 Each session keeps its own ledger in the plugin's `$.store` (one key per session, shared across repos). It records:
 
-- The session: its repo (the main working tree, so worktrees group together), its start time and the first 40 characters of its first prompt, which together name it, and the main session's tokens per model.
+- The session: its repo (the main working tree, so worktrees group together), its start time and the first 40 characters of its first prompt that is not a slash command, which together name it (`Oct 12 02:11 review the diff…`), and the main session's tokens per model. After `/clear` the new session gets its own start and name; mods cannot read the session's own title.
 - Each spawn (the latest 500 per session): description, agent type, the model the call named (or the default) and the model it resolved to, whether it was a fork or ran in the background, input / cache write / cache read / output tokens, steps and duration. Steps of an agent the ledger never saw spawn (one spawned before a hot reload) are listed as `unknown`.
 
 Ledgers no session has written to for 90 days are deleted when a session starts.
@@ -279,10 +279,10 @@ Ledgers no session has written to for 90 days are deleted when a session starts.
 `/agent-dispatch stats [days]` (1-90, default 30, today included) opens a pane over every session:
 
 - A summary: tokens (input + cache write + output) of the main session and of subagents with the subagent share, cache read on its own line, and spawns in total, how many named a model (`n/N`), how many named Opus, how many were forks, and the share that took the default model.
-- Rows grouped by repo, session, model or agent type (`Group by`), each with a bar (Svg on desktop, characters in the terminal), its tokens and spawns. `Spawns of` opens a row to its sessions and each spawn.
+- Rows grouped by repo (by folder name), session, model or agent type (`Group by`), each with a bar (Svg on desktop, colored cells in the terminal), its tokens, share and spawns. From 80 body columns a row is one line; narrower, its bar goes on a second line. Press a row's name to open it to its sessions and each spawn; `‹ Back` (`b`) returns.
 - `Period` switches between 7, 30 and 90 days.
 
-`/agent-dispatch stats --text [days]` prints the same report as text. `stats` prints it too in a `-p` run, or when the pane cannot be placed (a narrow terminal).
+In a narrow terminal the pane opens above the input box instead of beside the conversation. `/agent-dispatch stats --text [days]` prints the same report as text. `stats` prints it too in a `-p` run, or when no pane can be placed.
 
 Not included: the mods' own model calls (`$.model.fork` / `$.model.complete`), cloud sessions (they do not load mods), and anything before the mod was installed.
 

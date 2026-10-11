@@ -378,31 +378,40 @@ describe('usage ledger', () => {
     return world
   }
 
-  test('stats opens a pane: summary, groups down to each spawn, and the period', async ($, on) => {
+  test('stats opens a pane: summary, rows that open to each spawn, and the period', async ($, on) => {
     const world = await twoWeeks($, on)
     await stats($, 'stats')
     expect(world.opened).toEqual(['agent-dispatch-stats'])
 
+    for (const bodyColumns of [52, 110]) {
+      const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' } as never)
+      expect(await pane.find({ type: 'Text', text: 'Sep 13 – Oct 12' })).toBeDefined()
+      expect(await pane.find({ type: 'Text', text: '1,320' })).toBeDefined()
+      // Grouped by repo by default, named by the folder; bars are colored spaces, never '█'.
+      expect(await pane.find({ key: 'row:/repo' })).toBeDefined()
+      expect(await pane.find({ key: 'row:/old' })).toBeDefined()
+      expect(await pane.find({ type: 'Text', text: /█/ })).toBeUndefined()
+      expect(await pane.find({ type: 'Text', text: /deep review/ })).toBeUndefined()
+      await pane.unmount()
+    }
+
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    expect(await pane.find({ type: 'Text', text: /1,320/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /Spawns: 2/ })).toBeDefined()
-    // Grouped by repo by default, each with a character bar.
-    expect(await pane.find({ type: 'Text', text: /\/repo/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /\/old/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /█/ })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /deep review/ })).toBeUndefined()
-
     await pane.select({ key: 'group', value: 'model' })
-    await pane.select({ key: 'item', value: 'claude-opus-4' })
-    expect(await pane.find({ type: 'Text', text: /deep review · general-purpose · opus → claude-opus-4/ })).toBeDefined()
+    await pane.press({ key: 'row:claude-opus-4' })
+    expect(await pane.find({ type: 'Text', text: 'deep review' })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /general-purpose · opus → claude-opus-4/ })).toBeDefined()
     expect(await pane.find({ type: 'Text', text: /old task/ })).toBeUndefined()
+    expect(await pane.find({ key: 'row:claude-opus-4' })).toBeUndefined()
 
+    await pane.press({ key: 'back' })
+    expect(await pane.find({ type: 'Text', text: 'deep review' })).toBeUndefined()
     await pane.select({ key: 'group', value: 'type' })
-    await pane.select({ key: 'item', value: 'Explore' })
-    expect(await pane.find({ type: 'Text', text: /old task/ })).toBeDefined()
+    await pane.press({ key: 'row:Explore' })
+    expect(await pane.find({ type: 'Text', text: 'old task' })).toBeDefined()
 
+    await pane.press({ key: 'back' })
     await pane.select({ key: 'days', value: '7' })
-    expect(await pane.find({ type: 'Text', text: /old task/ })).toBeUndefined()
+    expect(await pane.find({ key: 'row:Explore' })).toBeUndefined()
     await pane.select({ key: 'days', value: '30' })
     await pane.select({ key: 'group', value: 'session' })
     expect(await pane.find({ type: 'Text', text: /Oct 5 09:00 last week/ })).toBeDefined()

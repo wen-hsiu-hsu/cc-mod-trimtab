@@ -20,6 +20,12 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
   90 days are deleted at session start.
 - Changed: `agent-dispatch` no longer lists running background agents above the
   input box; it shows only interrupted ones, with `[Redispatch]` and `[Dismiss]`.
+- The stats pane lays its rows out by the body's columns (one line from 80
+  columns, two below), draws terminal bars as colored cells, opens a row by its
+  name with `‹ Back` to return, and writes dates as `Oct 12` / `10/12`. A session
+  is named after its first prompt that is not a slash command, and after
+  `/clear` gets its own start and name; an agent that outlives `/clear` keeps
+  its steps on its spawn.
 
 ## [0.1.1] - 2026-10-11
 

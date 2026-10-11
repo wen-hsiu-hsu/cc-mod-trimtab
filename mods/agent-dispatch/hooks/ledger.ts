@@ -293,7 +293,7 @@ export function groups(lang: Lang, report: Report, by: GroupBy): Group[] {
   }
   for (const session of report.sessions) {
     if (by === 'repo') {
-      add(session.repo, session.repo || pick(lang, { en: '(no repo)', 'zh-TW': '（沒有 repo）' }), session, session.main, session.spawns)
+      add(session.repo, repoName(lang, session.repo), session, session.main, session.spawns)
     } else if (by === 'session') {
       add(`${session.repo}|${session.started}`, sessionName(lang, session), session, session.main, session.spawns)
     } else if (by === 'model') {
@@ -339,18 +339,27 @@ export function sessionName(lang: Lang, session: SessionRow): string {
   return `${stamp(lang, session.started)} ${session.prompt || pick(lang, { en: '(no prompt)', 'zh-TW': '（沒有 prompt）' })}`
 }
 
-export function spawnLine(lang: Lang, spawn: Spawn): string {
-  const parts = [
-    spawn.description || pick(lang, { en: '(spawned before the ledger saw it)', 'zh-TW': '（派出時帳本沒看到）' }),
-    spawn.type,
-    `${spawn.requested ?? pick(lang, { en: 'default', 'zh-TW': '預設' })} → ${spawn.model}`,
-    ...(spawn.background ? [pick(lang, { en: 'background', 'zh-TW': '背景' })] : []),
-    pick(lang, { en: `${n(tokens(spawn))} tokens`, 'zh-TW': `${n(tokens(spawn))} token` }),
-    pick(lang, { en: `${spawn.steps} steps`, 'zh-TW': `${spawn.steps} 步` }),
-    elapsed(spawn.last - spawn.at),
-  ]
+// A repo by its folder's name, as the pane's rows show it.
+export function repoName(lang: Lang, repo: string): string {
+  return repo.split('/').filter(Boolean).at(-1) ?? pick(lang, { en: '(no repo)', 'zh-TW': '（沒有 repo）' })
+}
 
-  return parts.join(' · ')
+// A spawn in three parts: what it was asked, what ran it, and what it cost.
+export function spawnParts(lang: Lang, spawn: Spawn): [string, string, string] {
+  return [
+    spawn.description || pick(lang, { en: '(spawned before the ledger saw it)', 'zh-TW': '（派出時帳本沒看到）' }),
+    `${spawn.type} · ${spawn.requested ?? pick(lang, { en: 'default', 'zh-TW': '預設' })} → ${spawn.model}`,
+    [
+      ...(spawn.background ? [pick(lang, { en: 'background', 'zh-TW': '背景' })] : []),
+      pick(lang, { en: `${n(tokens(spawn))} tokens`, 'zh-TW': `${n(tokens(spawn))} token` }),
+      pick(lang, { en: `${spawn.steps} steps`, 'zh-TW': `${spawn.steps} 步` }),
+      elapsed(spawn.last - spawn.at),
+    ].join(' · '),
+  ]
+}
+
+export function spawnLine(lang: Lang, spawn: Spawn): string {
+  return spawnParts(lang, spawn).join(' · ')
 }
 
 export function emptyText(lang: Lang): string {
