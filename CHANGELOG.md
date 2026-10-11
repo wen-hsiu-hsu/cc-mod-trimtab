@@ -3,6 +3,18 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [Unreleased]
+
+| Mod | Version |
+| --- | --- |
+| `agent-dispatch` | 0.2.0 |
+
+- Added: `agent-dispatch` records token use per session in a local ledger (main
+  session vs each subagent, per model, plus spawn counts, explicit-Opus spawns
+  and forks) and reports it with `/agent-dispatch stats [days]`. The `ledger`
+  setting (default on) turns recording off. Records older than 90 days are
+  deleted at session start.
+
 ## [0.1.1] - 2026-10-11
 
 | Mod | Version |

@@ -39,11 +39,11 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 
 依實作順序。
 
-- [ ] **1. `agent-dispatch`：加入用量帳本與分派提醒**。2026-10-09 決定。
-  - 用量帳本：`agent.spawn` 記下 agentId 對應的 agent 種類、呼叫有沒有指定 model、description，以及 `next(e)` 回傳的實際模型（被其他 mod 改過的也記得到）；`turn.step` 依 `agentId` 把每步 usage 歸到主 session 或該 agent。依「日期 × 主 session／subagent × agent 種類 × 模型」累計 input、cache write、cache read、output、步數與派出次數，存 `$.store`（跨 repo 共用一份），保留 90 天。
-  - 報表：`/agent-dispatch stats [天數]` 列出 subagent 佔總用量的比例、各模型用量、agent 種類 × 模型、指定 opus 與 fork 的次數，以及指定 opus 的 description 清單。
-  - 分派提醒（只提醒，不擋也不改模型）：subagent 跑在 Opus 但 description 看不出理由、或同一個 session fork 次數偏多時跳 toast，並記進帳本。「看不出理由」的判斷與 fork 門檻實作時再定，先只記錄不提醒，看一段時間的誤判再開。
-  - 每個功能各自的開關。
+- [ ] **1. `agent-dispatch`：加入用量帳本與分派提醒**。2026-10-09 決定。用量帳本與報表已做（0.2.0），分派提醒還沒做。
+  - [x] 用量帳本：`agent.spawn` 記下 agentId 對應的 agent 種類、呼叫有沒有指定 model、description，以及 `next(e)` 回傳的實際模型（被其他 mod 改過的也記得到）；`turn.step` 依 `agentId` 把每步 usage 歸到主 session 或該 agent。依「日期 × 主 session／subagent × agent 種類 × 模型」累計 input、cache write、cache read、output、步數與派出次數，存 `$.store`（跨 repo 共用一份），保留 90 天。
+  - [x] 報表：`/agent-dispatch stats [天數]` 列出 subagent 佔總用量的比例、各模型用量、agent 種類 × 模型、指定 opus 與 fork 的次數，以及指定 opus 的 description 清單。
+  - [ ] 分派提醒（只提醒，不擋也不改模型）：subagent 跑在 Opus 但 description 看不出理由、或同一個 session fork 次數偏多時跳 toast，並記進帳本。「看不出理由」的判斷與 fork 門檻實作時再定，先只記錄不提醒，看一段時間的誤判再開。
+  - 每個功能各自的開關（帳本已有 `ledger`）。
   - 限制：hook 不能讀檔，無法回填安裝前的 transcript；雲端 session 不載入 mod，那部分不會記到。實作前確認 `turn.step` 是否涵蓋 fork 與背景 agent 的每一步。
 
 ## 費用回報

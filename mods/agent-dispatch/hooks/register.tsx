@@ -3,6 +3,18 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { WatchedAgent } from '../types'
 import { configCommand, LANGUAGE, loadConfig, pick, type ConfigIO, type Lang, type Specs } from './config'
+import {
+  DEFAULT_DAYS,
+  emptyLedger,
+  LEDGER_PREFIX,
+  LEDGER_SPEC,
+  MAX_DAYS,
+  recordSpawn,
+  recordStep,
+  renderStats,
+  RETENTION_MS,
+  type Ledger,
+} from './ledger'
 
 const running = atom({ plugin: 'agent-dispatch', key: 'running' } as const, [])
 const stopped = atom({ plugin: 'agent-dispatch', key: 'stopped' } as const, [])
@@ -10,7 +22,8 @@ const now = atom({ plugin: 'agent-dispatch', key: 'now' } as const, 0)
 
 const MOD = 'agent-dispatch'
 const REDISPATCH = 'redispatch'
-const SPECS: Specs = { language: LANGUAGE }
+const STATS = 'stats'
+const SPECS: Specs = { ledger: LEDGER_SPEC, language: LANGUAGE }
 const POLL_MS = 3000
 const STOPPED = new Set(['killed', 'failed'])
 const FINISHED = new Set(['completed', 'idle'])
@@ -103,6 +116,53 @@ async function fillRedispatch($: EngineInterface, lang: Lang): Promise<string> {
   })
 }
 
+type LedgerState = { recording: boolean; writing: Promise<void> }
+
+// Applies `change` to this session's own ledger key. Parallel subagents step at the same time and
+// each write reads the ledger back, so they take turns. Bookkeeping must never break the engine's call.
+function record($: EngineInterface, state: LedgerState, where: string, change: (ledger: Ledger, at: number) => void): Promise<void> {
+  if (!state.recording) {
+    return Promise.resolve()
+  }
+  state.writing = state.writing.then(async () => {
+    try {
+      const key = `${LEDGER_PREFIX}${await $.session.id()}`
+      const ledger = { ...emptyLedger(), ...((await $.store.get(key)) as Partial<Ledger> | undefined) }
+      change(ledger, await $.clock.now())
+      await $.store.set(key, ledger)
+    } catch (error) {
+      $.ui.log(`${where}: ledger not written: ${String(error)}`, { to: 'debug' })
+    }
+  })
+
+  return state.writing
+}
+
+// Deletes the ledgers no session has written to for RETENTION_MS.
+async function pruneLedgers($: EngineInterface): Promise<void> {
+  const cutoff = (await $.clock.now()) - RETENTION_MS
+  for (const key of (await $.store.keys()).filter(name => name.startsWith(LEDGER_PREFIX))) {
+    const stored = (await $.store.get(key)) as Partial<Ledger> | undefined
+    if (typeof stored?.updated !== 'number' || stored.updated < cutoff) {
+      await $.store.delete(key)
+    }
+  }
+}
+
+async function statsText($: EngineInterface, lang: Lang, arg: string | undefined): Promise<string> {
+  const days = arg === undefined ? DEFAULT_DAYS : Number(arg)
+  if (!Number.isInteger(days) || days < 1 || days > MAX_DAYS) {
+    return pick(lang, {
+      en: `Usage: /${MOD} ${STATS} [days], days from 1 to ${MAX_DAYS} (default ${DEFAULT_DAYS})`,
+      'zh-TW': `用法：/${MOD} ${STATS} [天數]，天數 1 到 ${MAX_DAYS}（預設 ${DEFAULT_DAYS}）`,
+    })
+  }
+  const keys = (await $.store.keys()).filter(name => name.startsWith(LEDGER_PREFIX))
+  const stored = await Promise.all(keys.map(key => $.store.get(key)))
+
+  return renderStats(lang, stored, days, await $.clock.now())
+}
+
 
 // --- configIO: the same block in every mod (scripts/check-copies.sh) ---
 function configIO($: EngineInterface): ConfigIO {
@@ -130,21 +190,29 @@ function configIO($: EngineInterface): ConfigIO {
 export const register: Register = (on, options) => {
   // Re-read at session start and after `/agent-dispatch set`.
   let lang: Lang = 'en'
+  const ledger: LedgerState = { recording: true, writing: Promise.resolve() }
 
   on('session.start', async ($, e, next) => {
     try {
-      lang = (await loadConfig(configIO($), MOD, SPECS, options)).lang
+      const config = await loadConfig(configIO($), MOD, SPECS, options)
+      lang = config.lang
+      ledger.recording = config.values.ledger !== false
     } catch (error) {
       $.ui.log(`session.start: settings not read: ${String(error)}`, { to: 'debug' })
+    }
+    try {
+      await pruneLedgers($)
+    } catch (error) {
+      $.ui.log(`session.start: ledgers not pruned: ${String(error)}`, { to: 'debug' })
     }
     try {
       await $.command.register({
         name: MOD,
         description: pick(lang, {
-          en: 'Put the redispatch instructions for interrupted background agents in the prompt box (redispatch)',
-          'zh-TW': '把被中斷的背景 agent 重派指示放進輸入框（redispatch）',
+          en: 'Put the redispatch instructions for interrupted background agents in the prompt box (redispatch), or show token use by subagents and models (stats)',
+          'zh-TW': '把被中斷的背景 agent 重派指示放進輸入框（redispatch），或看 subagent 與各模型的 token 用量（stats）',
         }),
-        argumentHint: 'redispatch | status',
+        argumentHint: 'redispatch | stats [days] | status',
       })
     } catch (error) {
       $.ui.log(`session.start: /${MOD} not registered: ${String(error)}`, { to: 'debug' })
@@ -159,11 +227,61 @@ export const register: Register = (on, options) => {
     if (e.args.trim().split(/\s+/)[0] === REDISPATCH) {
       return { text: await fillRedispatch($, lang) }
     }
+    const [command, arg] = e.args.trim().split(/\s+/)
+    if (command === STATS) {
+      return { text: await statsText($, lang, arg) }
+    }
     const text = await configCommand(configIO($), MOD, SPECS, options, e.args, resolved => {
       lang = resolved.lang
+      ledger.recording = resolved.values.ledger !== false
     })
 
-    return { text: text ?? pick(lang, { en: `Usage: /${MOD} ${REDISPATCH}, /${MOD} status`, 'zh-TW': `用法：/${MOD} ${REDISPATCH}、/${MOD} status` }) }
+    return {
+      text:
+        text ??
+        pick(lang, {
+          en: `Usage: /${MOD} ${REDISPATCH}, /${MOD} ${STATS} [days], /${MOD} status`,
+          'zh-TW': `用法：/${MOD} ${REDISPATCH}、/${MOD} ${STATS} [天數]、/${MOD} status`,
+        }),
+    }
+  })
+
+  on('agent.spawn', async ($, e, next) => {
+    const spawned = await next(e)
+    if ('deny' in spawned) {
+      return spawned
+    }
+    await record($, ledger, 'agent.spawn', (entries, at) =>
+      recordSpawn(entries, at, {
+        ...(spawned.agentId === undefined ? {} : { agentId: spawned.agentId }),
+        type: e.subagentType,
+        model: spawned.model,
+        ...(e.model === undefined ? {} : { requested: e.model }),
+        fork: e.fork || e.subagentType === 'fork',
+        description: e.description,
+      }),
+    )
+
+    return spawned
+  })
+
+  on('turn.step', async function* ($, e, next) {
+    const result = yield* next(e)
+    const usage = result.usage
+    if (usage !== null) {
+      await record($, ledger, 'turn.step', (entries, at) =>
+        recordStep(entries, at, {
+          ...(e.agentId === undefined ? {} : { agentId: e.agentId }),
+          model: usage.model || e.model,
+          input: usage.input_tokens,
+          cacheWrite: usage.cache_creation_input_tokens,
+          cacheRead: usage.cache_read_input_tokens,
+          output: usage.output_tokens,
+        }),
+      )
+    }
+
+    return result
   })
 
   on('tool.call', { tool: 'Agent' }, async ($, e, next) => {
