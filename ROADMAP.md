@@ -39,11 +39,10 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 
 依實作順序。
 
-- [ ] **1. 費用回報**（見下節）。
-- [ ] **2. `tool-guard`：加入 cmd-rewrite、學來的守門**。
+- [ ] **1. `tool-guard`：加入 cmd-rewrite、學來的守門**。
   - cmd-rewrite：CLAUDE.md 寫的指令規則常沒被遵守（例如 repo 已有 `npm run test:brief`，Claude 仍直接打 `npx vitest`）。`tool.call`（Bash）執行前依 repo 層設定的規則（`{ "match": "^npx vitest run", "replace": "npm run test:brief --" }`）改寫指令，改寫時提示一次。進版控的規則第一次生效前要使用者核准（見「設計原則」）。
   - 學來的守門：`/tool-guard suggest` 讀 memory 中出現 3 次以上的規則，由模型草擬工具呼叫前的比對式（擋下或只提醒），使用者核准才生效。上游：`guards.ts`。
-- [ ] **3. `agent-dispatch`：加入用量帳本與分派提醒**。2026-10-09 決定。
+- [ ] **2. `agent-dispatch`：加入用量帳本與分派提醒**。2026-10-09 決定。
   - 用量帳本：`agent.spawn` 記下 agentId 對應的 agent 種類、呼叫有沒有指定 model、description，以及 `next(e)` 回傳的實際模型（被其他 mod 改過的也記得到）；`turn.step` 依 `agentId` 把每步 usage 歸到主 session 或該 agent。依「日期 × 主 session／subagent × agent 種類 × 模型」累計 input、cache write、cache read、output、步數與派出次數，存 `$.store`（跨 repo 共用一份），保留 90 天。
   - 報表：`/agent-dispatch stats [天數]` 列出 subagent 佔總用量的比例、各模型用量、agent 種類 × 模型、指定 opus 與 fork 的次數，以及指定 opus 的 description 清單。
   - 分派提醒（只提醒，不擋也不改模型）：subagent 跑在 Opus 但 description 看不出理由、或同一個 session fork 次數偏多時跳 toast，並記進帳本。「看不出理由」的判斷與 fork 門檻實作時再定，先只記錄不提醒，看一段時間的誤判再開。
@@ -52,7 +51,7 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 
 ## 費用回報
 
-還沒做。
+暫緩（見「暫緩」），設計先留著。
 
 - 一次性觸發：toast 顯示 token 數與估算金額。
 - 有模型參與的功能：輸入框上方常駐顯示各 mod 自己的累計（不跨 mod 加總），例如 `keep 3x 12.4k tok ~$0.04`。
@@ -165,6 +164,7 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 | open-items 的 Haiku 抽取 | 每輪都要花 token；先觀察 track 工具與選項解析的漏抓率 | `/open-items stats` 的漏抓率明顯偏高（2026-10-07 開始記錄） |
 | project-memory 只送相關的記憶給模型（Mem0 只送相似的前 10 筆） | 要 embedding 或相似度比對；記憶少時整份清單送得進去，`MEMORY.md` 也限 60 條 | 記憶（含失效前）超過約 150 條、或整理輸出常被截斷（debug log 的「丟棄 N 行」中出現 JSON 錯誤） |
 | project-memory 的離線評估集（照 LongMemEval 分類標 30–50 段對話的預期整理結果，量抽取與更新的錯誤率） | 成本較高，要先累積一段時間的真實整理結果才有素材 | 用過一個月以上，或懷疑整理品質（記錯、漏記、重複）時 |
+| 費用回報（見「費用回報」：每次呼叫的 toast、輸入框上方的各 mod 累計、依價格表估算金額） | 2026-10-11 查一個多月的 prompt 與 transcript：沒有一次問過 mod 呼叫模型花多少 token 或錢，也沒有因費用關功能；問過的是主對話的 context、訂閱額度與 cache 何時過期 | 開了 `keep_warm` 等背景呼叫後問「花了多少」、對用量表示意外，或 `/usage` 額度的消耗說不出來源。先做最窄的版本：`/<mod> status` 列累計 token 數，不估金額 |
 | CI 跑 `tsc` | 型別檔只在 Claude Code 載入 mod 時產生，CI 拿不到 | Claude Code 提供產生型別檔的指令，或型別檔有公開的套件 |
 
 ### 不做
