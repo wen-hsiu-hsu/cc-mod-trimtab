@@ -36,7 +36,8 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
   token card by the main session's models; a wide pane puts the period and
   grouping on its top line and names the table columns. Period, grouping and
   sort switch in place (one cycling button with `p`, `g`, `s` in the terminal,
-  segments on desktop), so nothing below them moves.
+  segments on desktop), so nothing below them moves. `N more` has the hotkey
+  `m`, and the cache read line is shorter.
 
 ## [0.1.1] - 2026-10-11
 

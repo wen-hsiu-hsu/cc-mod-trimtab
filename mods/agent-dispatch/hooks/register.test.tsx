@@ -465,7 +465,7 @@ describe('usage ledger', () => {
       expect(await text('spawned:named')).toMatch(/named a model \(Opus: 1\).*2$/)
       expect(await text('spawned:default')).toMatch(/default model.*1$/)
       expect(await text('spawned:fork')).toMatch(/fork \(main session's model\).*1$/)
-      expect(await text('cache-read')).toContain('Plus 2,000 tokens read from cache')
+      expect(await text('cache-read')).toBe('Cache read 2,000, not counted')
       await pane.unmount()
     }
   })
@@ -518,6 +518,7 @@ describe('usage ledger', () => {
     expect((await dot('a9'))?.props.color).toBe('gray')
     expect((await pane.find({ key: 'line:a9' }))?.text).toMatch(/task 9.*10,000.*Oct 12/)
     expect((await pane.find({ key: 'more' }))?.text).toContain('2 more')
+    expect((await pane.find({ key: 'more' }))?.props.hotkey).toBe('m')
 
     await pane.press({ key: 'more' })
     expect(await tasks(pane)).toHaveLength(12)
@@ -652,6 +653,9 @@ describe('usage ledger', () => {
 
     const desk = await $.ui.mount({ ...PANE, surface: 'desktop' } as never)
     expect((await desk.find({ key: 'days:7' }))?.props.variant).toBe('primary')
+    // The hotkey sits on the segment after the current one, so it steps forward as in the terminal.
+    expect((await desk.find({ key: 'days:30' }))?.props.hotkey).toBe('p')
+    expect((await desk.find({ key: 'days:7' }))?.props.hotkey).toBeUndefined()
     await desk.press({ key: 'days:30' })
     expect((await desk.find({ key: 'days:30' }))?.props.variant).toBe('primary')
     expect((await desk.find({ key: 'days:7' }))?.props.variant).toBeUndefined()

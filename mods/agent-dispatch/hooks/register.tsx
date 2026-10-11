@@ -516,7 +516,8 @@ export const register: Register = (on, options) => {
       type: pick(lang, { en: 'type', 'zh-TW': '種類' }),
     }
     // Switches in place, so nothing below moves: in the terminal one button that steps to the
-    // next value (its hotkey too) and wraps, elsewhere a segment per value.
+    // next value (its hotkey too) and wraps, elsewhere a segment per value with the hotkey on the
+    // one after the current, so it steps forward the same way.
     const switcher = (key: string, label: string, hotkey: string, options: { value: string; label: string }[], value: string, onPick: (value: string) => void) => {
       if (e.surface === 'terminal') {
         const at = Math.max(0, options.findIndex(option => option.value === value))
@@ -532,14 +533,17 @@ export const register: Register = (on, options) => {
         )
       }
 
+      const at = Math.max(0, options.findIndex(option => option.value === value))
+
       return (
         <Box key={`switch:${key}`} flexDirection="row" gap={1} flexShrink={0}>
           <Text dimColor>{label}</Text>
-          {options.map(option => (
+          {options.map((option, i) => (
             <Button
               key={`${key}:${option.value}`}
               label={option.label}
-              {...(option.value === value ? { variant: 'primary' as const } : { dimColor: true })}
+              {...(i === (at + 1) % options.length ? { hotkey } : {})}
+              {...(i === at ? { variant: 'primary' as const } : { dimColor: true })}
               onPress={() => onPick(option.value)}
             />
           ))}
@@ -824,7 +828,7 @@ export const register: Register = (on, options) => {
           })}
           {listed.length > limit ? (
             <Box paddingLeft={2}>
-              <Button key="more" plain onPress={() => void update($, view, current => ({ ...current, limit: limit + PAGE }))}>
+              <Button key="more" plain hotkey="m" onPress={() => void update($, view, current => ({ ...current, limit: limit + PAGE }))}>
                 <Text color="yellow">{pick(lang, { en: `${listed.length - limit} more ▸`, 'zh-TW': `還有 ${listed.length - limit} 筆 ▸` })}</Text>
               </Button>
             </Box>
@@ -833,7 +837,7 @@ export const register: Register = (on, options) => {
           )}
           <Box marginTop={1}>
             <Text dimColor wrap="wrap">
-              {pick(lang, { en: 'Enter opens a spawn · s sorts · ‹ Back (b) returns · Esc closes', 'zh-TW': 'Enter 展開一筆 · s 排序 · ‹ 返回（b）回總覽 · Esc 關閉' })}
+              {pick(lang, { en: 'Enter opens a spawn · s sorts · m more · ‹ Back (b) returns · Esc closes', 'zh-TW': 'Enter 展開一筆 · s 排序 · m 更多 · ‹ 返回（b）回總覽 · Esc 關閉' })}
             </Text>
           </Box>
         </Box>
@@ -886,8 +890,8 @@ export const register: Register = (on, options) => {
             <Box key="cache-read">
               <Text dimColor wrap="wrap">
                 {pick(lang, {
-                  en: `Plus ${n(report.cacheRead)} tokens read from cache: cheap, not counted`,
-                  'zh-TW': `另有 ${n(report.cacheRead)} token 讀自快取，費用低，不計入總 token`,
+                  en: `Cache read ${n(report.cacheRead)}, not counted`,
+                  'zh-TW': `快取讀取 ${n(report.cacheRead)}，不計入`,
                 })}
               </Text>
             </Box>
