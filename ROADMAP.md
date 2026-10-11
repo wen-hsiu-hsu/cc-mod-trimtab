@@ -188,7 +188,7 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 2. usage：只有 `$.model.fork` 回傳；`complete`、`classify` 沒有（依 GitHub 上的 `mods/types/claude-code.d.ts`，可能比安裝版本舊，需在本機型別檔再確認）。→ 見「費用回報」。
 3. `cc-mod-trimtab` 重名：網路搜尋沒找到同名的 Claude Code、MCP 或 agent 專案；未做 GitHub 全站搜尋。
 4. 2026-10-06 已在 CLI 實測 output-trimmer 的結果改寫、agent-dispatch（原 agent-watch）的中斷偵測、tool-guard（原 shell-guard）的攔截與放行、secret-scrub 的遮蔽、open-items 的自動延後與 compact 行為。
-5. `$.store` 是 plugin 自己的一個 JSON 檔，放在使用者的 Claude Code 設定目錄，跨 session 與熱重載保留（2.1.296 型別檔）。所有 session 共用同一份，所以 session 層的值（`set --session`、`on`）以 sessionId 為 key 存，一週沒寫入的 session 在其他 session 寫入時清掉（0.1.1 起；2026-10-11 實測兩個 session 會互蓋）。
+5. `$.store` 是 plugin 自己的一個 JSON 檔，放在使用者的 Claude Code 設定目錄，跨 session 與熱重載保留（2.1.296 型別檔）。所有 session 共用同一份，所以 session 層的值（`set --session`、`on`）以 sessionId 為 key 存，一週沒寫入的 session 在其他 session 寫入時清掉（0.1.1 起）。2026-10-11 實測：0.1.0 時 A 開 `keep_warm` 後 B `set`，A 的值被蓋回預設；0.1.1 後兩個 session 各自保留。
 6. 從 GitHub 安裝的 plugin 會複製到 `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`，plugin 資料夾外的檔案不會複製（[plugins/loading](https://code.claude.com/docs/en/plugins/loading)）；第三方 marketplace 預設不自動更新。2026-10-11 在隔離的 `CLAUDE_CONFIG_DIR` 從 GitHub 安裝 8 個 mod，`enabledPlugins` 順序照安裝順序，快取副本的測試通過。
 7. 2026-10-11 實測：`/reload-plugins` 後 `/<mod> status` 立刻讀到 `~/.claude/cc-mod-trimtab.json`（symlink 也讀得到）的 `"*".language`。
 8. 2026-10-11 實測 `--resume`：sessionId 不變，`session.start` 重讀設定，臨時開啟的灰字提示列與值都接得上（open-items o3）。
