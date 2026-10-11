@@ -1,0 +1,18 @@
+{
+  "name": "secret-scrub",
+  "version": "0.2.0",
+  "description": "Masks tokens, API keys and other secrets before a prompt is sent, so they stay out of the transcript and the prompt cache",
+  "author": {
+    "name": "wen-hsiu hsu"
+  },
+  "repository": "https://github.com/wen-hsiu-hsu/cc-mod-trimtab",
+  "license": "MIT",
+  "userConfig": {
+    "bypass_marker": {
+      "type": "string",
+      "title": "Marker to send as typed",
+      "description": "A prompt containing this marker is not masked and is sent as typed (the marker itself is removed).",
+      "default": "#noscrub"
+    }
+  }
+}

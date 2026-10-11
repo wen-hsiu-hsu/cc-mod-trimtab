@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The minimum supported version; the mod API is early access.
+      - run: npm install -g @anthropic-ai/claude-code@2.1.296
+      - name: Validate marketplace
+        run: claude plugin validate .
+      - name: Validate and test each mod
+        run: |
+          status=0
+          for mod in mods/*/; do
+            echo "::group::$mod"
+            claude plugin validate "$mod" || status=1
+            claude plugin test "$mod" || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+      - name: Check shared copies
+        run: scripts/check-copies.sh

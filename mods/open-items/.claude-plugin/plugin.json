@@ -1,0 +1,11 @@
+{
+  "name": "open-items",
+  "version": "0.3.0",
+  "description": "Keeps unresolved questions, pending decisions and deferred items outside the context, reminds you above the prompt box, and quotes one in a press",
+  "author": {
+    "name": "wen-hsiu hsu"
+  },
+  "repository": "https://github.com/wen-hsiu-hsu/cc-mod-trimtab",
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

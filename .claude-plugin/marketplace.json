@@ -1,0 +1,49 @@
+{
+  "name": "cc-mod-trimtab",
+  "description": "wen-hsiu hsu's Claude Code mods: fewer mistakes, fewer tokens, more fault tolerance",
+  "owner": {
+    "name": "wen-hsiu hsu"
+  },
+  "plugins": [
+    {
+      "name": "agent-dispatch",
+      "source": "./mods/agent-dispatch",
+      "description": "Shows running background agents above the prompt box and re-dispatches interrupted ones in one press"
+    },
+    {
+      "name": "self-check",
+      "source": "./mods/self-check",
+      "description": "Guard-rail reminders for Claude: when the same tool fails twice in a row for the same reason it is asked to find the cause first; when it says done after editing code without verifying, the stop is blocked once"
+    },
+    {
+      "name": "open-items",
+      "source": "./mods/open-items",
+      "description": "Keeps unresolved questions, pending decisions and deferred items outside the context, reminds you above the prompt box, and quotes one in a press"
+    },
+    {
+      "name": "output-trimmer",
+      "source": "./mods/output-trimmer",
+      "description": "When a Bash command prints too much, the model gets only the head, the tail and the error lines; the full output is saved to a file"
+    },
+    {
+      "name": "project-memory",
+      "source": "./mods/project-memory",
+      "description": "Distills the conversation in the background into project memory (the built-in memory) and a progress file; a rule confirmed in several sessions is proposed to you before it goes into CLAUDE.md, and a procedure becomes a project skill"
+    },
+    {
+      "name": "secret-scrub",
+      "source": "./mods/secret-scrub",
+      "description": "Masks tokens, API keys and other secrets before a prompt is sent, so they stay out of the transcript and the prompt cache"
+    },
+    {
+      "name": "session-keeper",
+      "source": "./mods/session-keeper",
+      "description": "Shows the prompt cache state above the prompt box on desktop; reads the cache once when idle so a 1h cache does not expire"
+    },
+    {
+      "name": "tool-guard",
+      "source": "./mods/tool-guard",
+      "description": "Holds commands that lose work (git, rm, migrations), previews what they would change and lets you decide; checks commit subject format and removes the Claude trailer"
+    }
+  ]
+}

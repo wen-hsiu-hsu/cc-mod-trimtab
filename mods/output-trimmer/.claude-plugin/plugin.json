@@ -1,0 +1,28 @@
+{
+  "name": "output-trimmer",
+  "version": "0.1.0",
+  "description": "When a Bash command prints too much, the model gets only the head, the tail and the error lines; the full output is saved to a file",
+  "author": {
+    "name": "wen-hsiu hsu"
+  },
+  "repository": "https://github.com/wen-hsiu-hsu/cc-mod-trimtab",
+  "license": "MIT",
+  "userConfig": {
+    "max_lines": {
+      "type": "number",
+      "title": "Trim after this many lines",
+      "description": "When Bash output has more lines than this, the model gets only the head, the tail and the error lines.",
+      "default": 150,
+      "min": 50,
+      "max": 5000
+    },
+    "max_chars": {
+      "type": "number",
+      "title": "Trim after this many characters",
+      "description": "The same when Bash output has more characters than this.",
+      "default": 15000,
+      "min": 2000,
+      "max": 200000
+    }
+  }
+}

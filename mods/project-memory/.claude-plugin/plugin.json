@@ -1,0 +1,49 @@
+{
+  "name": "project-memory",
+  "version": "0.1.0",
+  "description": "Distills the conversation in the background into project memory (the built-in memory) and a progress file; a rule confirmed in several sessions is proposed to you before it goes into CLAUDE.md, and a procedure becomes a project skill",
+  "author": {
+    "name": "wen-hsiu hsu"
+  },
+  "repository": "https://github.com/wen-hsiu-hsu/cc-mod-trimtab",
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "distill": {
+      "type": "boolean",
+      "title": "Automatic distill",
+      "description": "Every so many messages, after idling for a while, or at /clear, Sonnet distills the new conversation into memories, rules and procedures and updates the progress file. Off by default; turn it on for a while with /project-memory on; /project-memory run still distills by hand when it is off.",
+      "default": false
+    },
+    "distill_every": {
+      "type": "number",
+      "title": "Distill every N messages",
+      "description": "Distill when this many user messages have come since the last distill.",
+      "default": 30,
+      "min": 5,
+      "max": 200
+    },
+    "min_context_k": {
+      "type": "number",
+      "title": "Skip automatic distill below this many k of context",
+      "description": "A conversation that is too short is not distilled every N messages (idling, /clear and manual distills are not limited).",
+      "default": 30,
+      "min": 0,
+      "max": 1000
+    },
+    "idle_minutes": {
+      "type": "number",
+      "title": "Distill after idling this many minutes",
+      "description": "Distill once after this long since the last answer, with 5 or more new messages (context size does not matter). 0 means no distill when idle.",
+      "default": 10,
+      "min": 0,
+      "max": 120
+    },
+    "promote": {
+      "type": "boolean",
+      "title": "Ask Claude to put it in the repo",
+      "description": "For rules and procedures confirmed in 3 sessions, tell Claude in the first message of each session: a rule is proposed to you before it goes into CLAUDE.md, a procedure becomes a project skill (neither is committed).",
+      "default": true
+    }
+  }
+}

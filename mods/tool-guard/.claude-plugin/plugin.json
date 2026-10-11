@@ -1,0 +1,30 @@
+{
+  "name": "tool-guard",
+  "version": "0.2.0",
+  "description": "Holds commands that lose work (git, rm, migrations), previews what they would change and lets you decide; checks commit subject format and removes the Claude trailer",
+  "author": {
+    "name": "wen-hsiu hsu"
+  },
+  "repository": "https://github.com/wen-hsiu-hsu/cc-mod-trimtab",
+  "license": "MIT",
+  "userConfig": {
+    "commit_format": {
+      "type": "boolean",
+      "title": "Check commit subject format",
+      "description": "A commit subject that does not match the format is blocked and Claude is asked to fix it. The default format is `<emoji> type(scope)!: description` (Conventional Commits); commit_pattern sets your own.",
+      "default": false
+    },
+    "commit_pattern": {
+      "type": "string",
+      "title": "Commit subject format (regular expression)",
+      "description": "Empty means the built-in Conventional Commits format.",
+      "default": ""
+    },
+    "strip_attribution": {
+      "type": "boolean",
+      "title": "Remove the Claude trailer",
+      "description": "Remove Claude's Co-Authored-By trailer from commit messages.",
+      "default": true
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "name": "session-keeper",
+  "version": "0.3.0",
+  "description": "Shows the prompt cache state on desktop, reads the cache once when idle so a 1h cache does not expire, and suggests handing off to a new session when the context is large",
+  "author": {
+    "name": "wen-hsiu hsu"
+  },
+  "repository": "https://github.com/wen-hsiu-hsu/cc-mod-trimtab",
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "keep_warm": {
+      "type": "boolean",
+      "title": "Keep the cache warm",
+      "description": "With a 1h cache TTL and context over 30k, after idling for a while read the cache once (a fork that only replies OK) so it does not expire. Off by default; turn it on for a while with /session-keeper on keep_warm.",
+      "default": false
+    },
+    "idle_minutes": {
+      "type": "number",
+      "title": "Minutes of idling before keeping warm",
+      "description": "Minutes after the cache was last used before it is sent; must be under 60, or the cache has already expired.",
+      "default": 55,
+      "min": 5,
+      "max": 59
+    },
+    "max_keeps": {
+      "type": "number",
+      "title": "Most keep-warms per idle stretch",
+      "description": "Most keep-warms in one idle stretch; after that the cache expires as usual.",
+      "default": 3,
+      "min": 1,
+      "max": 10
+    },
+    "handoff_gate": {
+      "type": "string",
+      "title": "Offer a handoff for a new task",
+      "description": "When context passes CLAUDE_CTX_GUARD_TOKENS (150k by default), Haiku judges whether a prompt is an unrelated new task. suggest: the prompt is sent as usual and a handoff is offered above the prompt box when it is judged new; block: the prompt is held and you choose; off: no judging (default). Turn it on for a while with /session-keeper on handoff_gate (suggest).",
+      "options": [
+        "suggest",
+        "block",
+        "off"
+      ],
+      "default": "off"
+    },
+    "away_handoff": {
+      "type": "boolean",
+      "title": "Offer a handoff when the cache has expired",
+      "description": "When context is over the threshold and the cache has expired, the prompt is held and you choose to hand off or stay; with a 1h TTL the last keep-warm writes the handoff summary ahead of time instead. Off by default; turn it on for a while with /session-keeper on away_handoff.",
+      "default": false
+    },
+    "progress_resume": {
+      "type": "boolean",
+      "title": "Bring progress into a new session",
+      "description": "The first prompt of a new session gets .claude/progress.md attached (under 24 hours old, not written by this session, not given before).",
+      "default": true
+    }
+  }
+}

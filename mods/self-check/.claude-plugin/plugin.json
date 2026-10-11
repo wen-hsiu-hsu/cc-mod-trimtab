@@ -1,0 +1,24 @@
+{
+  "name": "self-check",
+  "version": "0.1.0",
+  "description": "Guard-rail reminders for Claude: when the same tool fails twice in a row for the same reason it is asked to find the cause first; when it says done after editing code without verifying, the stop is blocked once",
+  "author": {
+    "name": "wen-hsiu hsu"
+  },
+  "repository": "https://github.com/wen-hsiu-hsu/cc-mod-trimtab",
+  "license": "MIT",
+  "userConfig": {
+    "retry_nudge": {
+      "type": "boolean",
+      "title": "Repeated failure reminder",
+      "description": "When the same tool fails twice in a row for the same reason, ask Claude after the second result to find the cause first.",
+      "default": true
+    },
+    "done_check": {
+      "type": "boolean",
+      "title": "Said done without verifying",
+      "description": "When this turn edited code files and no test, build or check ran afterwards, block the stop once and ask Claude to verify.",
+      "default": true
+    }
+  }
+}
