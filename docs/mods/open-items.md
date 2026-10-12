@@ -10,7 +10,7 @@ Keeps undecided questions, unresolved bugs and deferred items outside the contex
 
 ## What it does
 
-- **Claude registers items** with the `track` tool (kinds: decision, question, deferred, bug). Text that is the same as, or contained in, an open item is not added again.
+- **Claude registers items** with the `track` tool (kinds: decision, question, deferred, bug). A deferred item says when to come back to it. Text that is the same as, or contained in, an open item is not added again.
 - **Unpicked options are deferred**: when you pick only some options (for example "A + B, write C down as an observation"), the unpicked ones are deferred automatically, and a toast shows what was deferred. Before the next prompt, press `[Undo deferral]` (`u`) or run `/open-items undo` to cancel it. Only an option list at the end of the answer, or followed by a question, is parsed.
 - **Count above the input box**: press `[Open]` (`o`) or run `/open-items` to open the pane.
 - **The pane**: mark items done or won't do, quote one into the input box, or copy the list as markdown (`c`). It lists each item's creation time and branch; items older than 7 days are dimmed. Esc closes it. Items you close in the pane are reported to Claude with the next prompt.
@@ -26,7 +26,7 @@ Keeps undecided questions, unresolved bugs and deferred items outside the contex
 | `/open-items undo` | Cancel the last automatic deferral |
 | `/open-items copy` | Copy the list as markdown |
 | `/open-items log [keyword]` | Search the decision log |
-| `/open-items stats` | The miss rate: the share of answers that end with a question but did not call `track` (each case is written to the debug log) |
+| `/open-items stats` | The miss rate: the share of answers that end with a question, made no `track` call, and got a reply from you longer than 14 characters. Short replies ("ok", "yes") and prompts you did not type are not counted (each miss is written to the debug log) |
 
 ## Settings
 

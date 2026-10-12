@@ -42,8 +42,9 @@ export type LogEntry = {
 
 export type OptionRef = { label: string; text: string }
 
-// Answers that ended with a question, and how many of those turns called no `track`.
-export type MissStats = { questions: number; missed: number }
+// Answers that ended with a question; how many of those turns called no `track`; and how many of
+// those the person then answered at length, the ones that may have left something untracked.
+export type MissStats = { questions: number; untracked: number; missed: number }
 
 declare module 'claude-code' {
   interface PluginState {
@@ -52,6 +53,7 @@ declare module 'claude-code' {
     // autoDeferred: uids of the items the latest prompt deferred, undoable until the next prompt.
     // panelResolved: uids resolved or dropped in the pane since the last prompt, told to the model with the next.
     // tracked: the main loop called `track` since its last answer.
+    // asked: the last line of the latest answer that ended with a question and no `track` call, until the next prompt.
     'open-items': {
       items: OpenItem[]
       options: OptionRef[]
@@ -60,6 +62,7 @@ declare module 'claude-code' {
       autoDeferred: string[]
       panelResolved: string[]
       tracked: boolean
+      asked: string
     }
   }
 }

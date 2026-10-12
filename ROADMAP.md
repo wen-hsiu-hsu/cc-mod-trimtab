@@ -40,7 +40,7 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 | ---- | ---- | -------------- |
 | bash-edit-snapshot（`tool-guard` 在 Bash 寫檔指令前用 `git stash create` 存快照，`/undo-bash [n]` 還原；`/rewind` 只追蹤 Edit／Write） | 2026-10-11 檢視約一個月的使用紀錄：Bash 寫檔（`sed -i`、`python3`、重導向、heredoc）很常見，但沒有一次造成損失，改錯的都在寫入前被檢查擋下或用 git 輕易救回；目標多是已 commit 的檔案，快照多保護的範圍很小 | Bash 寫檔讓未 commit 的內容遺失或要手動重建、且 `/rewind` 救不回；使用者因 Bash 改檔要求還原；或對未 commit 的檔案做大範圍取代出錯。做的時候寫檔偵測也複製到 `self-check` 的 `noteCall` |
 | classifier-retry（auto mode 分類器沒給判定時重試） | 實際發生的次數少；不確定同一個工具呼叫裡能否再呼叫一次 `next` | 頻率上升，或確認 API 支援重試 |
-| open-items 的 Haiku 抽取 | 每輪都要花 token；先觀察 track 工具與選項解析的漏抓率 | `/open-items stats` 的漏抓率明顯偏高（2026-10-07 開始記錄） |
+| open-items 的 Haiku 抽取 | 每輪都要花 token；先觀察 track 工具與選項解析的漏抓率 | `/open-items stats` 的漏抓率明顯偏高（2026-10-13 起只計你回覆超過 14 字的問句，短答與非本人訊息不計；之前 65% 的漏抓多半是「要 commit 嗎？」這類一句話就答完的確認，那些計數已作廢） |
 | project-memory 把有相關檔案的規則改寫進 `.claude/rules/<名稱>.md`（frontmatter `paths` 填相關檔案，只在碰到這些檔案時載入；沒有相關檔案的規則與流程類規則照舊寫進 CLAUDE.md，先問使用者不變） | 2026-10-12 決定先不做：寫進 repo 的規則還很少，CLAUDE.md 佔的 context 不成問題；相關檔案記不完整時，規則該出現卻不載入。依據見「查證結果」第 13 條 | CLAUDE.md 因升級進來的規則明顯變長（例如超過 200 行），或升級的規則多半只跟少數檔案有關。做的時候：改 `promote.ts` 的交代與 `mark_in_project` 的說明，由模型判斷規則屬於哪一種，新增 ADR 取代 0016 的這一點 |
 | project-memory 的 `<private>` 標記（訊息中標起來的段落不送去整理；claude-mem 的做法） | 2026-10-12 決定略過：`/project-memory off` 已能在這個 session 停止自動整理，送出前也已用 `secret-scrub` 的規則遮蔽金鑰 | 開著自動整理時需要只排除某一段（例如貼上客戶資料），而 `off` 再 `on` 不夠用；或發現敏感內容被寫進記憶 |
 | project-memory 只送相關的記憶給模型（Mem0 只送相似的前 10 筆） | 要 embedding 或相似度比對；記憶少時整份清單送得進去，`MEMORY.md` 也限 60 條 | 記憶（含失效前）超過約 150 條、或整理輸出常被截斷（debug log 的「丟棄 N 行」中出現 JSON 錯誤） |
@@ -62,7 +62,7 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 | open-items 每 N 輪重新注入清單（Cline Focus Chain） | 每輪都花 token；只在清單有變動時附差異就夠 |
 | open-items 的依賴與「可做清單」（beads 的 `bd ready`） | 項目只是 80 字的短句，依賴關係太重 |
 | open-items 同步到 GitHub issue 或 TODO 註解 | 會變成兩邊都要維護；需要時用「引用」交給模型開 issue |
-| open-items 載入時自動驗證是否仍成立（openloops 的 shell 判斷式） | 項目是文字，沒有可自動檢查的條件；改用顯示年齡讓使用者判斷 |
+| open-items 載入時自動驗證是否仍成立（以 shell 判斷式檢查） | 項目是文字，沒有可自動檢查的條件；改用顯示年齡讓使用者判斷 |
 
 ## 查證結果
 

@@ -576,21 +576,38 @@ test('/open-items copy puts the list on the clipboard as markdown', async ($, on
   expect(copied).toEqual(['## 待處理項目\n\n### 待你決定\n\n- o1：要不要加快取（main）\n'])
 })
 
-test('an answer ending on a question without a track call is counted and logged', async ($, on) => {
-  const store = engine(on)
+test('a question left untracked is a miss only when the person then replies at length', async ($, on) => {
+  const store = engine(on, { stats: { questions: 9, missed: 9 } })
   on('command.run', () => ({ text: '' }))
+  on('prompt.submit', ($, e) => ({ text: e.text }))
   await started($)
   const done = (answer: string, turnId: string) =>
     $.turn.complete({ answer, reason: 'answer', durationMs: 1, isAborted: false, turnId } as never)
-  await done('要 commit 嗎？', 't1')
+  const reply = (text: string, kind = 'composer') => $.prompt.submit({ text, origin: { kind } } as never)
+  // Tracked: not untracked, whatever the reply.
   await $.tool.call({ tool: TRACK, action: 'add', kind: 'decision', text: '要不要 commit' } as never)
+  await done('要 commit 嗎？', 't1')
+  await reply('好，先不要，等我把這段文件也改完再一起送出去')
+  // A confirmation answered with a word.
   await done('要 commit 嗎？', 't2')
-  await done('改好了。', 't3')
+  await reply('ok')
+  // Answered by a prompt the person did not type.
+  await done('要照這個方向做嗎？', 't3')
+  await reply('<task-notification> agent finished with a long report', 'system')
+  // Answered at length: a miss.
+  await done('A 和 B 你想先做哪個？', 't4')
+  await reply('先做 B，因為 A 要等上游的 API 定下來，順便把測試補齊')
+  // Not a question: nothing counted, and the reply after it is not judged.
+  await done('改好了。', 't5')
+  await reply('那再幫我把剩下的三個檔案也一起改一下吧，謝謝')
 
-  expect(store.get('stats')).toEqual({ questions: 2, missed: 1 })
-  expect(logged.filter(line => line.startsWith('open-items: missed'))).toHaveLength(1)
+  // The old { questions, missed } counts are dropped.
+  expect(store.get('stats')).toEqual({ questions: 4, untracked: 3, missed: 1 })
+  const misses = logged.filter(line => line.startsWith('open-items: missed'))
+  expect(misses).toHaveLength(1)
+  expect(misses[0]).toContain('A 和 B 你想先做哪個？')
   const ran = await $.command.run({ command: 'open-items', args: 'stats' } as never)
-  expect(ran.text).toContain('1 次沒有呼叫 track（50%）')
+  expect(ran.text).toContain('其中 3 次沒有呼叫 track，這些當中你回覆超過 14 字的有 1 次（25%）')
 })
 
 test('items keep their branch; the pane shows age and branch, the load toast counts the rest', async ($, on) => {

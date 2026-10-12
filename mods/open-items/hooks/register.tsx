@@ -40,12 +40,15 @@ const announce = atom({ plugin: 'open-items', key: 'announce' } as const, false)
 const autoDeferred = atom({ plugin: 'open-items', key: 'autoDeferred' } as const, [])
 const panelResolved = atom({ plugin: 'open-items', key: 'panelResolved' } as const, [])
 const tracked = atom({ plugin: 'open-items', key: 'tracked' } as const, false)
+const asked = atom({ plugin: 'open-items', key: 'asked' } as const, '')
 
 const COMMAND = 'open-items'
 const SPECS: Specs = { language: LANGUAGE }
 const PANE = 'open-items'
 const TOOL = 'mcp__open-items__track'
 const STATS_KEY = 'stats'
+// A reply this short (in characters) to a question is taken as a confirmation, not a miss.
+const SHORT_REPLY = 14
 const MAX_ITEMS = 200
 const MAX_NOTE = 160
 const RESOLVED_SHOWN = 5
@@ -313,32 +316,58 @@ async function copyList($: EngineInterface, lang: Lang, surface?: RenderSurface)
     : pick(lang, { en: `Cannot copy (${copied.reason}); here it is:\n\n${text}`, 'zh-TW': `無法複製（${copied.reason}），內容如下：\n\n${text}` })
 }
 
+// Counts kept before the next prompt decided misses ({ questions, missed }) are dropped: their
+// misses included every confirmation the person answered with a word.
+async function readStats($: EngineInterface): Promise<MissStats> {
+  const stats = (await $.store.get(STATS_KEY)) as Partial<MissStats> | undefined
+
+  return stats?.untracked === undefined ? { questions: 0, untracked: 0, missed: 0 } : (stats as MissStats)
+}
+
 async function statsText($: EngineInterface, lang: Lang): Promise<string> {
-  const stats = (await $.store.get(STATS_KEY)) as MissStats | undefined
-  if (stats === undefined || stats.questions === 0) {
+  const stats = await readStats($)
+  if (stats.questions === 0) {
     return pick(lang, { en: 'No answers ending in a question yet.', 'zh-TW': '還沒有以問句結尾的回答。' })
   }
   const rate = Math.round((stats.missed / stats.questions) * 100)
 
   return pick(lang, {
-    en: `${stats.questions} answer(s) ended with a question; ${stats.missed} of them made no track call (${rate}%). Each one is recorded in the debug log (open-items: missed).`,
-    'zh-TW': `以問句結尾的回答 ${stats.questions} 次，其中 ${stats.missed} 次沒有呼叫 track（${rate}%）。逐筆紀錄在 debug log（open-items: missed）。`,
+    en:
+      `${stats.questions} answer(s) ended with a question; ${stats.untracked} made no track call, ` +
+      `and ${stats.missed} of those got a reply longer than ${SHORT_REPLY} characters (${rate}%). ` +
+      'Short replies and prompts not typed by you are not counted. Each miss is recorded in the debug log (open-items: missed).',
+    'zh-TW':
+      `以問句結尾的回答 ${stats.questions} 次，其中 ${stats.untracked} 次沒有呼叫 track，` +
+      `這些當中你回覆超過 ${SHORT_REPLY} 字的有 ${stats.missed} 次（${rate}%）。` +
+      '短答和不是你輸入的訊息不計入。逐筆紀錄在 debug log（open-items: missed）。',
   })
 }
 
-// An answer that ends on a question without any `track` call this turn may have left something untracked.
+// An answer that ends on a question without any `track` call this turn may have left something
+// untracked; the next prompt decides (see `judgeMiss`).
 async function measureMiss($: EngineInterface, answer: string): Promise<void> {
   const didTrack = await read($, tracked)
   await update($, tracked, () => false)
-  if (!endsWithQuestion(answer)) {
+  const isQuestion = endsWithQuestion(answer)
+  const last = answer.split('\n').filter(line => line.trim() !== '').slice(-1)[0] ?? ''
+  await update($, asked, () => (isQuestion && !didTrack ? last : ''))
+  if (!isQuestion) {
     return
   }
-  const stats = ((await $.store.get(STATS_KEY)) as MissStats | undefined) ?? { questions: 0, missed: 0 }
-  await $.store.set(STATS_KEY, { questions: stats.questions + 1, missed: stats.missed + (didTrack ? 0 : 1) })
-  if (!didTrack) {
-    const last = answer.split('\n').filter(line => line.trim() !== '').slice(-1)[0] ?? ''
-    $.ui.log(`open-items: missed: answer ended with a question and no track call: ${clip(last, 120)}`, { to: 'debug' })
+  const stats = await readStats($)
+  await $.store.set(STATS_KEY, { ...stats, questions: stats.questions + 1, untracked: stats.untracked + (didTrack ? 0 : 1) })
+}
+
+// A question answered with a word ("ok", "commit") was a confirmation, done once answered; only a
+// longer reply typed by the person counts as a miss.
+async function judgeMiss($: EngineInterface, question: string, reply: string | undefined): Promise<void> {
+  await update($, asked, () => '')
+  if (reply === undefined || [...reply.trim()].length <= SHORT_REPLY) {
+    return
   }
+  const stats = await readStats($)
+  await $.store.set(STATS_KEY, { ...stats, missed: stats.missed + 1 })
+  $.ui.log(`open-items: missed: answer ended with a question and no track call: ${clip(question, 120)}`, { to: 'debug' })
 }
 
 const USAGE = {
@@ -382,7 +411,8 @@ export const register: Register = (on, pluginOptions) => {
     await $.tool.register({
       name: 'track',
       description:
-        'Track an open item. add: kind+text, returns id (or the similar open item, not added). ' +
+        'Track an open item. add: kind+text, returns id (or the similar open item, not added); ' +
+        'for deferred, the text names when to come back to it. ' +
         'resolve: id, optional note (a decision: what was chosen and why), dropped=true when it will not be done (note: why). ' +
         'list: the open items with their ids. history: earlier decisions and dropped items, optional query.',
       inputSchema: {
@@ -542,6 +572,7 @@ export const register: Register = (on, pluginOptions) => {
     const context: string[] = []
     const isPerson = e.origin.kind === 'composer' || e.origin.kind === 'bridge'
     const remembered = isPerson ? await read($, options) : []
+    const question = await read($, asked)
     // Items the person closed in the pane are told beside the prompt, so the model stops raising them.
     const closed = isPerson ? await read($, panelResolved) : []
     if (closed.length > 0) {
@@ -576,6 +607,9 @@ export const register: Register = (on, pluginOptions) => {
       }
       if (isPerson) {
         await deferUnchosen($, lang, e.text, remembered)
+      }
+      if (question !== '') {
+        await judgeMiss($, question, isPerson ? e.text : undefined)
       }
     } catch (error) {
       $.ui.log(`open-items: prompt.submit after next: ${String(error)}`, { to: 'debug' })
