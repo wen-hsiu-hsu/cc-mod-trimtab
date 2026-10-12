@@ -32,3 +32,5 @@ jobs:
           exit $status
       - name: Check shared copies
         run: scripts/check-copies.sh
+      - name: Check docs
+        run: scripts/check-docs.sh

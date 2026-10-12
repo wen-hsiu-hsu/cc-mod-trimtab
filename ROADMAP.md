@@ -1,39 +1,18 @@
 # Roadmap
 
-cc-mod-trimtab 的決定與理由、已知問題和之後的 mod 規劃。功能與用法見 [README](README.zh-TW.md)；這裡只留 README 沒寫的理由與還沒做的事。
-
-## 決定
-
-| 項目 | 決定 |
-| --- | --- |
-| 發佈 | 2026-10-11 發佈 v0.1.0，repo 是 public：`github.com/wen-hsiu-hsu/cc-mod-trimtab` |
-| repo 結構 | 單一 repo、單一 marketplace，每個 mod 可單獨 `/plugin install <mod>@cc-mod-trimtab` |
-| 名稱 | `cc-mod-trimtab`（repo 與 marketplace 同名）：`cc-mod-` 前綴讓人從名稱看出是 Claude Code mod。2026-10-11 由 `trimtab` 改名。`ballast` 已有同類 Claude Code plugin（`svy04/ballast`），不用 |
-| mod 名稱 | 已公開，原則上不再改名：改名會讓使用者的 `enabledPlugins` 與 `/config` 的值（綁在 `<mod>@cc-mod-trimtab`）失效，只在名稱本身造成問題時才改，並在 CHANGELOG 標成破壞性變更。公開前已把 `shell-guard` 改成 `tool-guard`、`agent-watch` 改成 `agent-dispatch`、`nudges` 改成 `self-check`；公開後把 `agent-dispatch` 改成 `subagent-dispatch`（見「設計紀錄 › 指令」） |
-| 版本 | 各 mod 有自己的 `version`，整個 repo 另打 tag `vX.Y.Z`，CHANGELOG 列出每個 tag 包含的 mod 版本 |
-| License | MIT。改寫自 ctx-handoff-mod 的檔案列在 `NOTICE` |
-| 文件語言 | 中英雙語：英文 `README.md`、中文 `README.zh-TW.md`；ROADMAP 只有中文 |
-| 介面語言 | 預設 `en`，可設 `zh-TW`（見「設計紀錄 › 介面語言」） |
-| git 歷史 | 發佈前壓成一個初始 commit（舊歷史含個人 email 與假密鑰原文，本機留 `backup/pre-squash`） |
-| 獨立性 | 每個 mod 不依賴其他 mod，也沒有中央 mod |
-| 支援範圍 | Claude Code 2.1.296 以上（實測版本，mod API 仍是 early access）；CLI 與 desktop。雲端 session 不會加入 repo 宣告的 marketplace（需要 workspace trust，雲端不顯示 trust 對話框） |
-
-## 發佈流程
-
-1. 在 worktree 改，`claude plugin validate`、`claude plugin test`、`scripts/check-copies.sh` 都過才合併回 master（這個 clone 是使用者所有 session 直接載入的 mod）。
-2. 改了哪個 mod 就調高它的 `version`：從 GitHub 安裝的使用者只有版本號變了才會更新，中間的 commit 拿不到。
-3. CHANGELOG 加一段，打 tag `vX.Y.Z`，push 前先問使用者。CI（`.github/workflows/ci.yml`）在 master 與 PR 上跑 validate、test、`check-copies.sh`，裝 `@anthropic-ai/claude-code@2.1.296`。
-4. 會改變預設值的改動，合併前先確認自己的 `pluginConfigs` 或 `~/.claude/cc-mod-trimtab.json` 已寫好要維持的值：這個 clone 是自己所有 session 直接載入的，合併後行為立刻改變。
-
-CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不到；`secret-scrub/hooks/history.test.ts` 也已有 2 個型別錯誤。
+cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案、已知問題，以及實測與查證的結果。功能與用法見 [docs/mods](docs/mods/)，已做的決定與理由見 [ADR](docs/adr/README.md)，開發與發佈流程見[開發指南](docs/development.md)。
 
 ## 已知問題
 
-- 安裝時 CLI 提示「userConfig options not yet set」：沒設定的值用預設，不影響使用，README 沒寫。
+- 安裝時 CLI 提示「userConfig options not yet set」：沒設定的值用預設，不影響使用（寫在[安裝與更新](docs/install.zh-TW.md)）。
 
 ## 待實測
 
 1. 2.1.296 自己產生的型別檔與 2.1.288 版是否一致（見「查證結果」2；目前只拿得到 2.1.288 版）。
+2. 用模型的功能在一個 session 第一次觸發時的 toast：只有自動測試。
+3. 第一次寫 `.claude/cc-mod-trimtab.local.json` 時加進 `.git/info/exclude`：只有自動測試。
+4. `subagent-dispatch` 帳本跨 `/clear` 的 session 命名與 agent 步數歸屬：只有自動測試。
+5. GitHub 的 private vulnerability reporting 是否已開啟（`SECURITY.md` 依賴它）。
 
 ## 待辦
 
@@ -45,7 +24,7 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
   - [x] 輸入框上方只在 agent 被中斷時顯示重派，執行中不再列出。
   - [ ] 分派提醒（只提醒，不擋也不改模型）：subagent 跑在 Opus 但 description 看不出理由、或同一個 session fork 次數偏多時跳 toast，並記進帳本。「看不出理由」的判斷與 fork 門檻實作時再定，先只記錄不提醒，看一段時間的誤判再開。
   - 每個功能各自的開關（帳本已有 `ledger`）。
-  - 限制：hook 不能讀檔，無法回填安裝前的 transcript；雲端 session 不載入 mod，那部分不會記到。實作前確認 `turn.step` 是否涵蓋 fork 與背景 agent 的每一步。
+  - 限制：hook 不能讀檔，無法回填安裝前的 transcript；雲端 session 不載入 mod，那部分不會記到。`turn.step` 涵蓋 fork 與背景 agent 的每一步（2026-10-11 實測，見「查證結果」9）。
 
 ## 費用回報
 
@@ -59,108 +38,9 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 - 金額依價格表估算並標明「依 API 價格估算」與價格日期；訂閱制實際不依 token 計費。價格表裡沒有的模型只顯示 token 數。
 - 價格表在每個需要的 mod 各放一份，加進 `scripts/check-copies.sh`（比照 `scrub.ts`）。
 
-## 設計紀錄
-
-### 介面規範
-
-顏色、版面、控制項、快捷鍵與用詞見 [DESIGN.md](DESIGN.md)（2026-10-12）。理由：
-
-- **畫的程式在有畫面的 mod 各放一份 `hooks/ui.tsx`**：mod 不能跨資料夾 import；只有 toast 的 mod 用不到，不放。
-- **`yellow` 只表示「要你處理」**：原本也用在切換鈕目前的值，和 band 的提問同色；目前的值改用 `bold`。
-- **確認框用 `1`／`2`**：和 Claude Code 內建權限提示一致，其他地方用字母。
-
-### 設定分層
-
-用法見 README「設定」。理由：
-
-- **repo 層由 mod 自己讀檔**：`pluginConfigs` 只從使用者或 managed 設定讀取，沒有專案層（見「查證結果」1）。讀設定的程式（`hooks/config.ts`）在每個 mod 各放一份，`check-copies.sh` 檢查相同。
-- **commit 進 repo 的檔案只能讓保護更嚴、花費更省**（2026-10-11）：clone 來的 repo 不能關掉 `secret-scrub`、`tool-guard`，也不能替使用者開啟會花 token 的功能。每個 key 標明類別（保護、花費、一般）與 repo 規則；違反的值不採用，`/<mod> status` 列出原因。`never` 的 key 連和下層相同的值也拒絕，`set --repo` 才不會把它寫進 repo 檔。
-- **`.local.json`**：fork 別人專案的 repo 用這個檔，不在對方 repo 多一個檔；第一次寫入時加進 `.git/info/exclude`。
-- **清單放使用者層的檔案**：`/config` 只能存字串、數字、布林。
-- **`secret-scrub` 的 `custom_rules` repo 不能設定**：JavaScript 的正規表示式沒有逾時，commit 進來的一條會無止盡回溯的規則會卡住每個 prompt。`allow` 要整段符合。
-- **個人習慣預設關**：commit 標題格式檢查預設關（使用者自己在 `pluginConfigs` 打開）；移除 Claude 署名預設開。
-
-### 指令
-
-- 每個 mod 註冊 `/<mod>`，子指令統一：`status`、`set`、`unset`、`on`、`off`。一次性動作用具名子指令（`/session-keeper handoff`、`/session-keeper stats`、`/project-memory run`）。
-- 舊指令改名時不留別名（留別名會再遇到撞名）：`/redispatch` → `/subagent-dispatch redispatch`、`/guard-allow` → `/tool-guard allow`、`/scrub-history` → `/secret-scrub history`、`/project-memory` → `/project-memory run`。
-- 指令名稱不用 `agent-` 開頭（2026-10-12）：Claude Code 的補全選單把 id 以 `agent-`、`file-`、`mcp-resource-`、`mcp-template` 開頭的項目當成 agent、檔案或 MCP 資源的建議，畫成一行並加上圖示，`/agent-dispatch` 因此被畫成 `* /agent-dispatch – …`。mod 名稱就是指令名稱，所以 `agent-dispatch` 整個改名為 `subagent-dispatch`。
-- 不註冊 `/handoff` 這類通用名稱：使用者自己的指令或 skill 同名時，mod 的註冊會被拒絕（2026-10-11 實際遇到 mattpocock/skills 的 `/handoff`）。註冊失敗時跳 toast，不只寫 debug log。
-
-### 用模型的功能
-
-| 功能 | mod | 模型 |
-| --- | --- | --- |
-| 保持快取、快取過期提議交接 | session-keeper | 主對話模型（fork） |
-| 判斷新任務 | session-keeper | Haiku |
-| 自動整理記憶 | project-memory | Sonnet |
-
-- **預設關**，第一次觸發時 toast 提醒一次。常開用 `/config` 或 `.local.json`；commit 進 repo 的檔案不能開。
-- **臨時開啟**（2026-10-11）：存在 session 層並記到期時間，`/clear` 換了 session 也算結束；已經常開的功能 `on` 不改變，`off` 只關這個 session。開啟期間每個 mod 一行灰字（`session-keeper on · keep_warm 1h42m`），畫在自己那段的最上面，常開的不列。
-- **費用說明**（2026-10-11）：每個功能一列的表（模型、何時呼叫、每次的量、送出的內容），表下說明估算方式、送去哪、訂閱制不依 token 計費、開啟方法；不放試算金額，免得價格變動要跟著改。
-
-### 介面語言
-
-2026-10-11 決定，發佈前完成：
-
-- 預設 `en`。設定共用一個值，寫在設定檔的 `"*": { "language": … }`；同一層裡 mod 自己的區段優先。repo 檔案不能設定。使用者檔例外接受這個單一值（`/config` 存不了跨 mod 的值），所以 `plugin.json` 的 `userConfig` 不放。
-- 畫面上看得到的文字依設定，包括 Stop hook 擋下與 tool-guard 拒絕的理由。給模型的指示一律英文；模型替使用者寫的內容（記憶、`progress.md`、交接摘要、升級成 CLAUDE.md 或 skill 的內容）依設定。解析使用者或 Claude 說的話時兩種語言都認。
-- 快取列（`cache warm … left`、`hit`、`miss`）與臨時開啟的灰字保留英文，當成技術用語。
-- `plugin.json` 與 marketplace 的說明只有英文（manifest 無法依語言切換），所以 `/config` 的標題是英文。
-- 已知的小落差：切換語言後，指令選單的描述要到下個 session 才更新；用預設 `en` 整理時，既有的中文記憶檔會改寫成英文標籤（內容不變）。
-
 ## mod 規劃
 
-提案依「實際發生過的問題 × 效益 ÷ 實作量」篩選。
-
-### 出處
-
-[cablate/ctx-handoff-mod](https://github.com/cablate/ctx-handoff-mod) v0.5.0（MIT，commit `3a06bc8`）。2026-10-09 決定不整個 fork：hooks 約 4,200 行、上游更新快，而且它的自動交接（600k 自動 `/clear`）與回覆語言提醒和這裡的規劃重疊。只拆保持快取、進度提醒、專案筆記、守門、防呆提醒五項，照 [README](README.zh-TW.md) 的共存規則與慣例重寫；它的面板直接取代 `AbovePrompt` 而沒有疊上 `next(e)` 的結果，`prompt.submit` 在 `next` 之前就改狀態，這兩點不照搬。沿用程式碼的 3 個檔案（`self-check/hooks/loops.ts`、`project-memory/hooks/distill.ts`、`promote.ts`）列在 `NOTICE`。
-
-### 分組
-
-2026-10-09 依「共用資料或同一個事件」分組：
-
-| mod | 包含 | 理由 |
-| --- | ---- | ---- |
-| `self-check`（由 nudges 改名） | 重複失敗、說完成卻沒驗證 | 對象是 Claude 不是使用者、看的是執行後的結果與 `classic.Stop`，和守門共用不到程式；出錯時跳過即可；「說完成卻沒驗證」會顯示成 Stop hook error，獨立才能用 `/plugin` 單獨停用 |
-| `session-keeper` | cache 狀態、保持快取、new-task-gate、交接、進度的讀取與帶入 | 共用用量、TTL 與閒置計時；保持快取的 fork 要讓快取到期時間跟著更新 |
-| `project-memory` | 專案筆記、進度的產生 | 上游兩者在同一個請求產生；筆記的規則是守門的來源 |
-| `tool-guard`（由 shell-guard 改名） | 固定規則（cmd-rewrite、學來的守門、bash-edit-snapshot 暫緩） | 都在工具執行前做事，共用指令解析、影響預覽與確認面板；學來的守門不只看 Bash，`shell-guard` 這個名字不準 |
-| `subagent-dispatch`（由 agent-watch、agent-dispatch 改名） | 背景 agent 監看與重派、用量帳本、分派提醒 | 都圍繞派 agent 這件事，共用 Agent 呼叫與 `agent.spawn` 的資料（種類、模型、description）。用量帳本要的 `turn.step` 雖然 session-keeper 也聽，但它拿不到 agent 種類 |
-| 維持獨立 | secret-scrub、output-trimmer、open-items | secret-scrub 要排第一，併入的功能也會看到未遮蔽的原文；output-trimmer、open-items 和別人沒有共用的資料。open-items 載入後會自己把清單附給 Claude，交接與進度不用帶未完成項目 |
-
-### 設計原則
-
-- **交接只建議、不自動清空**：上游到 600k 自動 `/clear`，不照搬（會在沒預期的時候發生，而且 600k 時模型品質早就下滑）。兩種情況攔下 prompt，讓使用者選「交接並開新 session」或「仍在這裡做」，共用同一個交接流程：
-  - context 超過門檻，且 prompt 是無關的新任務（new-task-gate）
-  - 快取已過期且 context 很大：保持快取的次數用完、或閒置太久後回來的第一則
-- **筆記寫進內建 memory**：每條一個檔案並更新 `MEMORY.md` 索引，只有一套記憶，Claude Code 自己載入，不用 mod 注入。出現次數存在 `project-memory` 的 `$.store`；規則寫進 CLAUDE.md 後刪掉對應的 memory 檔，避免重複。
-- **進度與交接摘要是同一份檔案**：`project-memory` 整理筆記時更新進度，`session-keeper` 交接時用交接摘要覆蓋，只有 `session-keeper` 讀取並帶入新 session。這樣不用跨 mod 讀 `$.store`。這份檔案是暫時性的，不放在 `memory/` 資料夾。
-- **守門與改寫規則放 repo 層設定**：核准的守門規則和 cmd-rewrite 規則照「設定分層」，進版控的放 `.claude/cc-mod-trimtab.json`，fork 別人專案的 repo 放 `.claude/cc-mod-trimtab.local.json`。
-- **進版控的 cmd-rewrite 規則要先核准**：改寫指令不算「讓保護更嚴」，clone 來的 repo 可以在 `.claude/cc-mod-trimtab.json` 把 `npm test` 改寫成任意指令。所以進版控的改寫規則第一次生效前要使用者核准，記下規則內容的雜湊，內容變了重新核准；`.local.json` 的不用。
-- 合併後每個功能要有自己的開關，一個功能出錯不能拖垮整個 mod。
-
-### 已完成的設計紀錄
-
-- **`self-check`（原 nudges）**（2026-10-09）：「說完成卻沒驗證」照上游，回覆要有「完成了」等說法才擋；子代理改的檔、只改文件都不算。上游只算 Edit／Write，漏掉 Bash 改檔（要等 bash-edit-snapshot 的寫檔偵測，見「暫緩」）。回覆語言提醒不移植。上游：`loops.ts`，`register.ts` 的 `classic.Stop` 和 `tool.call`。
-- **`session-keeper` 保持快取**（2026-10-09）：context 少於 30k 不送、TTL 還沒判斷出來不送、5m TTL 不送（上游不偵測 TTL，要手動關）。計時由 `$.state` 的最後請求時間推算，熱重載後接得上；fork 後更新快取到期時間。上游：`register.ts` 的 `schedule`、`onIdle`、`resumeSchedule`。
-- **`project-memory`**（2026-10-09）：依業界做法比對（Mem0、Letta sleep-time、Zep／Graphiti、Copilot Memory、Claude Code 官方 memory 文件）後決定：
-  - 規則寫進 CLAUDE.md 前先問使用者（官方定位 CLAUDE.md 由人寫）；流程做成 skill 不用問。
-  - 退出時 `session.end` 只有約 1.5 秒，來不及整理，不補。
-  - 次數算「幾個不同 session 證實過」；過期用工作日（repo 有開 session 的日子）計算；刪除改成標記失效（`invalidated`、`superseded_by`），90 天後刪檔。
-  - 記憶記下相關檔案路徑，檔案不見時標給模型判斷（Copilot 式出處驗證的簡化版）。
-  - 交接前不整理：mod 之間不能互相呼叫，交接摘要由 `session-keeper` 讀 `$.session.messages()` 自己寫。
-  - 上游：`distill.ts`、`notes.ts`、`promote.ts`、`transcript.ts`、`progress.ts`。
-- **`session-keeper` 交接與 new-task-gate**（2026-10-09）：依業界做法比對（Amp Handoff、Cline `new_task`、Anthropic 的 long-running harness 與 context engineering 文章、Chroma context rot、主題轉換偵測的論文）後決定：
-  - 交接內容放進新 session 的輸入框當草稿，審閱後才送出（Amp 的做法）。
-  - 判為新任務時，舊工作的摘要只寫進進度檔，新 session 的草稿只有新 prompt。
-  - 先用「只提議」模式，記錄選擇與忽略來算誤判率（判為新任務但留下的比例），之後才改成攔截（`/config` 的 `handoff_gate`）。不確定時判為相關；留下或忽略後，context 再多 50k 才會再提議。
-  - 快取過期才產生摘要的話 fork 要付整份重寫，所以 1h TTL 時把保持快取的最後一次改成產生交接摘要。
-  - 門檻沿用 `CLAUDE_CTX_GUARD_TOKENS`（預設 150000），和 status line 一致。
-  - 摘要由 fork 寫、不讓主對話寫（2026-10-11 與 mattpocock/skills 的 handoff skill 比較後確認）：`$.model.fork` 送的是主對話上一次請求的原樣前綴，同樣讀快取，費用和主對話寫一輪相同；主對話寫還要多一次寫檔的工具呼叫（再讀一次整份快取），而且回答進行中時不能插隊。
-  - 摘要固定段落，但加一段格式不拘的「其他」：固定段落保證「已驗證／未驗證」這類接手最容易漏的資訊一定出現，沒有的寫「無」好分辨是沒有還是漏寫；「其他」補上 skill 自由格式的彈性。也照 skill 加上「已寫在別處的只寫路徑」與「不寫密鑰」（摘要存成 repo 裡的檔案，secret-scrub 管不到）。
-  - 上游：`handoff.ts`，`register.ts` 的 `prompt.submit`、`classic.Stop`、`onIdle`。
+提案依「實際發生過的問題 × 效益 ÷ 實作量」篩選；已做的設計見 [ADR](docs/adr/README.md)。
 
 ### 暫緩
 
@@ -199,3 +79,6 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 6. 從 GitHub 安裝的 plugin 會複製到 `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`，plugin 資料夾外的檔案不會複製（[plugins/loading](https://code.claude.com/docs/en/plugins/loading)）；第三方 marketplace 預設不自動更新。2026-10-11 在隔離的 `CLAUDE_CONFIG_DIR` 從 GitHub 安裝 8 個 mod，`enabledPlugins` 順序照安裝順序，快取副本的測試通過。
 7. 2026-10-11 實測：`/reload-plugins` 後 `/<mod> status` 立刻讀到 `~/.claude/cc-mod-trimtab.json`（symlink 也讀得到）的 `"*".language`。
 8. 2026-10-11 實測 `--resume`：sessionId 不變，`session.start` 重讀設定，臨時開啟的灰字提示列與值都接得上（open-items o3）。
+9. 2026-10-11 實測 `subagent-dispatch` 帳本：背景 agent 的每一步都記到（例：5 步、33,692 token）；真實的 fork 記成 fork；同一模型的 id 寫法一致，不會拆成兩列；終端機太窄時 pane 改放在輸入框上方。
+10. 2026-10-12 改名 `agent-dispatch` → `subagent-dispatch`：`$.store` 的檔名是 `<mod>_<marketplace>-<雜湊>.json`，雜湊依 plugin 算，所以新名稱用新檔案，舊帳本不會跟著搬，要手動併入（session key 不重疊）；舊 session 在 `/reload-plugins` 前仍寫舊檔。在隔離的 `CLAUDE_CONFIG_DIR` 驗證過新名稱可安裝、舊名稱找不到。
+11. 用 `--plugin-dir` 開的 session 讀 `pluginConfigs` 的 key 是 `<mod>` 或 `<mod>@inline`，讀不到 `<mod>@cc-mod-trimtab` 的值（2026-10-11），所以測試 session 測不到用 `/config` 常開的行為。

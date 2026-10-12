@@ -68,7 +68,7 @@
 
 - **按鈕裡只放文字**，不放 `Box`。
 - **Band 的按鈕**：預設 variant，每顆都有 hotkey。
-- **Pane 列上的按鈕**：`plain dimColor`，可以沒有 hotkey。
+- **Pane 清單列上的操作按鈕**（完成、略過、打開某一列）：`plain dimColor`，可以沒有 hotkey。返回、更多、切換這類導覽按鈕一律要有（見「快捷鍵」）。
 - **切換**：不用下拉的 `Select`，它展開時會把下方畫面往下推。用 `ui.tsx` 的 `switcher`：
   - 終端機：一顆 `plain` 按鈕「‹ 值 ›」，按一次換下一個值，最後一個之後回到第一個，hotkey 也做同樣的事。
   - desktop：一排分段按鈕，目前的值 `variant="primary"`，其他 `dimColor`，hotkey 掛在目前值的下一顆。

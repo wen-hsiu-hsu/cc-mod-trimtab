@@ -3,6 +3,15 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [Unreleased]
+
+- Docs: the README is now a short overview. Each mod's behaviour, commands,
+  settings, cost and known limitations moved to `docs/mods/<mod>.md` (and
+  `.zh-TW.md`); install and settings moved to `docs/install.md` and
+  `docs/settings.md`. Corrected: the `open-items` decision log keeps the latest
+  300 entries; documented the ranges of the `output-trimmer` thresholds, the
+  built-in `commit_pattern` format, and that `ledger` is not in `/config`.
+
 ## [0.2.0] - 2026-10-12
 
 | Mod | Version |

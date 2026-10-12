@@ -28,5 +28,6 @@ instead of opening a public issue. Include the mod name, its version (from
   `project-memory` masks the conversation with the `secret-scrub` rules before
   sending it. These features are off by default.
 
-When a check itself fails, `secret-scrub` and `tool-guard` block rather than
-let the input through.
+When a check itself fails, `secret-scrub` holds the prompt rather than send it,
+and `tool-guard` blocks the commands it guards (those containing `git`, `rm` or
+`migrate`); other commands run as usual.
