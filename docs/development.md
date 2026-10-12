@@ -100,6 +100,16 @@ mod 不能 import 自己資料夾以外的檔案（見 [ADR 0011](adr/0011-share
 
 這兩行放在 commit 訊息的最後，和其他 trailer 一起。人手動 commit 時不會經過這個 hook，自己照上表檢查。
 
+### push 前的檢查
+
+同一個 hook 也在 Claude 執行 `git push` 前，比對 HEAD 與最近的 `v*` tag，擋下以下情況：
+
+- 某個 mod 在 tag 之後改了（測試檔不算），`plugin.json` 的 `version` 卻沒變。
+- 調高的版本沒寫進 `CHANGELOG.md`（`[Unreleased]` 的「`` `<mod>` X.Y.Z ``」或發佈表格的「`` | `<mod>` | X.Y.Z | ``」都算）。
+- 有 mod 改過，HEAD 卻還沒打新的 `v*` tag。
+
+確定這次不發佈新版（例如只推文件）時，在 push 指令後加註解 `# Release: n/a <理由>`。人手動 push 時不會經過這個 hook，自己照下方「發佈」檢查。
+
 ## ADR
 
 `docs/adr/NNNN-<slug>.md`，用英文寫，編號取目前最大的加一，並加進[索引](adr/README.md)。只在三個條件都成立時寫：難以反悔、沒有前因後果會讓人意外、真的在幾個做法之間取捨過。容易改回來的、或沒有其他做法的，不用寫。
@@ -121,5 +131,5 @@ mod 不能 import 自己資料夾以外的檔案（見 [ADR 0011](adr/0011-share
 
 1. 在 worktree 改，`claude plugin validate`、`claude plugin test`、`scripts/check-copies.sh`、`scripts/check-docs.sh` 都過，文件照「改完之後」更新了，才合併回 master（這個 clone 是使用者所有 session 直接載入的 mod）。
 2. 改了哪個 mod 就調高它的 `version`：從 GitHub 安裝的使用者只有版本號變了才會更新，中間的 commit 拿不到。
-3. CHANGELOG 加一段（每個 tag 列出包含的 mod 版本；破壞性變更寫出使用者要做什麼），打 tag `vX.Y.Z`，push 前先問使用者。
+3. CHANGELOG 加一段（每個 tag 列出包含的 mod 版本；破壞性變更寫出使用者要做什麼），打 tag `vX.Y.Z`，push 前先問使用者。少了 version、CHANGELOG 或 tag 時，push 前的檢查會擋下（見上方「push 前的檢查」）。
 4. 會改變預設值的改動，合併前先確認自己的 `pluginConfigs` 或 `~/.claude/cc-mod-trimtab.json` 已寫好要維持的值：這個 clone 是自己所有 session 直接載入的，合併後行為立刻改變。
