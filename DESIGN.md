@@ -1,0 +1,166 @@
+# 介面規範
+
+所有 mod 的畫面都照這份規範：顏色、版面、控制項、快捷鍵、用詞。新增或修改畫面時先對照這份文件；規範要改時先改這裡，再改程式。
+
+畫的程式放在有畫面的 mod 各自的 `hooks/ui.tsx`（mod 不能 import 自己資料夾外的檔案），內容相同，由 `scripts/check-copies.sh` 檢查。目前有畫面的 mod：`agent-dispatch`、`open-items`、`session-keeper`、`tool-guard`。只有 toast 和指令回應的 mod 不放 `ui.tsx`，照下面的「Toast」與「用詞」即可。
+
+## 畫面種類
+
+| 種類 | 用途 | 例子 |
+| --- | --- | --- |
+| Band（`AbovePrompt`） | 一兩行狀態或提問，畫在輸入框上方 | agent-dispatch 中斷提醒、open-items 計數、session-keeper 快取列 |
+| Pane | 要瀏覽或操作的內容 | agent-dispatch 用量、open-items 清單 |
+| 確認框（Pane） | 擋住 Claude、等使用者回答 | tool-guard 確認執行 |
+| Toast | 發生了一件事，看過就好 | 遮蔽了密鑰、省略了輸出 |
+| `ui.log` | 留在 transcript 裡的事件 | self-check 擋下「說完成卻沒驗證」 |
+| status | 沒有 Band 的介面（不是 terminal、desktop）才顯示 | 背景 agent 數 |
+
+## 顏色
+
+### 語意色
+
+終端機用 Ink 色名。顏色只加強，不單獨表達意思：文字本身要說得出狀態。
+
+| 色 | 意思 | 用在 |
+| --- | --- | --- |
+| `yellow` | 要你處理：等你決定、等你確認 | band 的提問、確認框外框、`warn` 狀態 |
+| `red` | 出錯、中斷、有風險 | 中斷的 agent、確認框的影響摘要、`hot` 狀態 |
+| `dimColor` | 次要資訊 | 標籤、說明、提示列、空狀態、列上的按鈕 |
+| `bold` | 數字總計、目前的位置 | 卡片總數、打開的那一列、切換鈕目前的值 |
+
+不要用顏色表示「選到」：切換鈕目前的值用 `bold`，不用 `yellow`。
+
+### 資料色票
+
+畫長條和圖例時，一個來源一個顏色，所有 mod 共用。終端機用 `ink`，desktop 的 `Svg` 用 `fill`。
+
+| key | 意思 | ink | fill |
+| --- | --- | --- | --- |
+| `main` | 主 session | `magenta` | `#8a5cc7` |
+| `sub` | subagent | `cyan` | `#2f8fb0` |
+| `named` | 指定模型 | `yellow` | `#c98a12` |
+| `default` | 沿用預設 | `gray` | `#8b8b93` |
+| `fork` | fork | `green` | `#3f9a4f` |
+
+同一個來源要再分（例如主 session 的各模型）時，用同色系輪流（`magenta`、`magentaBright`）。圖例一定有文字標籤。
+
+## 版面
+
+- **依 `e.props.bodyColumns` 排版**，不用 `padEnd` 補空白（中文字佔兩格）。欄位對齊用固定 `width` 的 `Box`，數字欄加 `justifyContent="flex-end"`。
+- **斷點**：
+  - 80 欄以上：一筆資料一行，表格上方加欄名列。
+  - 60 欄以上：兩張卡並排，各佔 `floor((body - 2) / 2)`，中間 `gap={2}`。
+  - 更窄：卡片上下排，長條另起一行。
+- **間距**：
+  - 同一行的文字片段：`gap={1}`；會折行的一排片段用 `columnGap`。
+  - 一排按鈕：`gap={2}`。
+  - 段落之間：`marginTop={1}`，不用空行。
+  - 子項縮排：`paddingLeft`，數值對齊上一層的欄寬。
+- **卡片**：`borderStyle="round" borderDimColor paddingX={1}`，標題 `dimColor`、總數 `bold`。
+- **確認框外框**：`borderStyle="round" borderColor="yellow" paddingX={1}`。
+- **單邊線**：Box 不能只畫一邊的邊框，要左側線就在每行前放一個上色的 `│`。
+- **長條**：
+  - 終端機：有底色的空格（`backgroundColor`），不用 `█`。
+  - desktop：`Svg`。判斷用 `e.surface !== 'terminal'`，不看 `'Svg' in parts`（runtime 一律提供所有元件）。
+  - 有值的部分至少一格。
+
+## 控制項
+
+- **按鈕裡只放文字**，不放 `Box`。
+- **Band 的按鈕**：預設 variant，每顆都有 hotkey。
+- **Pane 列上的按鈕**：`plain dimColor`，可以沒有 hotkey。
+- **切換**：不用下拉的 `Select`，它展開時會把下方畫面往下推。用 `ui.tsx` 的 `switcher`：
+  - 終端機：一顆 `plain` 按鈕「‹ 值 ›」，按一次換下一個值，最後一個之後回到第一個，hotkey 也做同樣的事。
+  - desktop：一排分段按鈕，目前的值 `variant="primary"`，其他 `dimColor`，hotkey 掛在目前值的下一顆。
+- **確認框**：`plain` 按鈕，執行在前、取消在後，取消 `autoFocus`（預設拒絕）。旁邊一行 `dimColor` 說明 Claude 在等。沒辦法放 pane 時改用 `$.ui.ask`，取消放第一個選項。
+
+## 快捷鍵
+
+Pane 和 Band 上所有導覽按鈕都要有 hotkey，並列在提示列。清單列上的操作（完成、略過、打開某一列）可以沒有。
+
+| 鍵 | 動作 | 用在 |
+| --- | --- | --- |
+| `b` | 返回上一層 | agent-dispatch |
+| `m` | 顯示更多 | agent-dispatch |
+| `p` | 切換期間 | agent-dispatch |
+| `g` | 切換分組 | agent-dispatch |
+| `s` | 切換排序 | agent-dispatch |
+| `c` | 複製 | open-items |
+| `o` | 打開 pane | open-items band |
+| `u` | 復原 | open-items band |
+| `r` | 重派 | agent-dispatch band |
+| `d` | 略過這次提醒 | agent-dispatch band |
+| `h` | 交接到新 session | session-keeper band |
+| `k` | 留在這裡繼續 | session-keeper band |
+| `1`／`2` | 執行／取消 | 確認框（和 Claude Code 內建權限提示的 1 Yes、2 No 一致） |
+
+- 同一個動作在每個 mod 用同一個鍵；新動作先查這張表，再加進來。
+- 確認框用數字，其他一律用小寫字母。
+- 不用 `Esc`、`Tab`、`Enter`、方向鍵：它們留給 pane 的焦點移動和關閉。
+
+## Pane
+
+- **開啟**：`$.ui.open({ id, title, focus: true, closeOnEscape: true })`。確認框不加 `closeOnEscape`，要明確按下執行或取消。
+- **標題**：mod 名稱開頭，要說明用途時接一個名詞，用 `pick`，例如 `agent-dispatch usage`／`agent-dispatch 用量`、`tool-guard confirm`／`tool-guard 確認`。只有一個 pane、用途就是 mod 名稱時只寫 mod 名稱（`open-items`）。
+- **提示列**：放在最下面，`marginTop={1}`，`<Text dimColor wrap="wrap">`。用 `ui.tsx` 的 `hintLine` 產生：
+  - 每項寫成「鍵 動作」，項目之間用 ` · ` 分隔。
+  - 最後一項是 `Esc closes`／`Esc 關閉`（確認框不列）。
+  - 按鈕上已經寫了動作的，寫成「‹ Back (b) returns」。
+- **空狀態**：`<Text dimColor wrap="wrap">`，一句話說沒有什麼，需要時在括號裡說明什麼時候會出現。例如 `No open items.`、`No usage recorded yet (…).`。
+
+## Band
+
+- 一行為主，文字用 `wrap="truncate-end"`，太長就截掉。
+- 文字顏色依「語意色」：提問用 `yellow`，出錯或中斷用 `red`，狀態用 `dimColor`。
+- 臨時開啟的功能，每個 mod 一行灰字（`<mod> on · <key> 1h42m`），畫在自己那段的最上面。
+- `e.props.hasSurvey` 時讓位，不畫。
+- 疊上 `next(e)` 的結果，不取代別人的 band。
+
+## Toast
+
+- 前綴 `<mod>: `（英文）／`<mod>：`（中文全形冒號），每一則都有前綴，失敗的也一樣。
+- 句子描述發生了什麼；需要使用者做事時，在後面接指令，例如 `；關閉：/session-keeper off keep_warm`。
+- 擋下類的寫成 `<mod>: blocked <什麼>`／`<mod> 擋下：<什麼>`。
+- 時長：
+  - 帶有後續動作（指令、復原）的：`timeoutMs: 8000`。
+  - 其他不設，用預設值。
+- `/<mod>` 註冊失敗時一定要跳 toast：`<mod>: /<mod> was not registered (<原因>)`。
+
+## 用詞
+
+- 畫面上看得到的字一律用 `pick(lang, { en, 'zh-TW': … })`，包括 pane 標題、`argumentHint`、toast 和空狀態。
+- 下列保留英文，當成技術用語，不翻譯：
+  - 名詞：`session`、`subagent`、`fork`、`repo`、`token`、`hook`、`pane`。
+  - 快取列：`cache`、`warm`、`cold`、`kept`、`hit`、`miss`、`left`。
+  - 臨時開啟灰字裡的 `on`。
+  - 單位：時間的 `s`／`m`／`h`，數量的 `k`／`M`，大小的 `KB`／`MB`。
+- 英文只有句首大寫，不用 Title Case（`Group by`、`Open items`，不是 `Group By`、`Open Items`）。
+- 完整句子加句號（空狀態、指令回應），標籤和按鈕不加。
+
+## 日期與數字
+
+| 種類 | en | zh-TW | 程式 |
+| --- | --- | --- | --- |
+| 日期 | `Oct 12` | `10/12` | agent-dispatch `ledger.ts` 的 `monthDay` |
+| 日期加時間 | `Oct 12 02:11` | `10/12 02:11` | `stamp` |
+| 區間 | `Sep 13 – Oct 12` | `9/13 至 10/12` | `range` |
+| 多久以前 | `just now`、`5 min ago`、`3 h ago`、`2 d ago` | `剛剛`、`5 分鐘前`、`3 小時前`、`2 天前` | open-items `items.ts` 的 `ageText` |
+| 時間長度 | `12s`、`3m05s`、`1h02m` | 同左 | `elapsed`、`fmtDuration`、`fmtLeft` |
+| Pane 裡的數字 | `12,345` | 同左 | `n` |
+| Band 裡的數字 | `1.2k`、`3M` | 同左 | session-keeper `meter.ts` 的 `fmtTokens` |
+
+- 檔案內容和給模型的文字用 `YYYY-MM-DD HH:MM`，不受這張表限制。
+- 百分比四捨五入成整數。
+
+## 符號
+
+| 符號 | 用法 |
+| --- | --- |
+| `‹ ›` | 切換鈕的值、返回鍵（`‹ Back`） |
+| `▸` | 還有更多（`5 more ▸`） |
+| `●` | 圖例和列前的色點 |
+| `│` | 單邊線 |
+| `·` | 分隔項目（提示列、band 片段） |
+| `→` | 流向（從哪個模型變成哪個） |
+
+不用 emoji，也不用 `█`、`✓`、`✗` 當狀態：狀態用文字說。
