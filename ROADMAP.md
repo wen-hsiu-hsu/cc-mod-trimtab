@@ -16,15 +16,7 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 
 ## 待辦
 
-依實作順序。
-
-- [ ] **1. `subagent-dispatch`：加入用量帳本與分派提醒**。2026-10-09 決定。用量帳本與報表已做（0.2.0），分派提醒還沒做。
-  - [x] 用量帳本：`agent.spawn` 記下每次派出的 description、agent 種類、指定與 `next(e)` 回傳的實際模型（被其他 mod 改過的也記得到）、fork、背景；`turn.step` 依 `agentId` 把每步 usage 加到主 session（依模型）或該次派出。session 層記 repo、開始時間、第一則 prompt 前 40 字。每個 session 一個 key，最多 500 筆派出，90 天沒寫入刪除。
-  - [x] 報表：`/subagent-dispatch stats [天數]` 開 pane（摘要卡、依 repo／session／模型／種類分組到每次派出、7／30／90 天），`--text` 與放不下時印文字版。
-  - [x] 輸入框上方只在 agent 被中斷時顯示重派，執行中不再列出。
-  - [ ] 分派提醒（只提醒，不擋也不改模型）：subagent 跑在 Opus 但 description 看不出理由、或同一個 session fork 次數偏多時跳 toast，並記進帳本。「看不出理由」的判斷與 fork 門檻實作時再定，先只記錄不提醒，看一段時間的誤判再開。
-  - 每個功能各自的開關（帳本已有 `ledger`）。
-  - 限制：hook 不能讀檔，無法回填安裝前的 transcript；雲端 session 不載入 mod，那部分不會記到。`turn.step` 涵蓋 fork 與背景 agent 的每一步（2026-10-11 實測，見「查證結果」9）。
+目前沒有。
 
 ## 費用回報
 
@@ -54,6 +46,7 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 | 費用回報（見「費用回報」：每次呼叫的 toast、輸入框上方的各 mod 累計、依價格表估算金額） | 2026-10-11 查一個多月的 prompt 與 transcript：沒有一次問過 mod 呼叫模型花多少 token 或錢，也沒有因費用關功能；問過的是主對話的 context、訂閱額度與 cache 何時過期 | 開了 `keep_warm` 等背景呼叫後問「花了多少」、對用量表示意外，或 `/usage` 額度的消耗說不出來源。先做最窄的版本：`/<mod> status` 列累計 token 數，不估金額 |
 | `tool-guard` 的 cmd-rewrite（Bash 執行前依 repo 設定的 `{ "match", "replace" }` 改寫指令，例如 `npx vitest run` 換成 `npm run test:brief --`；改寫時提示一次，進版控的規則第一次生效前要使用者核准） | 2026-10-11 查一個多月的 prompt 與 transcript：沒有一次因為 Claude 沒照 CLAUDE.md 的指令規則而糾正；唯一一條「該用 X 不要用 Y」的規則才加 5 天，之後還沒有 session 可看 | 有這類規則的 repo 累積 5 個以上 session 後，仍有 2 次以上被糾正或照舊跑錯的指令。先做最窄的版本：設定檔寫死的字面 match／replace |
 | `tool-guard` 的學來的守門（`/tool-guard suggest` 把 memory 中出現 3 次以上的規則交給模型草擬工具呼叫前的比對式，核准才生效；上游 `guards.ts`） | 同一次查證：沒有同一種工具呼叫錯誤在不同 session 被糾正 3 次以上；反覆出現的糾正是寫作風格與流程，比對式擋不了；規則提升已由 `project-memory` 的「3 個 session 證實」處理 | 同一個工具呼叫錯誤在不同 session 被糾正 3 次以上，且寫得成字面比對式。先做使用者自己在設定檔寫 block／warn 比對式，不用模型草擬 |
+| `subagent-dispatch` 的分派提醒（subagent 跑在 Opus 但 description 看不出理由、或同一個 session fork 偏多時跳 toast，只提醒不擋；先在 `stats` 標出符合的派出，看誤判再開 toast，開 toast 時給它自己的開關） | 2026-10-12 查帳本（新舊檔名共 23 次派出）：Sonnet 11、Haiku 9、fork 3，沒有一次跑在 Opus，一個 session 最多 fork 2 次。帳本已記模型、指定模型、fork 與 description，之後可直接從帳本算，不必先加欄位 | 帳本出現 3 次以上 description 沒寫理由的 Opus 派出（非 fork），或有 session fork 3 次以上。先做最窄的版本：`stats` 摘要多一行計數並在列表標出，不跳 toast |
 | CI 跑 `tsc` | 型別檔只在 Claude Code 載入 mod 時產生，CI 拿不到 | Claude Code 提供產生型別檔的指令，或型別檔有公開的套件 |
 
 ### 不做
