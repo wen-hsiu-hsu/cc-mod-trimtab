@@ -265,7 +265,7 @@ function engine(on: On, replies: (string | null)[], stored: Record<string, unkno
   ])
   const toasts: string[] = []
   const prompts: { system: string; prompt: string }[] = []
-  const state = { turns: 0, tokens: 50_000, sid: 's1' }
+  const state = { turns: 0, tokens: 50_000, sid: 's1', rateLimits: [] as { kind: string; percentUsed: number }[] }
   const clock = mock.clock(on)
   mock.store(on, stored)
   mock.env(on, { HOME: '/home/u' })
@@ -275,7 +275,7 @@ function engine(on: On, replies: (string | null)[], stored: Record<string, unkno
   on('session.root', () => ({ value: '/repo' }))
   on('session.repo', () => ({ value: { root: '/repo', remote: null, internal: false, name: null } }))
   on('session.turns', () => ({ value: state.turns }))
-  on('session.usage', () => ({ value: { startedAt: 0, context: { tokens: state.tokens, window: 200_000 } } }) as never)
+  on('session.usage', () => ({ value: { startedAt: 0, context: { tokens: state.tokens, window: 200_000 }, rateLimits: state.rateLimits } }) as never)
   on('session.messages', () => ({
     value: [
       { role: 'user', text: '以後 commit 前都要先跑 lint', toolUses: [] },
@@ -422,6 +422,49 @@ test('distills the conversation a /clear ended', { options: { distill: true } },
   expect(world.prompts.length).toBe(1)
   expect(world.prompts[0]?.prompt).toContain('以後 commit 前都要先跑 lint')
   expect(world.files.get('/repo/.claude/progress.md')).toContain('session: s1')
+})
+
+test('skips the automatic distill past the usage limit, and says so in the status; run still distills', { options: { distill: true, distill_every: 5 } }, async ($, on) => {
+  const world = engine(on, [REPLY])
+  await $.session.start(START)
+  world.state.rateLimits = [{ kind: 'five_hour', percentUsed: 85 }, { kind: 'seven_day', percentUsed: 20 }]
+  world.state.turns = 5
+  await $.turn.complete(answered)
+  await world.clock.advance(1)
+  expect(world.prompts.length).toBe(0)
+  // Skipping is no failure: no first-use toast, no retry wait.
+  expect(world.toasts).toEqual([])
+  const status = (await $.command.run({ command: 'project-memory', args: 'status' } as never)).text
+  expect(status).toContain('5 小時或 7 天額度用量超過 80% 時跳過')
+  expect(status).toMatch(/最近一次跳過：.*（每 5 則：5 小時額度已用 85%，超過 80%）/)
+  expect(status).toContain('還沒整理過')
+
+  world.state.rateLimits = [{ kind: 'five_hour', percentUsed: 80 }]
+  world.state.turns = 6
+  await $.turn.complete(answered)
+  await world.clock.advance(1)
+  expect(world.prompts.length).toBe(1)
+  expect((await $.command.run({ command: 'project-memory', args: 'status' } as never)).text).not.toContain('最近一次跳過')
+})
+
+test('run is not limited by usage; another window kind is not counted', { options: { max_rate_used: 50 } }, async ($, on) => {
+  const world = engine(on, [REPLY])
+  await $.session.start(START)
+  world.state.rateLimits = [{ kind: 'seven_day', percentUsed: 99 }]
+  world.state.turns = 1
+  await $.command.run({ command: 'project-memory', args: 'run' } as never)
+  expect(world.prompts.length).toBe(1)
+})
+
+test('drops the conversation a /clear ended while the usage is high', { options: { distill: true } }, async ($, on) => {
+  const world = engine(on, [REPLY])
+  await $.session.start(START)
+  world.state.rateLimits = [{ kind: 'seven_day', percentUsed: 90 }, { kind: 'spend_limit', percentUsed: 120 }]
+  world.state.turns = 5
+  await $.session.end({ reason: 'clear', sessionId: 's1', resume: {} } as never)
+  await world.clock.advance(1)
+  expect(world.prompts.length).toBe(0)
+  expect((await $.command.run({ command: 'project-memory', args: 'status' } as never)).text).toContain('（/clear：7 天額度已用 90%，超過 80%）')
 })
 
 test('waits five prompts after a failed distill before trying again', { options: { distill: true, distill_every: 5 } }, async ($, on) => {

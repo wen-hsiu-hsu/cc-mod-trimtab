@@ -26,7 +26,7 @@ Automatic distilling is off by default. `/project-memory run` is a command you r
 
 - **How to estimate**: input tokens times the Sonnet input price plus output tokens times the output price. This is not a fork and does not read the main conversation's cache.
 - **Where it goes**: through Claude Code's `$.model` to the same API provider the main conversation uses.
-- **Subscriptions**: not billed by token, but it counts toward the usage quota. The conversion above is estimated at API prices.
+- **Subscriptions**: not billed by token, but it counts toward the usage quota. The conversion above is estimated at API prices. While the 5-hour or 7-day limit is used past `max_rate_used` (80)%, automatic distilling is skipped; see "Distilling" below.
 - **Turn on**: `/project-memory on [duration]`, or keep `distill` on with `/config`.
 
 ## Distilling
@@ -36,6 +36,7 @@ Automatic distilling is off by default. `/project-memory run` is a command you r
   - After `idle_minutes` (default 10) idle minutes since the last answer, with 5 or more new messages (context size is not checked). With 0, it does not distill when idle.
   - On `/clear` with 5 or more new messages: it captures the conversation in `session.end` first, then distills after switching to the new session. When you quit directly (`/exit`, ctrl+c), the hook has only about 1.5 seconds, which is not enough to distill.
   - `/project-memory run` distills immediately and shows the status. `/project-memory status` shows the status and settings. After an automatic run fails, it tries again after 5 more messages.
+  - **Skipped near the usage limit**: before any of the three automatic runs above, it reads the usage from `$.session.usage()` (no tokens spent). If the 5-hour or 7-day limit is used past `max_rate_used` (default 80)%, the run is skipped. This is not a failure: `status` shows the reason for the latest skip, and the next trigger checks again. A conversation that `/clear` ended while skipping is dropped, not kept for later. `run` is not limited. With an API key instead of a subscription there is no usage to read, and it distills as usual.
 - **What is sent**: the conversation after the last user message that the previous run reached (if it is not found, the whole conversation is sent, but this run may not raise any occurrence count). Tool input is cut to 300 characters and results to 500, then masked with the rules of `secret-scrub`. If an action in the model's output contains a value that looks like a key, the whole line is dropped. Memories of the user and feedback types must carry the user's own words. If they cannot be matched, they are dropped.
 - **Where it writes**: the memory folder is, first, the location from which the context loaded `MEMORY.md`. If it is not found, it uses `~/.claude/projects/<encoded repo root>/memory/` (worktrees share the main working tree's). Each memory and rule is one file named `pm-<type>-<alphanumerics from the title>-<hash>.md`. The frontmatter has `name`, `description` and `type`. The body has the approach, the reason, related files and the 3 latest pieces of evidence. If the main session edited these files, the next run takes the file content as the truth and keeps sections it does not recognize as they are. If a file was changed during distilling, this run does not write it, and the next run distills the same part again.
 - **What you see**: a toast appears when something changes, and the list of changes is attached to the next prompt. In `MEMORY.md` it changes only the lines that link to `pm-` files.
@@ -62,6 +63,7 @@ Nothing is committed.
 | `distill_every` | 30 | 5-200 | Can only raise it | Distill after this many user messages since the last run |
 | `min_context_k` | 30 | 0-1000 | Can only raise it | Below this many k of context, skip the every-N-messages run (only that one) |
 | `idle_minutes` | 10 | 0-120 | Cannot be set | Distill after this many idle minutes; 0 means never on idle |
+| `max_rate_used` | 80 | 0-100 | Can only lower it | Skip automatic distilling while the 5-hour or 7-day limit is used past this percent; 100 means never skip |
 | `promote` | on | | Can be set | Notices about writing confirmed rules and procedures to the repo |
 
 Values from `/config` are stored in `pluginConfigs` in the user-level `~/.claude/settings.json` and shared by all repos. Tested on 2.1.295 on 2026-10-09: `pluginConfigs` in the repo's `.claude/settings.json` and `.claude/settings.local.json` do not take effect. To adjust per repo, use the repo or local file described in [Settings](../settings.md).

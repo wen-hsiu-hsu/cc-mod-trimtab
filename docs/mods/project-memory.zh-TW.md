@@ -26,7 +26,7 @@
 
 - **怎麼估**：輸入 token × Sonnet 輸入價＋輸出 token × 輸出價。這不是 fork，不讀主對話的快取。
 - **送去哪**：經由 Claude Code 的 `$.model` 送到主對話使用的同一個 API 供應商。
-- **訂閱制**：不依 token 計費，但算進用量額度；上面的換算是依 API 價格估算。
+- **訂閱制**：不依 token 計費，但算進用量額度；上面的換算是依 API 價格估算。5 小時或 7 天額度用量超過 `max_rate_used`（80）% 時跳過自動整理，見下方「整理」。
 - **開啟**：`/project-memory on [時長]`，或用 `/config` 常開 `distill`。
 
 ## 整理
@@ -36,6 +36,7 @@
   - 最後一次回答後閒置 `idle_minutes`（預設 10）分鐘，且有 5 則以上新訊息（不看 context 大小）；設成 0 時閒置不整理。
   - `/clear` 時有 5 則以上新訊息：先在 `session.end` 抓下對話，換到新 session 後再整理。直接退出（`/exit`、ctrl+c）時 hook 只有約 1.5 秒，來不及整理。
   - `/project-memory run` 立即整理並顯示狀態，`/project-memory status` 看狀態與設定。自動整理失敗後隔 5 則再試。
+  - **額度高時跳過**：上面三種自動整理開始前讀 `$.session.usage()` 的用量（不花 token），5 小時或 7 天額度任一用量超過 `max_rate_used`（預設 80）% 就跳過，不算失敗，`status` 會顯示最近一次跳過的原因；之後的時機照常再判斷。`/clear` 時跳過的那段對話直接放棄，不另外保存。`run` 不受限。用 API key、不是訂閱制時讀不到用量，照常整理。
 - **送什麼**：上次整理到的那則使用者訊息之後的對話（找不到時送整段，但不准增加出現次數），工具輸入截到 300 字、結果截到 500 字，再用 `secret-scrub` 的規則遮蔽；模型輸出的動作裡有像金鑰的值整行丟掉。user、feedback 類記憶要附使用者原話，比對不到就丟掉。
 - **寫到哪**：記憶資料夾優先用 context 載入 `MEMORY.md` 的位置，找不到時用 `~/.claude/projects/<repo 根目錄編碼>/memory/`（worktree 共用主工作樹的）。每條記憶與規則一個 `pm-<類型>-<標題中的英數字>-<雜湊>.md`，frontmatter 有 `name`、`description`、`type`，內文是做法、理由、相關檔案與最近 3 筆根據；主 session 改過這些檔案，下次整理以檔案內容為準，認不得的段落原樣保留。整理期間檔案被改過時這次不寫，下次重新整理同一段。
 - **你會看到**：有變動時 toast，變動清單附在下一則 prompt。`MEMORY.md` 只改連到 `pm-` 檔的行。
@@ -62,6 +63,7 @@
 | `distill_every` | 30 | 5–200 | 只能調高 | 距上次整理的使用者訊息達到這個數量時整理 |
 | `min_context_k` | 30 | 0–1000 | 只能調高 | context 少於幾 k 不做「每幾則」的整理（只影響這一種） |
 | `idle_minutes` | 10 | 0–120 | 不能設定 | 閒置幾分鐘後整理；0 表示閒置不整理 |
+| `max_rate_used` | 80 | 0–100 | 只能調低 | 5 小時或 7 天額度用量超過這個百分比時跳過自動整理；100 表示不跳過 |
 | `promote` | 開 | | 可設定 | 交代把證實過的規則與流程寫進 repo |
 
 `/config` 的值存在使用者層級 `~/.claude/settings.json` 的 `pluginConfigs`，所有 repo 共用；2026-10-09 在 2.1.295 實測，repo 的 `.claude/settings.json`、`.claude/settings.local.json` 裡的 `pluginConfigs` 不會生效，所以依 repo 調整要用[設定](../settings.zh-TW.md)的 repo 或 local 檔案。

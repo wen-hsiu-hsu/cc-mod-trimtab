@@ -39,6 +39,14 @@
       "min": 0,
       "max": 120
     },
+    "max_rate_used": {
+      "type": "number",
+      "title": "Skip automatic distill past this % of the usage limit",
+      "description": "While the 5-hour or 7-day limit of the subscription is used past this percent, the automatic distill is skipped (/project-memory run is not limited; a conversation ended by /clear meanwhile is not distilled). Without a subscription there are no limits to read and it always distills.",
+      "default": 80,
+      "min": 0,
+      "max": 100
+    },
     "promote": {
       "type": "boolean",
       "title": "Ask Claude to put it in the repo",

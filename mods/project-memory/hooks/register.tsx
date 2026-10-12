@@ -27,8 +27,10 @@ const now = atom({ plugin: 'project-memory', key: 'now' } as const, 0)
 // Redraws the time left of a feature switched on for a while.
 const TICK_MS = 30_000
 
-type Config = { isDistillOn: boolean; every: number; minTokens: number; idleMs: number; isPromoteOn: boolean; lang: Lang }
+type Config = { isDistillOn: boolean; every: number; minTokens: number; idleMs: number; maxRate: number; isPromoteOn: boolean; lang: Lang }
 type Last = { at: number; why: string; changes: string[]; rejected: Rejected; error?: string }
+// An automatic distill left out because the account's usage was high: not a failure.
+type Skipped = { at: number; why: string; kind: string; percent: number; max: number }
 type Mark = { turn: number; anchor?: string }
 // The conversation as it stood when a /clear ended it: the distill runs after the session moved on.
 type Snapshot = { sid: string; turns: number; rows: readonly Row[] }
@@ -43,6 +45,7 @@ export function configOf(options: Record<string, unknown>): Config {
     minTokens: clamp(options.min_context_k, 30, 0, 1000) * 1000,
     // 0: no distill on idling.
     idleMs: clamp(options.idle_minutes, 10, 0, 120) * 60_000,
+    maxRate: clamp(options.max_rate_used, 80, 0, 100),
     isPromoteOn: options.promote !== false,
     lang: options.language === 'zh-TW' ? 'zh-TW' : 'en',
   }
@@ -104,6 +107,7 @@ async function readText($: EngineInterface, path: string): Promise<string> {
 
 const repoKey = async ($: EngineInterface) => `repo:${await workspace($)}`
 const lastKey = async ($: EngineInterface) => `last:${await workspace($)}`
+const skipKey = async ($: EngineInterface) => `skipped:${await workspace($)}`
 const today = async ($: EngineInterface) => localStamp(await $.clock.now()).slice(0, 10)
 
 async function loadStore($: EngineInterface): Promise<RepoStore> {
@@ -331,17 +335,42 @@ async function reload($: EngineInterface, options: PluginOptions, take: (config:
 // Idle long enough with enough new prompts: distill now, while the person is away.
 let idle: Timer | undefined
 
-async function onIdle($: EngineInterface, lang: Lang, idleMs: number): Promise<void> {
+async function onIdle($: EngineInterface, config: Config): Promise<void> {
+  const { lang, idleMs } = config
   idle = undefined
   if (running) return
   const mark = (await $.store.get(`distill:${await $.session.id()}`)) as Mark | undefined
   const turns = await $.session.turns()
   if (turns - (mark?.turn ?? 0) < END_MIN_TURNS || turns < retryAt) return
-  await autoDistill($, lang, pick(lang, { en: `idle for ${idleMs / 60_000} minutes`, 'zh-TW': `閒置 ${idleMs / 60_000} 分鐘` }))
+  await autoDistill($, config, pick(lang, { en: `idle for ${idleMs / 60_000} minutes`, 'zh-TW': `閒置 ${idleMs / 60_000} 分鐘` }))
 }
 
-// A distill this mod starts on its own: the first one in a session says what it costs.
-async function autoDistill($: EngineInterface, lang: Lang, why: string, snap?: Snapshot): Promise<string> {
+// The 5-hour or 7-day window used past max percent; none off a subscription or when usage is not known.
+export function overRate(limits: readonly { kind: string; percentUsed: number }[] | undefined, max: number) {
+  return limits?.find(l => (l.kind === 'five_hour' || l.kind === 'seven_day') && l.percentUsed > max)
+}
+
+const windowName = (lang: Lang, kind: string) =>
+  kind === 'five_hour' ? pick(lang, { en: '5-hour', 'zh-TW': '5 小時' }) : kind === 'seven_day' ? pick(lang, { en: '7-day', 'zh-TW': '7 天' }) : kind
+
+const skipText = (lang: Lang, s: Skipped) =>
+  pick(lang, {
+    en: `${s.why}: the ${windowName(lang, s.kind)} limit is ${s.percent}% used, over ${s.max}%`,
+    'zh-TW': `${s.why}：${windowName(lang, s.kind)}額度已用 ${s.percent}%，超過 ${s.max}%`,
+  })
+
+// A distill this mod starts on its own: left out while the account's usage is high (a /clear's
+// conversation is then dropped); the first one in a session says what it costs.
+async function autoDistill($: EngineInterface, config: Config, why: string, snap?: Snapshot): Promise<string> {
+  const lang = config.lang
+  const over = overRate(await $.session.usage().then(u => u.rateLimits, () => undefined), config.maxRate)
+  if (over !== undefined) {
+    const skipped: Skipped = { at: await $.clock.now(), why, kind: over.kind, percent: over.percentUsed, max: config.maxRate }
+    $.ui.log(`project-memory: automatic distill skipped (${why}): ${over.kind} ${over.percentUsed}% > ${config.maxRate}%`, { to: 'debug' })
+    await $.store.set(await skipKey($), skipped)
+
+    return skipText(lang, skipped)
+  }
   if (await firstUse(configIO($), 'distill')) {
     $.ui.toast(
       pick(lang, {
@@ -368,6 +397,7 @@ function statusLines(lang: Lang, changes: readonly string[], rejected: Rejected,
 async function statusText($: EngineInterface, config: Config): Promise<string> {
   const lang = config.lang
   const last = (await $.store.get(await lastKey($))) as Last | undefined
+  const skipped = (await $.store.get(await skipKey($))) as Skipped | undefined
   const mark = (await $.store.get(`distill:${await $.session.id()}`)) as Mark | undefined
   const since = (await $.session.turns()) - (mark?.turn ?? 0)
   const store = await loadStore($)
@@ -387,6 +417,9 @@ async function statusText($: EngineInterface, config: Config): Promise<string> {
 
   return [
     pick(lang, { en: `Automatic distill: ${config.isDistillOn ? enabled : 'off'}`, 'zh-TW': `自動整理：${config.isDistillOn ? enabled : '關'}` }),
+    ...(config.isDistillOn
+      ? [pick(lang, { en: `Skipped while the 5-hour or 7-day limit is over ${config.maxRate}% used`, 'zh-TW': `5 小時或 7 天額度用量超過 ${config.maxRate}% 時跳過` })]
+      : []),
     counts,
     last === undefined
       ? pick(lang, { en: 'Not distilled yet.', 'zh-TW': '還沒整理過。' })
@@ -394,6 +427,9 @@ async function statusText($: EngineInterface, config: Config): Promise<string> {
           en: `Last distill: ${localStamp(last.at)} (${last.why})${last.error ? ` failed: ${last.error}` : `, ${last.changes.length} change(s)`}`,
           'zh-TW': `上次整理：${localStamp(last.at)}（${last.why}）${last.error ? `失敗：${last.error}` : `，${last.changes.length} 項變動`}`,
         }),
+    ...(skipped !== undefined && (last === undefined || skipped.at > last.at)
+      ? [pick(lang, { en: `Last skipped: ${localStamp(skipped.at)} (${skipText(lang, skipped)})`, 'zh-TW': `最近一次跳過：${localStamp(skipped.at)}（${skipText(lang, skipped)}）` })]
+      : []),
   ].join('\n')
 }
 
@@ -437,6 +473,18 @@ export const SPECS: Specs = {
     description: {
       en: 'Minutes of idling after the last answer before a distill; 0 means no distill when idle',
       'zh-TW': '最後一次回答後閒置幾分鐘整理一次；0 表示閒置時不整理',
+    },
+  },
+  max_rate_used: {
+    category: 'cost',
+    type: 'number',
+    default: 80,
+    repo: 'only-lower',
+    min: 0,
+    max: 100,
+    description: {
+      en: 'Skip the automatic distill while the 5-hour or 7-day limit is used past this percent (run is not limited)',
+      'zh-TW': '5 小時或 7 天額度用量超過這個百分比時，跳過自動整理（run 不受限）',
     },
   },
   promote: {
@@ -542,13 +590,13 @@ export const register: Register = (on, options) => {
     try {
       if (!config.isDistillOn || e.agentId !== undefined || e.reason !== 'answer') return result
       idle?.cancel()
-      idle = config.idleMs > 0 ? $.clock.after(config.idleMs, () => void onIdle($, config.lang, config.idleMs)) : undefined
+      idle = config.idleMs > 0 ? $.clock.after(config.idleMs, () => void onIdle($, config)) : undefined
       if (running) return result
       const mark = (await $.store.get(`distill:${await $.session.id()}`)) as Mark | undefined
       const turns = await $.session.turns()
       if (turns - (mark?.turn ?? 0) < config.every || turns < retryAt) return result
       if (((await $.session.usage()).context.tokens ?? 0) < config.minTokens) return result
-      $.clock.after(0, () => void autoDistill($, config.lang, pick(config.lang, { en: `every ${config.every} messages`, 'zh-TW': `每 ${config.every} 則` })))
+      $.clock.after(0, () => void autoDistill($, config, pick(config.lang, { en: `every ${config.every} messages`, 'zh-TW': `每 ${config.every} 則` })))
     } catch (error) {
       $.ui.log(`project-memory: turn.complete: ${String(error)}`, { to: 'debug' })
     }
@@ -570,7 +618,7 @@ export const register: Register = (on, options) => {
         const turns = await $.session.turns()
         if (turns - (mark?.turn ?? 0) >= END_MIN_TURNS) {
           const snap: Snapshot = { sid: e.sessionId, turns, rows: (await $.session.messages()) as readonly Row[] }
-          $.clock.after(0, () => void autoDistill($, config.lang, '/clear', snap))
+          $.clock.after(0, () => void autoDistill($, config, '/clear', snap))
         }
       }
     } catch (error) {
