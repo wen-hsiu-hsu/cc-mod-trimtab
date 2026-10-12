@@ -1,5 +1,5 @@
 {
-  "name": "agent-dispatch",
+  "name": "subagent-dispatch",
   "version": "0.2.0",
   "description": "Shows the background agents that are running above the prompt box, and re-dispatches the ones that were interrupted in one press",
   "author": {

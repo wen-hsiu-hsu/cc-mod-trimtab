@@ -91,7 +91,7 @@ test('draws nothing above the prompt while an agent runs, and the stop once it i
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
   await $.tool.call({ tool: 'Agent', description: 'review', prompt: 'review the diff', model: 'sonnet' })
 
-  const ui = await $.ui.mount({ plugin: 'agent-dispatch', surface: 'terminal', ...BAND } as never)
+  const ui = await $.ui.mount({ plugin: 'subagent-dispatch', surface: 'terminal', ...BAND } as never)
   expect(await ui.find({ type: 'Text', text: /執行中|Esc/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /review/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: 'band beneath' })).toBeDefined()
@@ -99,7 +99,7 @@ test('draws nothing above the prompt while an agent runs, and the stop once it i
 
   status.value = 'killed'
   await clock.advance(3000)
-  const after = await $.ui.mount({ plugin: 'agent-dispatch', surface: 'terminal', ...BAND } as never)
+  const after = await $.ui.mount({ plugin: 'subagent-dispatch', surface: 'terminal', ...BAND } as never)
   expect(await after.find({ type: 'Text', text: /執行中/ })).toBeUndefined()
   expect(await after.find({ type: 'Text', text: /1 個 agent 被中斷：review/ })).toBeDefined()
   expect(await after.find({ key: 'redispatch' })).toBeDefined()
@@ -107,12 +107,12 @@ test('draws nothing above the prompt while an agent runs, and the stop once it i
   await after.unmount()
 })
 
-test('/agent-dispatch redispatch and status', async ($, on) => {
+test('/subagent-dispatch redispatch and status', async ($, on) => {
   engine(on, { value: 'running' })
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-  const run = (args: string) => $.command.run({ command: 'agent-dispatch', args } as never)
+  const run = (args: string) => $.command.run({ command: 'subagent-dispatch', args } as never)
   expect((await run('redispatch')).text).toBe('沒有被中斷的背景 agent。')
-  expect((await run('status')).text).toMatch(/^agent-dispatch 設定[\s\S]*language = zh-TW {2}\[使用者\]/)
+  expect((await run('status')).text).toMatch(/^subagent-dispatch 設定[\s\S]*language = zh-TW {2}\[使用者\]/)
   expect((await run('')).text).toMatch(/^用法/)
 })
 
@@ -123,12 +123,12 @@ test('the wording is English by default', async ($, on) => {
   await $.tool.call({ tool: 'Agent', description: 'review', prompt: 'review the diff', model: 'sonnet' })
   status.value = 'killed'
   await clock.advance(3000)
-  const after = await $.ui.mount({ plugin: 'agent-dispatch', surface: 'terminal', ...BAND } as never)
+  const after = await $.ui.mount({ plugin: 'subagent-dispatch', surface: 'terminal', ...BAND } as never)
   expect(await after.find({ type: 'Text', text: /1 agent\(s\) interrupted: review/ })).toBeDefined()
   expect(await after.find({ key: 'redispatch', text: 'Redispatch' })).toBeDefined()
   await after.unmount()
-  const run = (args: string) => $.command.run({ command: 'agent-dispatch', args } as never)
-  expect((await run('')).text).toBe('Usage: /agent-dispatch redispatch, /agent-dispatch stats [--text] [days], /agent-dispatch status')
+  const run = (args: string) => $.command.run({ command: 'subagent-dispatch', args } as never)
+  expect((await run('')).text).toBe('Usage: /subagent-dispatch redispatch, /subagent-dispatch stats [--text] [days], /subagent-dispatch status')
 })
 
 describe('usage ledger', () => {
@@ -149,7 +149,7 @@ describe('usage ledger', () => {
   }
 
   const start = ($: T) => $.session.start({ cwd: '/repo/wt', surface: 'terminal', isInteractive: true })
-  const stats = async ($: T, args = 'stats --text') => (await $.command.run({ command: 'agent-dispatch', args } as never)).text as string
+  const stats = async ($: T, args = 'stats --text') => (await $.command.run({ command: 'subagent-dispatch', args } as never)).text as string
   const line = (text: string, has: string) => text.split('\n').find(row => row.includes(has)) ?? ''
 
   test('stats --text lists each spawn under its session and repo', async ($, on) => {
@@ -158,7 +158,7 @@ describe('usage ledger', () => {
     world.repo = { root: '/repo', remote: null, internal: false, name: null }
     on('prompt.submit', ($, e) => ({ text: e.text }))
     await start($)
-    await $.prompt.submit({ text: '/agent-dispatch stats', origin: { kind: 'composer' } } as never)
+    await $.prompt.submit({ text: '/subagent-dispatch stats', origin: { kind: 'composer' } } as never)
     await $.prompt.submit({ text: 'review the diff and fix the flaky ledger test please', origin: { kind: 'composer' } } as never)
     await $.prompt.submit({ text: 'a later prompt', origin: { kind: 'composer' } } as never)
     await step($, 'claude-opus-4')
@@ -290,7 +290,7 @@ describe('usage ledger', () => {
     const world = newWorld()
     engine(on, { value: 'running' }, '', world)
     await start($)
-    await $.command.run({ command: 'agent-dispatch', args: 'set ledger false' } as never)
+    await $.command.run({ command: 'subagent-dispatch', args: 'set ledger false' } as never)
     await step($, 'claude-opus-4')
     await spawn($, world, { model: 'opus' }, 'a1')
 
@@ -358,7 +358,7 @@ describe('usage ledger', () => {
     }
   }
 
-  const PANE = { plugin: 'agent-dispatch', component: 'Pane', requestId: 'agent-dispatch-stats', props: { title: 'stats', isFocused: true, bodyColumns: 100, placement: 'dock' } } as const
+  const PANE = { plugin: 'subagent-dispatch', component: 'Pane', requestId: 'subagent-dispatch-stats', props: { title: 'stats', isFocused: true, bodyColumns: 100, placement: 'dock' } } as const
 
   // Today: a main step and an Opus review in /repo; a week ago: a haiku Explore in /old.
   async function twoWeeks($: T, on: On, surface: 'terminal' | 'desktop' = 'terminal', isInteractive = true): Promise<World> {
@@ -388,7 +388,7 @@ describe('usage ledger', () => {
   test('stats opens a pane: summary, rows that open to each spawn, and the period', async ($, on) => {
     const world = await twoWeeks($, on)
     await stats($, 'stats')
-    expect(world.opened).toEqual(['agent-dispatch-stats'])
+    expect(world.opened).toEqual(['subagent-dispatch-stats'])
 
     for (const bodyColumns of [52, 110]) {
       const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' } as never)
@@ -432,8 +432,8 @@ describe('usage ledger', () => {
     await step($, 'claude-opus-4')
     const text = await stats($, 'stats')
     expect(text).toContain('Sessions')
-    expect(world.opened).toEqual(['agent-dispatch-stats'])
-    expect(world.closed).toEqual(['agent-dispatch-stats'])
+    expect(world.opened).toEqual(['subagent-dispatch-stats'])
+    expect(world.closed).toEqual(['subagent-dispatch-stats'])
   })
 
   test('stats prints the text report in a -p run without opening a pane', async ($, on) => {

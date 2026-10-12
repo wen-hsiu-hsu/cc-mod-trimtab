@@ -7,21 +7,28 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
 | Mod | Version |
 | --- | --- |
-| `agent-dispatch` | 0.2.0 |
+| `subagent-dispatch` | 0.2.0 |
 | `open-items` | 0.3.2 |
 | `session-keeper` | 0.3.2 |
 | `tool-guard` | 0.2.2 |
 
-- Added: `agent-dispatch` records each spawn and the main session's token use
+- Changed (breaking): `agent-dispatch` is renamed `subagent-dispatch`, and its
+  command `/subagent-dispatch`. The typeahead drew `/agent-dispatch` as an
+  agent suggestion (`* /agent-dispatch – …` on one line), because Claude Code
+  treats a suggestion whose id starts with `agent-` as one. Install it again
+  with `/plugin install subagent-dispatch@cc-mod-trimtab`, and move its
+  settings from `agent-dispatch` to `subagent-dispatch` (in
+  `~/.claude/cc-mod-trimtab.json`, repo files and `pluginConfigs`).
+- Added: `subagent-dispatch` records each spawn and the main session's token use
   in a local ledger, one key per session (repo, start time, first prompt, and
   per spawn the description, type, named and resolved model, fork, background,
   tokens, steps and duration; the latest 500 spawns per session).
-  `/agent-dispatch stats [days]` opens a pane with a summary and rows grouped by
+  `/subagent-dispatch stats [days]` opens a pane with a summary and rows grouped by
   repo, session, model or agent type down to each spawn, over 7, 30 or 90 days.
   `--text`, a `-p` run, or a pane that cannot be placed prints it as text. The
   `ledger` setting (default on) turns recording off. Ledgers not written to for
   90 days are deleted at session start.
-- Changed: `agent-dispatch` no longer lists running background agents above the
+- Changed: `subagent-dispatch` no longer lists running background agents above the
   input box; it shows only interrupted ones, with `[Redispatch]` and `[Dismiss]`.
 - The stats pane lays its rows out by the body's columns (one line from 80
   columns, two below), draws terminal bars as colored cells, opens a row by its

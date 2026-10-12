@@ -14,7 +14,7 @@ Claude Code 的 function-hook plugin（mod）：減少出錯、節省 token、�
 | `secret-scrub` | 送出 prompt 前遮蔽 `token=`、`Bearer`、`sk-…`、`ghp_…`、JWT、私鑰、`*_TOKEN=` 等密鑰；prompt 含 `#noscrub`（`bypass_marker` 可改）時原樣送出；可加自訂規則（`custom_rules`）與例外（`allow`）；輸入框歷史（`history.jsonl`）也改寫成遮蔽後的內容，`/secret-scrub history` 清理所有 session 的舊紀錄 | 否 | 是 | 否 |
 | `tool-guard` | 攔下會丟失工作的指令，先量出影響範圍：`reset --hard`、`checkout --`、`restore`（會丟掉的未 commit 檔案）、`clean -f`（會刪的未追蹤檔案）、force push（遠端會被蓋掉的 commit）、`stash drop/clear`、`--no-verify`、`rm -r/-f`（會刪的檔案數與大小，`$TMPDIR`、`/tmp`、`/var/folders` 與 `rm_skip_paths` 底下的不算）、資料庫 migration（待執行的項目）。不會造成損失的直接放行（工作區乾淨、force push 不丟 commit 且不是 main/master、rm 沒有符合的檔案、沒有待執行的 migration）；要確認時開面板列出影響，按 `1` 執行、`2` 取消；終端機太窄放不下面板時改用內建的詢問對話框（同樣列出影響，選「執行」或「取消」，也可以打字回覆給 Claude）。`-p` 等非互動模式無人可問，直接擋下並把影響寫進原因，由使用者輸入 `/tool-guard allow` 放行一次（10 分鐘內）。另外可檢查 commit 標題格式（`commit_format`，預設關；`commit_pattern` 自訂格式），並移除 Claude 署名（`strip_attribution`，預設開） | 否 | 是 | 否 |
 | `output-trimmer` | Bash 輸出超過 150 行或 15k 字元（`max_lines`、`max_chars`）時，只給模型開頭、結尾與錯誤行，完整輸出存到 `$TMPDIR/claude-output-trimmer/`；讀檔類指令不處理，指令加 `# notrim` 取得完整輸出 | 否 | 是 | 否 |
-| `agent-dispatch` | 背景 agent 被中斷時在輸入框上方顯示：按 `[重派]`（`r`）或 `/agent-dispatch redispatch` 把重派指示放進輸入框，或按 `[略過]`（`d`）；agent 執行中不顯示。`/agent-dispatch stats [天數]` 依本機帳本開 pane，列出每次派出，以及主 session、subagent 與各模型的 token 用量（`--text` 改印文字） | 否 | 是（手機只有狀態列） | 否 |
+| `subagent-dispatch` | 背景 agent 被中斷時在輸入框上方顯示：按 `[重派]`（`r`）或 `/subagent-dispatch redispatch` 把重派指示放進輸入框，或按 `[略過]`（`d`）；agent 執行中不顯示。`/subagent-dispatch stats [天數]` 依本機帳本開 pane，列出每次派出，以及主 session、subagent 與各模型的 token 用量（`--text` 改印文字） | 否 | 是（手機只有狀態列） | 否 |
 | `open-items` | 追蹤待決定、未解決、延後的項目：Claude 用 `track` 工具登記，與未完成項目相同或互相包含的文字不重複新增；你只選部分選項時（「A＋B，C 先寫成觀察項」）沒選的自動列為延後，toast 顯示延後了哪些，下一則 prompt 前可按 `[復原延後]`（`u`）或 `/open-items undo` 取消（只解析回答結尾、或後面接問句的選項清單）。輸入框上方顯示計數，按 `[開啟]`（`o`）或 `/open-items` 開面板（完成／不做／引用／複製成 markdown，列出建立時間與 branch，超過 7 天變淡）；在面板關掉的項目會隨下一則 prompt 告知 Claude。決策帶理由完成、或標為不做的項目另存一份不過期的紀錄，`/open-items log [關鍵字]` 或 `track` 的 `history` 可查。依 repo 跨 session 保存（同 repo 的 worktree 共用），每次變動就合併寫入，並行的 session 不會互相覆寫；載入後的第一則 prompt 會把清單附給 Claude，toast 註明幾個在其他 branch、幾個超過 7 天。`/open-items copy` 複製清單，`/open-items stats` 看漏抓率（回答以問句結尾卻沒呼叫 `track` 的比例，逐筆記在 debug log） | 否 | 是（手機只有狀態列） | 否 |
 | `session-keeper` | desktop 的輸入框上方常駐一行 prompt cache 狀態（desktop 不執行 status line）：`cache  warm 1h [16:44] 23m left  ·  kept 1/3  ·  hit 91%  ·  miss 2 +150.2k (ttl? +1)`；快過期變黃、過期變紅並顯示下次要重寫的量（`cold, next +184.3k`）；失效原因是推測的。保持快取：TTL 為 1h、context 超過 30k 時，最後一次用到快取後閒置 55 分鐘送一次只回覆 OK 的 fork 讀快取，每段閒置最多 3 次，CLI 也會送。交接：context 超過門檻（`CLAUDE_CTX_GUARD_TOKENS`，預設 150k）時，Haiku 判斷 prompt 是無關的新任務、或快取已過期，就在輸入框上方提議 `[交接並開新 session]`（`h`）／`[仍在這裡做]`（`k`）；交接時摘要寫進 `.claude/progress.md`，`/clear` 後放進輸入框當草稿；`/session-keeper handoff [目標]` 隨時交接。新 session 的第一則 prompt 附上 24 小時內的進度。見下方「session-keeper」 | 保持快取與交接時（fork 主對話）、判斷新任務時（Haiku）；預設關，`/session-keeper on` 開啟 | cache 狀態只在 desktop 顯示；其餘都有 | 否 |
 | `self-check` | 給 Claude 的防呆提醒，不擋使用者：同一個工具連續兩次因同樣原因失敗（錯誤文字去掉路徑與數字後相同）時，在第二次的結果後面請 Claude 先找出原因、不要原樣重試；這一輪改過程式檔（Edit／Write，不含 `.md` `.txt` 等文件、不含子代理改的）、之後沒跑測試、建置或檢查，回覆卻說完成時，擋下這次停止一次請 Claude 驗證（回覆已說明沒驗證的不擋）。兩項各自可關閉（`retry_nudge`、`done_check`，見「設定」）。出錯時跳過，不影響工具呼叫與停止 | 否 | 是 | 否 |
@@ -37,7 +37,7 @@ claude plugin marketplace add wen-hsiu-hsu/cc-mod-trimtab
 /plugin install session-keeper@cc-mod-trimtab
 /plugin install tool-guard@cc-mod-trimtab
 /plugin install output-trimmer@cc-mod-trimtab
-/plugin install agent-dispatch@cc-mod-trimtab
+/plugin install subagent-dispatch@cc-mod-trimtab
 /plugin install open-items@cc-mod-trimtab
 /plugin install self-check@cc-mod-trimtab
 /plugin install project-memory@cc-mod-trimtab
@@ -145,8 +145,8 @@ scripts/check-copies.sh             # 檢查各 mod 共用程式的複本一致
 同一事件的 hook 會一層包一層：排在前面的在外層，先拿到輸入、最後拿到結果，呼叫 `next(e)` 才交給下一層。順序由 `~/.claude/settings.json` 的 `enabledPlugins` 決定，跟安裝順序無關，`/plugin install` 會把新的 plugin 加在最後。目前沒有讓 plugin 自己宣告順序的機制（型別檔：「same-event hooks nest in this order and no other way」）。所以原則是**每個 mod 的功能都不能依賴順序**：
 
 - **交給 `next`**：用 matcher（`{ tool: 'Bash' }`、`{ command }`、`{ component, requestId }`）縮小範圍，處理完一律交給 `next`，不要在共用事件上自己回答。
-- **共用的位置用疊的**：輸入框上方的 band（`AbovePrompt`）只有一個，所有 plugin 共用。有東西要畫時先 `const below = await next(e)`，把 `below` 放在自己的內容下方；沒東西時 `return next(e)`。直接回傳自己的樹會讓內層 plugin（包括 image-view 這類外部 plugin）的 band 消失。測試時在 engine 端加一個畫 `band beneath` 的 hook，斷言它仍然看得到（見 `session-keeper`、`agent-dispatch`、`open-items` 的測試）。`$.ui.status`、toast、各自 id 的 pane 由 engine 依 plugin 分開，不用處理。
-- **band 裡的 Button 不可撞**：`key` 和 `hotkey` 在所有 mod 間不可重複。目前使用中的是 agent-dispatch 的 `r` `d`、open-items 的 `o` `u`、session-keeper 的 `h` `k`。
+- **共用的位置用疊的**：輸入框上方的 band（`AbovePrompt`）只有一個，所有 plugin 共用。有東西要畫時先 `const below = await next(e)`，把 `below` 放在自己的內容下方；沒東西時 `return next(e)`。直接回傳自己的樹會讓內層 plugin（包括 image-view 這類外部 plugin）的 band 消失。測試時在 engine 端加一個畫 `band beneath` 的 hook，斷言它仍然看得到（見 `session-keeper`、`subagent-dispatch`、`open-items` 的測試）。`$.ui.status`、toast、各自 id 的 pane 由 engine 依 plugin 分開，不用處理。
+- **band 裡的 Button 不可撞**：`key` 和 `hotkey` 在所有 mod 間不可重複。目前使用中的是 subagent-dispatch 的 `r` `d`、open-items 的 `o` `u`、session-keeper 的 `h` `k`。
 - **送出後才改狀態**：內層可能擋下事件（例如 `prompt.submit` 回傳 `drop`），所以呼叫 `next` 之前只讀狀態，確定事件通過後才改（見 `open-items` 的 `prompt.submit`）。`next` 之後的程式包在 `try` 裡，避免 `.catch` 被觸發。
 
 唯一無法與順序無關的是**誰先看到原文**：排在 `secret-scrub` 外層的 `prompt.submit` hook 一定會先看到還沒遮蔽的 prompt。因此 `secret-scrub` 固定排在 `enabledPlugins` 的第一個，新增或重排 plugin 後要檢查。實際順序用 `claude -p "ok" --debug-file <檔案>` 的 `$ built for …` 那行確認。
@@ -265,7 +265,7 @@ context 大的時候，接無關的新任務、或快取過期後繼續，成本
 
 `/config` 的值存在使用者層級 `~/.claude/settings.json` 的 `pluginConfigs`，所有 repo 共用；2026-10-09 在 2.1.295 實測，repo 的 `.claude/settings.json`、`.claude/settings.local.json` 裡的 `pluginConfigs` 不會生效，所以依 repo 調整要用上方「設定」的 repo 或 local 檔案。
 
-## agent-dispatch
+## subagent-dispatch
 
 ### 用量帳本
 
@@ -276,7 +276,7 @@ context 大的時候，接無關的新任務、或快取過期後繼續，成本
 
 90 天沒有寫入的帳本在 session 開始時刪除。
 
-`/agent-dispatch stats [天數]`（1–90，預設 30，含今天）開 pane，涵蓋所有 session：
+`/subagent-dispatch stats [天數]`（1–90，預設 30，含今天）開 pane，涵蓋所有 session：
 
 - 兩張卡，內容寬 60 欄以上時並排，較窄時上下排。**總 token**（input + cache write + output）附一條分成主 session（紫）與 subagent（青）的長條，以及 subagent 佔比。**派出**依模型怎麼來分成三類，相加等於總數：指定模型（黃，含指定 Opus 的次數）、沿用預設（灰）、fork（綠，用主 session 的模型）。快取讀取（不計入）在卡片下方另列一短行。
 - 依 repo（顯示資料夾名稱）、session、模型或 agent 種類分組（`分組`），每列有長條（desktop 用 Svg，終端機用有底色的格子）、token、佔比與派出次數。pane 內容寬 80 欄以上時一列一行，上方有一行欄名，期間與分組放在同一行標題列；較窄時長條換到第二行。
@@ -284,7 +284,7 @@ context 大的時候，接無關的新任務、或快取過期後繼續，成本
 - 按一列的名稱打開它：上方是這一列自己的兩張卡，下面用表格列出每次派出（圓點顏色表示模型怎麼來、description、長條、token、日期），預設 token 多的在前，`排序` 可改成時間新的在前或耗時長的在前。打開一個 session 時，Token 卡依主 session 用到的各模型拆開。先列 10 筆，按 `還有 N 筆`（`m`）再列 10 筆。按一筆派出會在原地展開它的種類、模型、執行（背景、步數、耗時）與 session，一次展開一筆。種類分組的「主 session」那列沒有派出，改列各 session 自己的 token。`‹ 返回`（`b`）回總覽。
 - `期間` 有 7、30、90 天。
 
-終端機較窄時 pane 會改放在輸入框上方。`/agent-dispatch stats --text [天數]` 印出同樣內容的文字版；`-p` 執行或無處放 pane 時，`stats` 也改印文字版。
+終端機較窄時 pane 會改放在輸入框上方。`/subagent-dispatch stats --text [天數]` 印出同樣內容的文字版；`-p` 執行或無處放 pane 時，`stats` 也改印文字版。
 
 不含：各 mod 自己呼叫模型（`$.model.fork` / `$.model.complete`）的用量、雲端 session（不載入 mod）、安裝之前的紀錄。
 

@@ -16,6 +16,6 @@ export type StatsView = { days: number; by: string; item: string; sort: string; 
 
 declare module 'claude-code' {
   interface PluginState {
-    'agent-dispatch': { running: WatchedAgent[]; stopped: WatchedAgent[]; view: StatsView }
+    'subagent-dispatch': { running: WatchedAgent[]; stopped: WatchedAgent[]; view: StatsView }
   }
 }

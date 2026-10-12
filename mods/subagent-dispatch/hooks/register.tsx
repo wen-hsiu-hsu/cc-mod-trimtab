@@ -41,11 +41,11 @@ import {
 // An opened row lists this many spawns, and this many more at each "more".
 const PAGE = 10
 
-const running = atom({ plugin: 'agent-dispatch', key: 'running' } as const, [])
-const stopped = atom({ plugin: 'agent-dispatch', key: 'stopped' } as const, [])
+const running = atom({ plugin: 'subagent-dispatch', key: 'running' } as const, [])
+const stopped = atom({ plugin: 'subagent-dispatch', key: 'stopped' } as const, [])
 // What the stats pane shows: the period, the grouping, the row opened to its spawns, their
 // order, how many of them are listed and the one opened in place.
-const view = atom({ plugin: 'agent-dispatch', key: 'view' } as const, { days: 30, by: 'repo', item: '', sort: 'tokens', limit: PAGE, spawn: '' })
+const view = atom({ plugin: 'subagent-dispatch', key: 'view' } as const, { days: 30, by: 'repo', item: '', sort: 'tokens', limit: PAGE, spawn: '' })
 
 // How an opened row orders its spawns: most tokens, newest, or longest run first.
 type SortBy = 'tokens' | 'time' | 'duration'
@@ -55,10 +55,10 @@ const SORTS: Record<SortBy, (spawn: Spawn) => number> = {
   duration: spawn => spawn.last - spawn.at,
 }
 
-const MOD = 'agent-dispatch'
+const MOD = 'subagent-dispatch'
 const REDISPATCH = 'redispatch'
 const STATS = 'stats'
-const PANE = 'agent-dispatch-stats'
+const PANE = 'subagent-dispatch-stats'
 const PERIODS = [7, 30, 90]
 // From this many body columns a row is one line; below, its bar goes on a second line.
 const WIDE_COLUMNS = 80
@@ -103,8 +103,8 @@ async function refresh($: EngineInterface, lang: Lang): Promise<void> {
     await update($, stopped, list => [...list, ...newlyStopped])
     $.ui.toast(
       pick(lang, {
-        en: `agent-dispatch: ${newlyStopped.length} background agent(s) were interrupted; type /${MOD} ${REDISPATCH} to dispatch them again`,
-        'zh-TW': `agent-dispatch：${newlyStopped.length} 個背景 agent 被中斷，輸入 /${MOD} ${REDISPATCH} 重派`,
+        en: `subagent-dispatch: ${newlyStopped.length} background agent(s) were interrupted; type /${MOD} ${REDISPATCH} to dispatch them again`,
+        'zh-TW': `subagent-dispatch：${newlyStopped.length} 個背景 agent 被中斷，輸入 /${MOD} ${REDISPATCH} 重派`,
       }),
       { timeoutMs: 8000 },
     )
@@ -221,7 +221,7 @@ async function stats($: EngineInterface, lang: Lang, args: string[], interactive
   }
   if (!text && interactive) {
     await update($, view, current => ({ ...current, days }))
-    const opened = await $.ui.open({ id: PANE, title: pick(lang, { en: 'agent-dispatch usage', 'zh-TW': 'agent-dispatch 用量' }), focus: true, closeOnEscape: true })
+    const opened = await $.ui.open({ id: PANE, title: pick(lang, { en: 'subagent-dispatch usage', 'zh-TW': 'subagent-dispatch 用量' }), focus: true, closeOnEscape: true })
     if (opened.isPlaced) {
       return pick(lang, { en: 'Opened the usage pane (Esc closes it).', 'zh-TW': '已開啟用量 pane（Esc 關閉）。' })
     }
@@ -312,7 +312,7 @@ function configIO($: EngineInterface): ConfigIO {
 // --- end configIO ---
 
 export const register: Register = (on, options) => {
-  // Re-read at session start and after `/agent-dispatch set`.
+  // Re-read at session start and after `/subagent-dispatch set`.
   let lang: Lang = 'en'
   // A `-p` run has no pane: `stats` prints its report there.
   let interactive = true

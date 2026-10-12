@@ -51,8 +51,8 @@ export const LEDGER_SPEC: KeySpec = {
   default: true,
   repo: 'never',
   description: {
-    en: 'Record each spawn and the token use of the main session and every subagent in a local ledger, for /agent-dispatch stats. Off records nothing; existing records stay',
-    'zh-TW': '把每次派出，以及主 session 與各 subagent 的 token 用量記進本機帳本，供 /agent-dispatch stats 使用。關閉後不再記錄，已有的紀錄保留',
+    en: 'Record each spawn and the token use of the main session and every subagent in a local ledger, for /subagent-dispatch stats. Off records nothing; existing records stay',
+    'zh-TW': '把每次派出，以及主 session 與各 subagent 的 token 用量記進本機帳本，供 /subagent-dispatch stats 使用。關閉後不再記錄，已有的紀錄保留',
   },
 }
 
@@ -384,8 +384,8 @@ export function spawnLine(lang: Lang, spawn: Spawn): string {
 
 export function emptyText(lang: Lang): string {
   return pick(lang, {
-    en: 'No usage recorded yet (recording starts once the ledger setting is on and agent-dispatch is loaded).',
-    'zh-TW': '還沒有用量紀錄（ledger 設定開啟且載入 agent-dispatch 後才開始記）。',
+    en: 'No usage recorded yet (recording starts once the ledger setting is on and subagent-dispatch is loaded).',
+    'zh-TW': '還沒有用量紀錄（ledger 設定開啟且載入 subagent-dispatch 後才開始記）。',
   })
 }
 
@@ -416,7 +416,7 @@ export const NOT_INCLUDED: Record<Lang, string> = {
   'zh-TW': '不含：各 mod 自己呼叫模型（$.model.fork/complete）的用量、雲端 session，以及安裝帳本之前的紀錄。',
 }
 
-// `/agent-dispatch stats --text [days]`, and what `stats` prints where no pane can be placed.
+// `/subagent-dispatch stats --text [days]`, and what `stats` prints where no pane can be placed.
 export function renderStats(lang: Lang, report: Report): string {
   if (report.sessions.length === 0) {
     return emptyText(lang)
@@ -424,8 +424,8 @@ export function renderStats(lang: Lang, report: Report): string {
   const all = report.main + report.sub
   const lines: string[] = [
     pick(lang, {
-      en: `agent-dispatch usage, ${report.days} days: ${range(lang, report)}`,
-      'zh-TW': `agent-dispatch 用量，${report.days} 天：${range(lang, report)}`,
+      en: `subagent-dispatch usage, ${report.days} days: ${range(lang, report)}`,
+      'zh-TW': `subagent-dispatch 用量，${report.days} 天：${range(lang, report)}`,
     }),
     '',
     ...summaryLines(lang, report),

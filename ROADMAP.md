@@ -9,7 +9,7 @@ cc-mod-trimtab 的決定與理由、已知問題和之後的 mod 規劃。功能
 | 發佈 | 2026-10-11 發佈 v0.1.0，repo 是 public：`github.com/wen-hsiu-hsu/cc-mod-trimtab` |
 | repo 結構 | 單一 repo、單一 marketplace，每個 mod 可單獨 `/plugin install <mod>@cc-mod-trimtab` |
 | 名稱 | `cc-mod-trimtab`（repo 與 marketplace 同名）：`cc-mod-` 前綴讓人從名稱看出是 Claude Code mod。2026-10-11 由 `trimtab` 改名。`ballast` 已有同類 Claude Code plugin（`svy04/ballast`），不用 |
-| mod 名稱 | 已公開，不再改名：改名會讓使用者的 `enabledPlugins` 與 `/config` 的值（綁在 `<mod>@cc-mod-trimtab`）失效。公開前已把 `shell-guard` 改成 `tool-guard`、`agent-watch` 改成 `agent-dispatch`、`nudges` 改成 `self-check` |
+| mod 名稱 | 已公開，原則上不再改名：改名會讓使用者的 `enabledPlugins` 與 `/config` 的值（綁在 `<mod>@cc-mod-trimtab`）失效，只在名稱本身造成問題時才改，並在 CHANGELOG 標成破壞性變更。公開前已把 `shell-guard` 改成 `tool-guard`、`agent-watch` 改成 `agent-dispatch`、`nudges` 改成 `self-check`；公開後把 `agent-dispatch` 改成 `subagent-dispatch`（見「設計紀錄 › 指令」） |
 | 版本 | 各 mod 有自己的 `version`，整個 repo 另打 tag `vX.Y.Z`，CHANGELOG 列出每個 tag 包含的 mod 版本 |
 | License | MIT。改寫自 ctx-handoff-mod 的檔案列在 `NOTICE` |
 | 文件語言 | 中英雙語：英文 `README.md`、中文 `README.zh-TW.md`；ROADMAP 只有中文 |
@@ -39,9 +39,9 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 
 依實作順序。
 
-- [ ] **1. `agent-dispatch`：加入用量帳本與分派提醒**。2026-10-09 決定。用量帳本與報表已做（0.2.0），分派提醒還沒做。
+- [ ] **1. `subagent-dispatch`：加入用量帳本與分派提醒**。2026-10-09 決定。用量帳本與報表已做（0.2.0），分派提醒還沒做。
   - [x] 用量帳本：`agent.spawn` 記下每次派出的 description、agent 種類、指定與 `next(e)` 回傳的實際模型（被其他 mod 改過的也記得到）、fork、背景；`turn.step` 依 `agentId` 把每步 usage 加到主 session（依模型）或該次派出。session 層記 repo、開始時間、第一則 prompt 前 40 字。每個 session 一個 key，最多 500 筆派出，90 天沒寫入刪除。
-  - [x] 報表：`/agent-dispatch stats [天數]` 開 pane（摘要卡、依 repo／session／模型／種類分組到每次派出、7／30／90 天），`--text` 與放不下時印文字版。
+  - [x] 報表：`/subagent-dispatch stats [天數]` 開 pane（摘要卡、依 repo／session／模型／種類分組到每次派出、7／30／90 天），`--text` 與放不下時印文字版。
   - [x] 輸入框上方只在 agent 被中斷時顯示重派，執行中不再列出。
   - [ ] 分派提醒（只提醒，不擋也不改模型）：subagent 跑在 Opus 但 description 看不出理由、或同一個 session fork 次數偏多時跳 toast，並記進帳本。「看不出理由」的判斷與 fork 門檻實作時再定，先只記錄不提醒，看一段時間的誤判再開。
   - 每個功能各自的開關（帳本已有 `ledger`）。
@@ -83,7 +83,8 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 ### 指令
 
 - 每個 mod 註冊 `/<mod>`，子指令統一：`status`、`set`、`unset`、`on`、`off`。一次性動作用具名子指令（`/session-keeper handoff`、`/session-keeper stats`、`/project-memory run`）。
-- 舊指令改名時不留別名（留別名會再遇到撞名）：`/redispatch` → `/agent-dispatch redispatch`、`/guard-allow` → `/tool-guard allow`、`/scrub-history` → `/secret-scrub history`、`/project-memory` → `/project-memory run`。
+- 舊指令改名時不留別名（留別名會再遇到撞名）：`/redispatch` → `/subagent-dispatch redispatch`、`/guard-allow` → `/tool-guard allow`、`/scrub-history` → `/secret-scrub history`、`/project-memory` → `/project-memory run`。
+- 指令名稱不用 `agent-` 開頭（2026-10-12）：Claude Code 的補全選單把 id 以 `agent-`、`file-`、`mcp-resource-`、`mcp-template` 開頭的項目當成 agent、檔案或 MCP 資源的建議，畫成一行並加上圖示，`/agent-dispatch` 因此被畫成 `* /agent-dispatch – …`。mod 名稱就是指令名稱，所以 `agent-dispatch` 整個改名為 `subagent-dispatch`。
 - 不註冊 `/handoff` 這類通用名稱：使用者自己的指令或 skill 同名時，mod 的註冊會被拒絕（2026-10-11 實際遇到 mattpocock/skills 的 `/handoff`）。註冊失敗時跳 toast，不只寫 debug log。
 
 ### 用模型的功能
@@ -126,7 +127,7 @@ CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不�
 | `session-keeper` | cache 狀態、保持快取、new-task-gate、交接、進度的讀取與帶入 | 共用用量、TTL 與閒置計時；保持快取的 fork 要讓快取到期時間跟著更新 |
 | `project-memory` | 專案筆記、進度的產生 | 上游兩者在同一個請求產生；筆記的規則是守門的來源 |
 | `tool-guard`（由 shell-guard 改名） | 固定規則（cmd-rewrite、學來的守門、bash-edit-snapshot 暫緩） | 都在工具執行前做事，共用指令解析、影響預覽與確認面板；學來的守門不只看 Bash，`shell-guard` 這個名字不準 |
-| `agent-dispatch`（由 agent-watch 改名） | 背景 agent 監看與重派、用量帳本、分派提醒 | 都圍繞派 agent 這件事，共用 Agent 呼叫與 `agent.spawn` 的資料（種類、模型、description）。用量帳本要的 `turn.step` 雖然 session-keeper 也聽，但它拿不到 agent 種類 |
+| `subagent-dispatch`（由 agent-watch、agent-dispatch 改名） | 背景 agent 監看與重派、用量帳本、分派提醒 | 都圍繞派 agent 這件事，共用 Agent 呼叫與 `agent.spawn` 的資料（種類、模型、description）。用量帳本要的 `turn.step` 雖然 session-keeper 也聽，但它拿不到 agent 種類 |
 | 維持獨立 | secret-scrub、output-trimmer、open-items | secret-scrub 要排第一，併入的功能也會看到未遮蔽的原文；output-trimmer、open-items 和別人沒有共用的資料。open-items 載入後會自己把清單附給 Claude，交接與進度不用帶未完成項目 |
 
 ### 設計原則

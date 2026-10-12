@@ -2,14 +2,14 @@
 
 所有 mod 的畫面都照這份規範：顏色、版面、控制項、快捷鍵、用詞。新增或修改畫面時先對照這份文件；規範要改時先改這裡，再改程式。
 
-畫的程式放在有畫面的 mod 各自的 `hooks/ui.tsx`（mod 不能 import 自己資料夾外的檔案），內容相同，由 `scripts/check-copies.sh` 檢查。目前有畫面的 mod：`agent-dispatch`、`open-items`、`session-keeper`、`tool-guard`。只有 toast 和指令回應的 mod 不放 `ui.tsx`，照下面的「Toast」與「用詞」即可。
+畫的程式放在有畫面的 mod 各自的 `hooks/ui.tsx`（mod 不能 import 自己資料夾外的檔案），內容相同，由 `scripts/check-copies.sh` 檢查。目前有畫面的 mod：`subagent-dispatch`、`open-items`、`session-keeper`、`tool-guard`。只有 toast 和指令回應的 mod 不放 `ui.tsx`，照下面的「Toast」與「用詞」即可。
 
 ## 畫面種類
 
 | 種類 | 用途 | 例子 |
 | --- | --- | --- |
-| Band（`AbovePrompt`） | 一兩行狀態或提問，畫在輸入框上方 | agent-dispatch 中斷提醒、open-items 計數、session-keeper 快取列 |
-| Pane | 要瀏覽或操作的內容 | agent-dispatch 用量、open-items 清單 |
+| Band（`AbovePrompt`） | 一兩行狀態或提問，畫在輸入框上方 | subagent-dispatch 中斷提醒、open-items 計數、session-keeper 快取列 |
+| Pane | 要瀏覽或操作的內容 | subagent-dispatch 用量、open-items 清單 |
 | 確認框（Pane） | 擋住 Claude、等使用者回答 | tool-guard 確認執行 |
 | Toast | 發生了一件事，看過就好 | 遮蔽了密鑰、省略了輸出 |
 | `ui.log` | 留在 transcript 裡的事件 | self-check 擋下「說完成卻沒驗證」 |
@@ -80,16 +80,16 @@ Pane 和 Band 上所有導覽按鈕都要有 hotkey，並列在提示列。清�
 
 | 鍵 | 動作 | 用在 |
 | --- | --- | --- |
-| `b` | 返回上一層 | agent-dispatch |
-| `m` | 顯示更多 | agent-dispatch |
-| `p` | 切換期間 | agent-dispatch |
-| `g` | 切換分組 | agent-dispatch |
-| `s` | 切換排序 | agent-dispatch |
+| `b` | 返回上一層 | subagent-dispatch |
+| `m` | 顯示更多 | subagent-dispatch |
+| `p` | 切換期間 | subagent-dispatch |
+| `g` | 切換分組 | subagent-dispatch |
+| `s` | 切換排序 | subagent-dispatch |
 | `c` | 複製 | open-items |
 | `o` | 打開 pane | open-items band |
 | `u` | 復原 | open-items band |
-| `r` | 重派 | agent-dispatch band |
-| `d` | 略過這次提醒 | agent-dispatch band |
+| `r` | 重派 | subagent-dispatch band |
+| `d` | 略過這次提醒 | subagent-dispatch band |
 | `h` | 交接到新 session | session-keeper band |
 | `k` | 留在這裡繼續 | session-keeper band |
 | `1`／`2` | 執行／取消 | 確認框（和 Claude Code 內建權限提示的 1 Yes、2 No 一致） |
@@ -101,7 +101,7 @@ Pane 和 Band 上所有導覽按鈕都要有 hotkey，並列在提示列。清�
 ## Pane
 
 - **開啟**：`$.ui.open({ id, title, focus: true, closeOnEscape: true })`。確認框不加 `closeOnEscape`，要明確按下執行或取消。
-- **標題**：mod 名稱開頭，要說明用途時接一個名詞，用 `pick`，例如 `agent-dispatch usage`／`agent-dispatch 用量`、`tool-guard confirm`／`tool-guard 確認`。只有一個 pane、用途就是 mod 名稱時只寫 mod 名稱（`open-items`）。
+- **標題**：mod 名稱開頭，要說明用途時接一個名詞，用 `pick`，例如 `subagent-dispatch usage`／`subagent-dispatch 用量`、`tool-guard confirm`／`tool-guard 確認`。只有一個 pane、用途就是 mod 名稱時只寫 mod 名稱（`open-items`）。
 - **提示列**：放在最下面，`marginTop={1}`，`<Text dimColor wrap="wrap">`。用 `ui.tsx` 的 `hintLine` 產生：
   - 每項寫成「鍵 動作」，項目之間用 ` · ` 分隔。
   - 最後一項是 `Esc closes`／`Esc 關閉`（確認框不列）。
@@ -141,7 +141,7 @@ Pane 和 Band 上所有導覽按鈕都要有 hotkey，並列在提示列。清�
 
 | 種類 | en | zh-TW | 程式 |
 | --- | --- | --- | --- |
-| 日期 | `Oct 12` | `10/12` | agent-dispatch `ledger.ts` 的 `monthDay` |
+| 日期 | `Oct 12` | `10/12` | subagent-dispatch `ledger.ts` 的 `monthDay` |
 | 日期加時間 | `Oct 12 02:11` | `10/12 02:11` | `stamp` |
 | 區間 | `Sep 13 – Oct 12` | `9/13 至 10/12` | `range` |
 | 多久以前 | `just now`、`5 min ago`、`3 h ago`、`2 d ago` | `剛剛`、`5 分鐘前`、`3 小時前`、`2 天前` | open-items `items.ts` 的 `ageText` |
