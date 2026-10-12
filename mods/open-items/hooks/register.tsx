@@ -3,6 +3,7 @@ import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { ItemKind, MissStats, OpenItem, OptionRef, Outcome, Tombstone } from '../types'
 import { configCommand, LANGUAGE, loadConfig, pick, type ConfigIO, type Lang, type Specs } from './config'
+import { emptyState, hintLine, TONE } from './ui'
 import {
   KINDS,
   appendLog,
@@ -143,7 +144,7 @@ async function resolveItem($: EngineInterface, lang: Lang, id: string, how: Reso
 }
 
 async function openPane($: EngineInterface, lang: Lang): Promise<void> {
-  await $.ui.open({ id: PANE, title: pick(lang, { en: 'Open items', 'zh-TW': '待處理項目' }) })
+  await $.ui.open({ id: PANE, title: COMMAND, focus: true, closeOnEscape: true })
 }
 
 // Per repository: a worktree's repo root is the main working tree's, so every worktree shares it.
@@ -398,11 +399,16 @@ export const register: Register = (on, pluginOptions) => {
         required: ['action'],
       },
     })
-    await $.command.register({
-      name: COMMAND,
-      description: pick(lang, { en: 'List the unresolved questions, pending decisions and deferred items', 'zh-TW': '列出尚未解決的問題、待決定與延後事項' }),
-      argumentHint: pick(lang, { en: '[copy | undo | log [keyword] | stats | status]', 'zh-TW': '[copy | undo | log [關鍵字] | stats | status]' }),
-    })
+    try {
+      await $.command.register({
+        name: COMMAND,
+        description: pick(lang, { en: 'List the unresolved questions, pending decisions and deferred items', 'zh-TW': '列出尚未解決的問題、待決定與延後事項' }),
+        argumentHint: pick(lang, { en: '[copy | undo | log [keyword] | stats | status]', 'zh-TW': '[copy | undo | log [關鍵字] | stats | status]' }),
+      })
+    } catch (error) {
+      $.ui.log(`session.start: /${COMMAND} not registered: ${String(error)}`, { to: 'debug' })
+      $.ui.toast(pick(lang, { en: `${COMMAND}: /${COMMAND} was not registered (${String(error)})`, 'zh-TW': `${COMMAND}：/${COMMAND} 指令沒有註冊成功（${String(error)}）` }))
+    }
     await ensureLoaded($, lang)
 
     return next(e)
@@ -604,7 +610,7 @@ export const register: Register = (on, pluginOptions) => {
     return (
       <Box flexDirection="column">
         <Box flexDirection="row">
-          <Text color="yellow" wrap="truncate-end">{text}</Text>
+          <Text color={TONE.attention} wrap="truncate-end">{text}</Text>
           <Button key="open" label={pick(lang, { en: 'Open', 'zh-TW': '開啟' })} hotkey="o" onPress={() => void openPane($, lang)} />
           {canUndo && <Button key="undo" label={pick(lang, { en: 'Undo deferral', 'zh-TW': '復原延後' })} hotkey="u" onPress={() => void undoDeferred($, lang)} />}
         </Box>
@@ -614,7 +620,8 @@ export const register: Register = (on, pluginOptions) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Button, Text } = $.ui.resolve(e)
+    const parts = $.ui.resolve(e)
+    const { Box, Button, Text } = parts
     const list = await read($, items)
     const now = await $.clock.now()
     const open = list.filter(item => !item.isDone)
@@ -624,7 +631,7 @@ export const register: Register = (on, pluginOptions) => {
     // buttons, drawn plain and dim so a dozen of them do not outweigh the items.
     return (
       <Box flexDirection="column">
-        {open.length === 0 && <Text dimColor>{pick(lang, { en: 'No open items.', 'zh-TW': '目前沒有待處理項目。' })}</Text>}
+        {open.length === 0 && emptyState(parts, pick(lang, { en: 'No open items.', 'zh-TW': '目前沒有待處理項目。' }))}
         {KINDS.map(kind => {
           const group = open.filter(item => item.kind === kind)
           if (group.length === 0) {
@@ -729,6 +736,7 @@ export const register: Register = (on, pluginOptions) => {
             <Button
               key="copy"
               label={pick(lang, { en: 'Copy as markdown', 'zh-TW': '複製成 markdown' })}
+              hotkey="c"
               plain
               dimColor
               onPress={press =>
@@ -738,6 +746,17 @@ export const register: Register = (on, pluginOptions) => {
               }
             />
           </Box>
+        )}
+        {hintLine(
+          parts,
+          lang,
+          open.length === 0
+            ? []
+            : [
+                { en: 'Tab moves', 'zh-TW': 'Tab 移動' },
+                { en: 'Enter presses a button', 'zh-TW': 'Enter 按下按鈕' },
+                { en: 'c copies', 'zh-TW': 'c 複製' },
+              ],
         )}
       </Box>
     )

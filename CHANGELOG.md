@@ -8,6 +8,7 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 | Mod | Version |
 | --- | --- |
 | `agent-dispatch` | 0.2.0 |
+| `open-items` | 0.3.2 |
 
 - Added: `agent-dispatch` records each spawn and the main session's token use
   in a local ledger, one key per session (repo, start time, first prompt, and
@@ -43,6 +44,9 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
   longer yellow, and desktop bars take the subagent cyan of the terminal. The
   interrupted-agents toast stays 8 seconds, and the command's argument hint
   follows the interface language.
+- `open-items` follows `DESIGN.md`: the pane is titled `open-items`, takes the
+  focus and closes with `Esc`, lists its keys on its last line, and copies with
+  `c`. A `/open-items` that cannot be registered says so in a toast.
 
 ## [0.1.1] - 2026-10-11
 

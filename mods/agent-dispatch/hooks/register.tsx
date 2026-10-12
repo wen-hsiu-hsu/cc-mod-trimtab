@@ -819,7 +819,7 @@ export const register: Register = (on, options) => {
           </Box>
         )}
         {report.sessions.length === 0 ? (
-          emptyState(parts, emptyText(lang))
+          <Box marginTop={1}>{emptyState(parts, emptyText(lang))}</Box>
         ) : (
           <Box flexDirection="column">
             <Box key="cards" flexDirection={paired ? 'row' : 'column'} marginTop={1} gap={paired ? 2 : 0}>

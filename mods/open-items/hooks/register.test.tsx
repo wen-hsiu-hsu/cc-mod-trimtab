@@ -176,6 +176,10 @@ const BAND = { component: 'AbovePrompt', props: { hasSurvey: false, isWorking: f
 // The engine beneath: ops the plugin calls answer here. Returns the plugin's store.
 // Ids of the panes the plugin asked to open.
 let opened: string[] = []
+// What the plugin passed to each ui.open.
+let openedWith: Record<string, unknown>[] = []
+// Set to make command.register refuse the name.
+let refuseCommand: string | undefined
 // Texts the plugin put into the prompt box.
 let filled: string[] = []
 // Toasts, clipboard writes and debug lines.
@@ -190,6 +194,8 @@ const ZH = '{"*":{"language":"zh-TW"}}'
 
 function engine(on: On, stored: Record<string, unknown> = {}, where: Where = {}, userFile = ZH): Map<string, unknown> {
   opened = []
+  openedWith = []
+  refuseCommand = undefined
   filled = []
   toasts = []
   copied = []
@@ -211,7 +217,13 @@ function engine(on: On, stored: Record<string, unknown> = {}, where: Where = {},
   on('store.keys', () => ({ value: [...store.keys()] }))
   on('session.id', () => ({ value: 's1' }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('command.register', ($, e) => {
+    if (refuseCommand !== undefined) {
+      throw new Error(refuseCommand)
+    }
+
+    return { value: { command: e.name } }
+  })
   on('tool.register', () => ({ value: { tool: TRACK } }))
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))
   on('session.root', () => ({ value: root }))
@@ -240,7 +252,7 @@ function engine(on: On, stored: Record<string, unknown> = {}, where: Where = {},
     value: { exitCode: 0, stdout: e.argv.includes('--short') ? 'abc1234\n' : `${where.branch ?? 'main'}\n`, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
   }))
   on('ui.status', () => ({ value: undefined }))
-  on('ui.open', ($, e) => (opened.push(e.id), { value: { isPlaced: true } }) as never)
+  on('ui.open', ($, e) => (opened.push(e.id), openedWith.push(e as never), { value: { isPlaced: true } }) as never)
 
   return store
 }
@@ -642,4 +654,29 @@ test('the track history for Claude is English even in zh-TW, while /open-items l
   await $.tool.call({ tool: TRACK, action: 'resolve', id: 'o1', note: '要' } as never)
   expect(JSON.stringify((await $.tool.call({ tool: TRACK, action: 'history' } as never)).result)).toMatch(/\[decision, resolved just now\]/)
   expect((await $.command.run({ command: 'open-items', args: 'log' } as never)).text).toMatch(/\[待你決定, 已解決 剛剛\]/)
+})
+
+test('the pane follows DESIGN.md: named after the mod, focused, Esc closes it, keys listed at the bottom', async ($, on) => {
+  engine(on, {}, {}, '')
+  await started($)
+  await $.command.run({ command: 'open-items', args: '' } as never)
+  expect(openedWith[0]).toMatchObject({ title: 'open-items', focus: true, closeOnEscape: true })
+
+  const empty = await $.ui.mount(PANE_MOUNT as never)
+  expect((await empty.find({ key: 'empty' }))?.text).toBe('No open items.')
+  expect((await empty.find({ key: 'hint' }))?.text).toBe('Esc closes')
+  await empty.unmount()
+
+  await $.tool.call({ tool: TRACK, action: 'add', kind: 'decision', text: 'cache it?' } as never)
+  const pane = await $.ui.mount(PANE_MOUNT as never)
+  expect((await pane.find({ key: 'copy' }))?.props.hotkey).toBe('c')
+  expect((await pane.find({ key: 'hint' }))?.text).toBe('Tab moves · Enter presses a button · c copies · Esc closes')
+  await pane.unmount()
+})
+
+test('says so when the command name is taken', async ($, on) => {
+  engine(on)
+  refuseCommand = "it is the user's /open-items"
+  await started($)
+  expect(toasts).toContainEqual(expect.stringMatching(/^open-items：\/open-items 指令沒有註冊成功/))
 })

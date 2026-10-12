@@ -87,10 +87,10 @@ export function hintLine({ Box, Text }: Kit, lang: Lang, items: Words[], closes 
   )
 }
 
-// What a pane shows when it has nothing to list.
+// What a pane shows when it has nothing to list; under a header, the caller sets it a line apart.
 export function emptyState({ Box, Text }: Kit, text: string): RenderNode {
   return (
-    <Box key="empty" marginTop={1}>
+    <Box key="empty">
       <Text dimColor wrap="wrap">
         {text}
       </Text>
