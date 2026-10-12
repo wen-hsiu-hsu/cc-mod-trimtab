@@ -22,3 +22,4 @@ A decision gets an ADR when it is hard to reverse, surprising without its contex
 | [0016](0016-memory-in-built-in-memory.md) | Memory goes into Claude Code's built-in memory; progress and the handoff summary share one file | 2026-10-09 |
 | [0017](0017-keep-warm.md) | When session-keeper keeps the cache warm | 2026-10-09 |
 | [0018](0018-self-check.md) | self-check looks only at Edit / Write and an explicit "done" | 2026-10-09 |
+| [0019](0019-failure-behaviour.md) | When a check itself fails, the guards block and self-check skips | 2026-10-12 |
