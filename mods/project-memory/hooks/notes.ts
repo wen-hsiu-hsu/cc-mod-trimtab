@@ -379,3 +379,52 @@ export function storeOf(notes: Notes, asked: Record<string, PromoteAsk>, activeD
 
   return { rules, procedures: notes.procedures, asked, activeDays }
 }
+
+// ---------- /project-memory list ----------
+
+// The sessions an evidence line's stamp names (`YYYY-MM-DD <sid>`); a memory keeps EVIDENCE_KEEP of them.
+const sessionsOf = (evidence: readonly string[]) =>
+  new Set(evidence.map(e => /^\d{4}-\d{2}-\d{2} ([0-9A-Za-z-]{1,8})(?=[｜|\s]|$)/.exec(e)?.[1]).filter((s): s is string => s !== undefined)).size
+
+type ListItem = { type: string; title: string; sessions: number; seen: string; status: string[]; isDead: boolean }
+
+// One plain line per memory and rule that has a file: type, title, sessions confirmed in, last
+// confirmed, and where it stands. gone: a file's paths no longer in the repository. promoteMin:
+// the sessions a rule needs before it is asked into CLAUDE.md.
+export function listLines(notes: Notes, activeDays: readonly string[], gone: ReadonlyMap<string, string[]>, promoteMin: number, lang: Lang, cap = INDEX_CAP): string[] {
+  const t = (en: string, zh: string) => pick(lang, { en, 'zh-TW': zh })
+  const inIndex = new Set(indexEntries(notes, activeDays, cap).map(e => e.file))
+  const statusOf = (file: string, x: { invalidated?: string }, archived: boolean) => {
+    if (x.invalidated) return [t(`invalidated ${x.invalidated}`, `失效 ${x.invalidated}`)]
+    const status = [archived ? t('stale', '已過期') : inIndex.has(file) ? t('listed', '列在目錄') : t(`not listed (over ${cap})`, `未列（超過 ${cap} 條）`)]
+    const missing = gone.get(file)
+    if (missing !== undefined) status.push(t(`files gone: ${missing.join(', ')}`, `檔案遺失：${missing.join(', ')}`))
+
+    return status
+  }
+  const items: ListItem[] = [
+    ...notes.memory.map(m => ({
+      type: m.type,
+      title: m.title,
+      sessions: sessionsOf(m.evidence),
+      seen: lastSeen(m.evidence) ?? '',
+      status: statusOf(m.file, m, isArchived(m, activeDays)),
+      isDead: m.invalidated !== undefined,
+    })),
+    ...notes.rules
+      .filter((r): r is Rule & { file: string } => r.file !== undefined)
+      .map(r => ({
+        type: t('rule', '規則'),
+        title: r.name,
+        sessions: r.count,
+        seen: lastSeen(r.evidence) ?? '',
+        status: [...statusOf(r.file, r, false), ...(!r.invalidated && r.project === undefined && r.count >= promoteMin ? [t('waiting to go into CLAUDE.md', '等待寫進 CLAUDE.md')] : [])],
+        isDead: r.invalidated !== undefined,
+      })),
+  ].sort((a, b) => Number(a.isDead) - Number(b.isDead) || b.seen.localeCompare(a.seen))
+  if (items.length === 0) return [t('No memories yet.', '還沒有記憶。')]
+  const sep = lang === 'zh-TW' ? '、' : '; '
+
+  return items.map(i =>
+    `[${i.type}] ${oneLine(i.title)} · ${t(`${i.sessions} session(s)`, `${i.sessions} 個 session`)} · ${i.seen || t('never confirmed', '未證實')} · ${i.status.join(sep)}`)
+}

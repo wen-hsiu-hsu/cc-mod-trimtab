@@ -4,10 +4,10 @@ import type { EngineInterface, PluginOptions, Register, Timer } from 'claude-cod
 import { configCommand, firstUse, LANGUAGE, loadConfig, nextExpiry, onLine, pick, resolve, type ConfigIO, type Lang, type Resolved, type Specs } from './config'
 import { MERGE_OPS, applyActions, changesNote, distillPrompt, latestProgress, mergePrompt, parseActions } from './distill'
 import type { Rejected } from './distill'
-import { FILE_PREFIX, INDEX_CAP, INDEX_FILE, indexEntries, joinLive, listed, notesOf, readStore, renderMemory, renderRule, splitLive, storeOf, updateIndex, withActiveDay } from './notes'
+import { FILE_PREFIX, INDEX_CAP, INDEX_FILE, indexEntries, joinLive, listLines, listed, notesOf, readStore, renderMemory, renderRule, splitLive, storeOf, updateIndex, withActiveDay } from './notes'
 import type { Notes, RepoStore } from './notes'
 import { PROGRESS_FILE, progressForPrompt, renderProgress, withExclude } from './progress'
-import { PROMOTE_DESCRIPTION, PROMOTE_SCHEMA, PROMOTE_TOOL, applyPlaced, markAsked, promoteItems, promoteReport, promoteText, readReport } from './promote'
+import { PROMOTE_DESCRIPTION, PROMOTE_MIN_COUNT, PROMOTE_SCHEMA, PROMOTE_TOOL, applyPlaced, markAsked, promoteItems, promoteReport, promoteText, readReport } from './promote'
 import { lastAnchor, transcriptOf, userTextOf } from './transcript'
 import type { Row } from './transcript'
 
@@ -523,11 +523,21 @@ function configIO($: EngineInterface): ConfigIO {
 }
 // --- end configIO ---
 
+// Every memory and rule of this repository, one line each; no model call.
+async function listText($: EngineInterface, lang: Lang): Promise<string> {
+  const dir = await memoryDir($)
+  const store = await loadStore($)
+  const notes = notesOf(await ownFiles($, dir), store)
+  const lines = listLines(notes, store.activeDays, await gonePaths($, splitLive(notes).live, await workspace($)), PROMOTE_MIN_COUNT, lang)
+
+  return [pick(lang, { en: `Memories and rules in ${dir}:`, 'zh-TW': `${dir} 的記憶與規則：` }), ...lines.map(l => `- ${l}`)].join('\n')
+}
+
 function usage(lang: Lang): string {
   return [
     pick(lang, {
-      en: `Usage: /${COMMAND} run (distill), /${COMMAND} status, /${COMMAND} set <key> <value> [--session|--local|--repo], /${COMMAND} unset <key>`,
-      'zh-TW': `用法：/${COMMAND} run（整理）、/${COMMAND} status、/${COMMAND} set <key> <value> [--session|--local|--repo]、/${COMMAND} unset <key>`,
+      en: `Usage: /${COMMAND} run (distill), /${COMMAND} list (every memory), /${COMMAND} status, /${COMMAND} set <key> <value> [--session|--local|--repo], /${COMMAND} unset <key>`,
+      'zh-TW': `用法：/${COMMAND} run（整理）、/${COMMAND} list（列出每條記憶）、/${COMMAND} status、/${COMMAND} set <key> <value> [--session|--local|--repo]、/${COMMAND} unset <key>`,
     }),
     pick(lang, {
       en: `Automatic distill: /${COMMAND} on [duration, default 2h] turns it on for a while, /${COMMAND} off turns it off`,
@@ -554,8 +564,8 @@ export const register: Register = (on, options) => {
         name: COMMAND,
         description: pick(config.lang, { en: 'Distill this conversation into project memory and progress (run), or view and change settings', 'zh-TW': '整理這段對話的專案記憶與進度（run），或看、改設定' }),
         argumentHint: pick(config.lang, {
-          en: 'run | on [duration] | off | status | set <key> <value> | unset <key>',
-          'zh-TW': 'run | on [時長] | off | status | set <key> <value> | unset <key>',
+          en: 'run | list | on [duration] | off | status | set <key> <value> | unset <key>',
+          'zh-TW': 'run | list | on [時長] | off | status | set <key> <value> | unset <key>',
         }),
       })
     } catch (error) {
@@ -574,6 +584,9 @@ export const register: Register = (on, options) => {
     const sub = e.args.trim().split(/\s+/)[0] ?? ''
     if (sub === 'run') {
       return { text: `${await distill($, config.lang, pick(config.lang, { en: 'manual', 'zh-TW': '手動' }))}\n\n${await statusText($, config)}` }
+    }
+    if (sub === 'list') {
+      return { text: await listText($, config.lang) }
     }
     const text = await configCommand(configIO($), COMMAND, SPECS, options, e.args, resolved => void settle($, resolved, options, take).catch(error => $.ui.log(`settle: ${String(error)}`, { to: 'debug' })))
     if (text === undefined) {

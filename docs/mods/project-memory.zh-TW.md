@@ -13,6 +13,7 @@
 | 指令 | 做什麼 |
 | --- | --- |
 | `/project-memory run` | 立即整理並顯示狀態 |
+| `/project-memory list` | 列出這個 repo 的每條記憶與規則，不呼叫模型（見下方「列出記憶」） |
 | `/project-memory on [時長]`、`off` | 臨時開啟自動整理，或在這個 session 關閉 |
 | `/project-memory status`、`set`、`unset` | 查看狀態與修改設定 |
 
@@ -45,6 +46,14 @@
 - **過期**：project、reference 類超過 30 個工作日（這個 repo 有開 session 的日子，記在 `$.store`）沒被證實，從 `MEMORY.md` 拿掉、檔案保留，再被證實就放回。停工一段時間回來不會一次全部過期。
 - **上限**：`MEMORY.md` 只自動載入前 200 行，和主 session 自己的記憶共用，所以 `pm-` 的行最多 60 條。整理後超過時，再送一次只能合併與標記失效的請求；仍超過（或請求失敗）就只列最近被證實的 60 條，其餘檔案保留。
 - **進度**：有實際進展才更新 `.claude/progress.md`（加進 `.git/info/exclude`），整份取代；`session-keeper` 交接時會用交接摘要覆蓋它，並由它帶入新 session（見「session-keeper」的「交接」）。
+
+## 列出記憶
+
+`/project-memory list` 每條記憶與規則一行：類型、標題、被幾個 session 證實、最後證實的日期、狀態。只讀記憶資料夾與 `$.store`，不呼叫模型。
+
+- **session 數**：規則用它的次數；記憶只留最近 3 筆根據，所以最多算到 3。
+- **狀態**：`列在目錄`、`未列（超過 60 條）`、`已過期`、`失效 <日期>`，可能再加上 `檔案遺失：<路徑>` 或 `等待寫進 CLAUDE.md`（規則被 3 個 session 證實、還沒放進 repo）。
+- **順序**：有效的在前、失效的在後，各自依最後證實日由新到舊。
 
 ## 寫進 repo
 

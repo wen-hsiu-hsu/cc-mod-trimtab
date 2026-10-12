@@ -2,7 +2,7 @@ import type { On } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
 import { ACTIONS_END, ACTIONS_START, MERGE_OPS, applyActions, distillPrompt, parseActions } from './distill'
-import { INDEX_CAP, fileNameFor, indexEntries, isArchived, joinLive, notesOf, parseFile, readStore, renderMemory, renderRule, splitLive, storeOf, updateIndex, withActiveDay } from './notes'
+import { INDEX_CAP, fileNameFor, indexEntries, isArchived, joinLive, listLines, notesOf, parseFile, readStore, renderMemory, renderRule, splitLive, storeOf, updateIndex, withActiveDay } from './notes'
 import type { Memory, Notes, Procedure, Rule } from './notes'
 import { renderProgress, withExclude, type Progress } from './progress'
 import { applyPlaced, markAsked, promoteItems, promoteText, readReport } from './promote'
@@ -115,6 +115,31 @@ describe('MEMORY.md', () => {
   test('holds to the cap, keeping the most recently confirmed', () => {
     const memory = [mem({ file: 'pm-1.md', evidence: ['2026-10-03｜x'] }), mem({ file: 'pm-2.md', evidence: ['2026-10-01｜x'] }), mem({ file: 'pm-3.md', evidence: ['2026-10-02｜x'] })]
     expect(indexEntries({ ...EMPTY, memory }, [], 2).map(e => e.file)).toEqual(['pm-1.md', 'pm-3.md'])
+  })
+})
+
+describe('/project-memory list', () => {
+  test('one line per memory and rule: type, title, sessions, last confirmed, where it stands', () => {
+    const notes: Notes = {
+      memory: [
+        mem({ file: 'pm-1.md', title: '列著的', evidence: ['2026-10-03 aaaaaaaa｜x', '2026-10-05 bbbbbbbb｜y', '2026-10-06 aaaaaaaa｜z'] }),
+        mem({ file: 'pm-2.md', title: '過期的', evidence: ['2026-09-01 cccccccc｜x'] }),
+        mem({ file: 'pm-3.md', title: '失效的', invalidated: '2026-10-07', evidence: ['2026-10-09 dddddddd｜x'] }),
+        mem({ file: 'pm-4.md', type: 'feedback', title: '檔案不見的', paths: ['a.ts'], evidence: ['2026-10-02 eeeeeeee｜x'] }),
+      ],
+      rules: [rule({ file: 'pm-rule-r.md', count: 3, evidence: ['2026-10-04 s1｜x'] }), rule({ file: undefined, name: '已放進 repo', project: '已在 CLAUDE.md' })],
+      procedures: [],
+    }
+    const lines = listLines(notes, days('2026-09-02', 31), new Map([['pm-4.md', ['a.ts']]]), 3, 'zh-TW')
+    expect(lines).toEqual([
+      '[project] 列著的 · 2 個 session · 2026-10-06 · 列在目錄',
+      '[規則] 規則一 · 3 個 session · 2026-10-04 · 列在目錄、等待寫進 CLAUDE.md',
+      '[feedback] 檔案不見的 · 1 個 session · 2026-10-02 · 列在目錄、檔案遺失：a.ts',
+      '[project] 過期的 · 1 個 session · 2026-09-01 · 已過期',
+      '[project] 失效的 · 1 個 session · 2026-10-09 · 失效 2026-10-07',
+    ])
+    expect(listLines(notes, [], new Map(), 3, 'en', 1)[1]).toBe('[rule] 規則一 · 3 session(s) · 2026-10-04 · not listed (over 1); waiting to go into CLAUDE.md')
+    expect(listLines(EMPTY, [], new Map(), 3, 'en')).toEqual(['No memories yet.'])
   })
 })
 
@@ -465,6 +490,15 @@ test('drops the conversation a /clear ended while the usage is high', { options:
   await world.clock.advance(1)
   expect(world.prompts.length).toBe(0)
   expect((await $.command.run({ command: 'project-memory', args: 'status' } as never)).text).toContain('（/clear：7 天額度已用 90%，超過 80%）')
+})
+
+test('/project-memory list lists the memory folder without calling the model', async ($, on) => {
+  const world = engine(on, [REPLY])
+  world.files.set(`${DIR}/pm-project-a.md`, renderMemory(mem({ paths: ['gone.ts'], evidence: ['2026-10-01 s1｜x'] }), 'zh-TW'))
+  await $.session.start(START)
+  const text = (await $.command.run({ command: 'project-memory', args: 'list' } as never)).text
+  expect(text).toBe(`${DIR} 的記憶與規則：\n- [project] 部署要先跑 migration · 1 個 session · 2026-10-01 · 列在目錄、檔案遺失：gone.ts`)
+  expect(world.prompts.length).toBe(0)
 })
 
 test('waits five prompts after a failed distill before trying again', { options: { distill: true, distill_every: 5 } }, async ($, on) => {

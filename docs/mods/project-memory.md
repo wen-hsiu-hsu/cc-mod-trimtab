@@ -13,6 +13,7 @@ Distills each conversation in the background into Claude Code's own memory and a
 | Command | What it does |
 | --- | --- |
 | `/project-memory run` | Distill now and show the status |
+| `/project-memory list` | List every memory and rule of this repo, without calling the model (see "Listing memories" below) |
 | `/project-memory on [duration]`, `off` | Turn automatic distilling on for a while, or off for this session |
 | `/project-memory status`, `set`, `unset` | See the status and change settings |
 
@@ -46,6 +47,13 @@ Automatic distilling is off by default. `/project-memory run` is a command you r
 - **Limit**: only the first 200 lines of `MEMORY.md` load automatically, and it is shared with the main session's own memory, so `pm-` lines are limited to 60. If it exceeds that after a run, it sends one more request that may only merge and mark invalid. If it still exceeds the limit (or the request fails), it lists only the 60 most recently confirmed and keeps the other files.
 - **Progress**: `.claude/progress.md` (added to `.git/info/exclude`) is updated only when there is real progress, and the whole file is replaced. When `session-keeper` hands off, it overwrites this file with the handoff summary and loads it into the new session (see "Handoff" in "session-keeper").
 
+## Listing memories
+
+`/project-memory list` shows one line per memory and rule: type, title, how many sessions confirmed it, the date it was last confirmed, and its status. It reads only the memory folder and `$.store`, and does not call the model.
+
+- **Sessions**: a rule shows its count. A memory keeps only its 3 latest pieces of evidence, so it counts at most 3.
+- **Status**: `listed`, `not listed (over 60)`, `stale` or `invalidated <date>`, possibly followed by `files gone: <paths>` or `waiting to go into CLAUDE.md` (a rule confirmed in 3 sessions and not yet in the repo).
+- **Order**: valid entries first, invalidated ones last, each from the most recently confirmed.
 ## Writing to the repo
 
 For rules and procedures that 3 different sessions confirmed and that are not yet in the repo, the first prompt of each session attaches a notice (at most 3 at a time; the same one at most 2 times, 6 hours apart). A further confirmation in the same session adds only evidence, not a count.
