@@ -10,6 +10,6 @@ Usage is in [Settings](../settings.md).
 - **`.local.json`**: for a repo forked from someone else, so the other project gets no extra file; it is added to `.git/info/exclude` on the first write.
 - **Lists live in the user-layer file**: `/config` stores only strings, numbers and booleans.
 - **The repo file cannot set `custom_rules` of `secret-scrub`**: JavaScript regular expressions have no timeout, and a committed rule that backtracks forever would hang every prompt. `allow` must match the whole text.
-- **Personal habits are off by default**: the commit subject check is off (the maintainer turns it on in `pluginConfigs`); removing the Claude attribution is on.
+- **Personal habits are off by default**: the commit subject check is off (users turn it on in their own `pluginConfigs`); removing the Claude attribution is on.
 - **Guard and rewrite rules go in the repo layer** (future features): approved guard rules and cmd-rewrite rules follow the layers; committed ones go in `.claude/cc-mod-trimtab.json`, and ones for a forked repo in `.claude/cc-mod-trimtab.local.json`.
 - **Committed cmd-rewrite rules need approval first** (future feature): rewriting a command does not "tighten protection"; a cloned repo could rewrite `npm test` into any command in `.claude/cc-mod-trimtab.json`. So a committed rewrite rule needs the user's approval before it first applies, the rule's hash is recorded, and a changed rule needs approval again. Rules in `.local.json` do not.
