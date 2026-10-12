@@ -64,9 +64,10 @@
   - desktop：`Svg`。判斷用 `e.surface !== 'terminal'`，不看 `'Svg' in parts`（runtime 一律提供所有元件）。
   - 有值的部分至少一格。
 - **單行清單**（焦點列動作的清單）：不分斷點，一筆一行，要能塞進 55 欄（dock 時的 body 寬）。
-  - 一行依序是 id、種類、內文，用 ` ` 隔開，`wrap="truncate-end"`。
-  - 焦點所在的那一列在下面展開，`paddingLeft` 對齊內文：全文（`wrap="wrap"`），再一行 `dimColor` 的時間與 branch，用 ` · ` 隔開。其他列不展開。
-  - 不按種類分組，種類寫在每一列上。
+  - 一行是固定欄寬的三欄：id（按鈕，見「焦點列動作」）、種類（`dimColor`）、內文（`wrap="truncate-end"`）。
+  - 焦點所在的那一列，內文改成 `wrap="wrap"`，在自己那一欄裡折行，不另外重複全文；下面再一行 `dimColor` 的時間與 branch，用 ` · ` 隔開，`paddingLeft` 對齊內文。其他列不展開。
+  - 不按種類分組，種類寫在每一列上，用短字樣：`待決定`／`問　題`／`延　後`／`bug`，英文 `Decide`／`Question`／`Deferred`／`Bug`。兩個字的中文中間放一個全形空格，跟三個字的對齊。
+  - 清單上方一行：左邊是切換清單的 `switcher`，右邊是作用在整份清單的按鈕（open-items 的「複製成 markdown」）。
 
 ## 控制項
 
@@ -74,10 +75,11 @@
 - **Band 的按鈕**：預設 variant，每顆都有 hotkey。
 - **Pane 清單列上的操作按鈕**（略過、打開某一列）：`plain dimColor`，可以沒有 hotkey。返回、更多、切換這類導覽按鈕一律要有（見「快捷鍵」）。
 - **焦點列動作**：每一列的動作都一樣時（open-items 的完成、不做、引用），不在每列放按鈕，改成清單下方一排，作用在焦點所在的那一列：
-  - 每一列是一顆 `plain` 按鈕，整行文字就是按鈕，`key` 寫成 `row:<id>`，Tab／↑↓ 在列之間移動。
+  - 每一列只有 id 是一顆 `plain` 按鈕（label 就是 id），`key` 寫成 `row:<id>`，Tab／↑↓ 在列之間移動。不把整行做成按鈕：按鈕裡不能放 `Box`，焦點列折行時對不齊內文那一欄。
   - 用 `ui.focus` 記下焦點在哪一列；焦點不在任何一列時，按動作不做事。
   - 動作按鈕 `plain`，每顆都有 hotkey，放在清單下方 `marginTop={1}`，`gap={2}`。
   - 關掉的列留在原位：`dimColor` 加 `strikethrough`，文字前加狀態（`Done`／`完成`、`Won't do`／`不做`），焦點不動；再按一次同一個動作就復原。切換清單或重開 pane 時才移走。
+  - 「最近完成」清單的動作是重新打開（`d`）和引用（`q`）：重新打開的列一樣留在原位，文字前加 `Reopened`／`重新打開`。
   - 不用 `$.ui.focus` 把焦點搬到下一列：實測焦點會落在剛按的動作按鈕上，或跳過一列。
 - **切換**：不用下拉的 `Select`，它展開時會把下方畫面往下推。用 `ui.tsx` 的 `switcher`：
   - 終端機：一顆 `plain` 按鈕「‹ 值 ›」，按一次換下一個值，最後一個之後回到第一個，hotkey 也做同樣的事。
@@ -96,7 +98,7 @@ Pane 和 Band 上所有導覽按鈕和焦點列動作都要有 hotkey，並列�
 | `g` | 切換分組 | subagent-dispatch |
 | `s` | 切換排序 | subagent-dispatch |
 | `c` | 複製 | open-items |
-| `d` | 完成焦點那一列 | open-items |
+| `d` | 完成焦點那一列（最近完成清單：重新打開） | open-items |
 | `x` | 不做焦點那一列 | open-items |
 | `q` | 引用焦點那一列到輸入框 | open-items |
 | `v` | 切換清單（未完成／最近完成） | open-items |
