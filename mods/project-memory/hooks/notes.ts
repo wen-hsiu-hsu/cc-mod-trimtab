@@ -32,10 +32,15 @@ export const isDeclined = (v: string | undefined) => v === 'declined' || v === '
 export const FILE_PREFIX = 'pm-'
 export const INDEX_FILE = 'MEMORY.md'
 
+// A file of the repository an entry is about, relative to its root, and a string in it the entry
+// relies on (a function name, a config key). Both are checked at each distill.
+export type FileRef = { path: string; anchor?: string }
+// A file found missing, or (anchor set) a file whose string is no longer in it.
+export type Gone = FileRef
+
 // Fields both a memory and a rule carry.
 type Lifecycle = {
-  // Files of the repository it is about, relative to its root; checked for at each distill.
-  paths: string[]
+  paths: FileRef[]
   evidence: string[]
   // The day it was found no longer true, and what took its place.
   invalidated?: string
@@ -127,7 +132,7 @@ export type ParsedFile = {
   how?: string
   why?: string
   applies?: string
-  paths: string[]
+  paths: FileRef[]
   invalidated?: string
   supersededBy?: string
   evidence: string[]
@@ -169,7 +174,7 @@ export function parseFile(text: string): ParsedFile {
     if (field) {
       const value = (field[2] ?? '').trim()
       const key = FIELD_KEY[field[1] ?? '']
-      if (key === 'paths') parsed.paths = value.split(/\s*,\s*/).map(p => p.replace(/^`|`$/g, '')).filter(Boolean)
+      if (key === 'paths') parsed.paths = parseRefs(value)
       else if (key !== undefined) parsed[key] = value
       continue
     }
@@ -184,6 +189,23 @@ export function parseFile(text: string): ParsedFile {
 
   return parsed
 }
+
+// `` `a.ts` → `anchor`, `b.ts` ``; a line someone wrote without backticks is split on commas.
+const REF = /`([^`]+)`(?:\s*(?:→|->)\s*`([^`]+)`)?/g
+
+function parseRefs(value: string): FileRef[] {
+  const refs = [...value.matchAll(REF)].map(m => ({ path: m[1]!.trim(), ...(m[2]?.trim() ? { anchor: m[2].trim() } : {}) }))
+
+  return refs.length > 0 ? refs : value.split(/\s*,\s*/).filter(Boolean).map(path => ({ path }))
+}
+
+const renderRef = (r: FileRef) => `\`${r.path}\`${r.anchor ? ` → \`${r.anchor}\`` : ''}`
+
+// What a gone ref says, for the model and the person.
+export const goneText = (g: Gone, lang: Lang) =>
+  g.anchor === undefined
+    ? pick(lang, { en: `${g.path} is gone`, 'zh-TW': `${g.path} 不存在` })
+    : pick(lang, { en: `${g.path} no longer contains "${g.anchor}"`, 'zh-TW': `${g.path} 裡已找不到「${g.anchor}」` })
 
 // The index line's hook and the frontmatter description: one short line.
 export function describe(how?: string, why?: string, title = '') {
@@ -207,7 +229,7 @@ function renderFile(name: string, type: MemoryType, fields: FileFields, life: Li
     ...(fields.how ? [`${labelOf(lang, 'how')} ${fields.how}`] : []),
     ...(fields.why ? [`${labelOf(lang, 'why')} ${fields.why}`] : []),
     ...(fields.applies ? [`${labelOf(lang, 'applies')} ${fields.applies}`] : []),
-    ...(life.paths.length > 0 ? [`${labelOf(lang, 'paths')} ${life.paths.map(p => `\`${p}\``).join(', ')}`] : []),
+    ...(life.paths.length > 0 ? [`${labelOf(lang, 'paths')} ${life.paths.map(renderRef).join(', ')}`] : []),
     ...(life.extra.length > 0 ? ['', ...life.extra] : []),
     ...(life.evidence.length > 0 ? ['', pick(lang, EVIDENCE_HEAD), ...life.evidence.map(e => `- ${e}`)] : []),
     '',
@@ -389,16 +411,16 @@ const sessionsOf = (evidence: readonly string[]) =>
 type ListItem = { type: string; title: string; sessions: number; seen: string; status: string[]; isDead: boolean }
 
 // One plain line per memory and rule that has a file: type, title, sessions confirmed in, last
-// confirmed, and where it stands. gone: a file's paths no longer in the repository. promoteMin:
+// confirmed, and where it stands. gone: a file's refs no longer found. promoteMin:
 // the sessions a rule needs before it is asked into CLAUDE.md.
-export function listLines(notes: Notes, activeDays: readonly string[], gone: ReadonlyMap<string, string[]>, promoteMin: number, lang: Lang, cap = INDEX_CAP): string[] {
+export function listLines(notes: Notes, activeDays: readonly string[], gone: ReadonlyMap<string, Gone[]>, promoteMin: number, lang: Lang, cap = INDEX_CAP): string[] {
   const t = (en: string, zh: string) => pick(lang, { en, 'zh-TW': zh })
   const inIndex = new Set(indexEntries(notes, activeDays, cap).map(e => e.file))
   const statusOf = (file: string, x: { invalidated?: string }, archived: boolean) => {
     if (x.invalidated) return [t(`invalidated ${x.invalidated}`, `失效 ${x.invalidated}`)]
     const status = [archived ? t('stale', '已過期') : inIndex.has(file) ? t('listed', '列在目錄') : t(`not listed (over ${cap})`, `未列（超過 ${cap} 條）`)]
     const missing = gone.get(file)
-    if (missing !== undefined) status.push(t(`files gone: ${missing.join(', ')}`, `檔案遺失：${missing.join(', ')}`))
+    if (missing !== undefined) status.push(...missing.map(g => goneText(g, lang)))
 
     return status
   }

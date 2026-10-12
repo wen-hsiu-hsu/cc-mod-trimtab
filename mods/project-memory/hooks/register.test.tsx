@@ -19,24 +19,24 @@ const days = (from: string, n: number) => Array.from({ length: n }, (_, i) => ne
 
 describe('memory files', () => {
   test('render and parse back the same memory, keeping lines someone else wrote', () => {
-    const m = mem({ how: '先跑 `npm run migrate`', why: '否則啟動失敗', paths: ['db/migrate.ts'], extra: ['自己加的備註'] })
+    const m = mem({ how: '先跑 `npm run migrate`', why: '否則啟動失敗', paths: [{ path: 'db/migrate.ts' }], extra: ['自己加的備註'] })
     const p = parseFile(renderMemory(m, 'zh-TW'))
-    expect(p).toMatchObject({ name: m.title, type: 'project', how: m.how, why: m.why, paths: ['db/migrate.ts'], evidence: m.evidence, extra: ['自己加的備註'] })
+    expect(p).toMatchObject({ name: m.title, type: 'project', how: m.how, why: m.why, paths: [{ path: 'db/migrate.ts' }], evidence: m.evidence, extra: ['自己加的備註'] })
     expect(renderMemory({ ...m, title: p.name, how: p.how, why: p.why, paths: p.paths, evidence: p.evidence, extra: p.extra }, 'zh-TW')).toBe(renderMemory(m, 'zh-TW'))
     expect(renderMemory(m, 'zh-TW')).toStartWith('---\nname: 部署要先跑 migration\ndescription: 先跑 `npm run migrate`\ntype: project\n---\n')
     expect(renderMemory(m, 'zh-TW')).toContain('**做法：** 先跑')
   })
 
   test('the labels follow the language, and either language reads back', () => {
-    const m = mem({ how: 'run it', why: 'else it fails', paths: ['db/migrate.ts'], evidence: ['2026-10-01 | x'] })
+    const m = mem({ how: 'run it', why: 'else it fails', paths: [{ path: 'db/migrate.ts' }], evidence: ['2026-10-01 | x'] })
     const en = renderMemory(m)
     expect(en).toContain('**How:** run it')
     expect(en).toContain('\n## Evidence\n- 2026-10-01 | x\n')
-    expect(parseFile(en)).toMatchObject({ how: 'run it', why: 'else it fails', paths: ['db/migrate.ts'], evidence: ['2026-10-01 | x'], extra: [] })
+    expect(parseFile(en)).toMatchObject({ how: 'run it', why: 'else it fails', paths: [{ path: 'db/migrate.ts' }], evidence: ['2026-10-01 | x'], extra: [] })
     // A file written in the other language is read, and rewritten in the current one.
     const zh = renderMemory(m, 'zh-TW')
     expect(zh).toContain('\n## 根據\n')
-    expect(parseFile(zh)).toMatchObject({ how: 'run it', why: 'else it fails', paths: ['db/migrate.ts'], evidence: ['2026-10-01 | x'], extra: [] })
+    expect(parseFile(zh)).toMatchObject({ how: 'run it', why: 'else it fails', paths: [{ path: 'db/migrate.ts' }], evidence: ['2026-10-01 | x'], extra: [] })
     expect(parseFile(en)).toEqual(parseFile(zh))
   })
 
@@ -125,16 +125,16 @@ describe('/project-memory list', () => {
         mem({ file: 'pm-1.md', title: '列著的', evidence: ['2026-10-03 aaaaaaaa｜x', '2026-10-05 bbbbbbbb｜y', '2026-10-06 aaaaaaaa｜z'] }),
         mem({ file: 'pm-2.md', title: '過期的', evidence: ['2026-09-01 cccccccc｜x'] }),
         mem({ file: 'pm-3.md', title: '失效的', invalidated: '2026-10-07', evidence: ['2026-10-09 dddddddd｜x'] }),
-        mem({ file: 'pm-4.md', type: 'feedback', title: '檔案不見的', paths: ['a.ts'], evidence: ['2026-10-02 eeeeeeee｜x'] }),
+        mem({ file: 'pm-4.md', type: 'feedback', title: '檔案不見的', paths: [{ path: 'a.ts' }], evidence: ['2026-10-02 eeeeeeee｜x'] }),
       ],
       rules: [rule({ file: 'pm-rule-r.md', count: 3, evidence: ['2026-10-04 s1｜x'] }), rule({ file: undefined, name: '已放進 repo', project: '已在 CLAUDE.md' })],
       procedures: [],
     }
-    const lines = listLines(notes, days('2026-09-02', 31), new Map([['pm-4.md', ['a.ts']]]), 3, 'zh-TW')
+    const lines = listLines(notes, days('2026-09-02', 31), new Map([['pm-4.md', [{ path: 'a.ts' }]]]), 3, 'zh-TW')
     expect(lines).toEqual([
       '[project] 列著的 · 2 個 session · 2026-10-06 · 列在目錄',
       '[規則] 規則一 · 3 個 session · 2026-10-04 · 列在目錄、等待寫進 CLAUDE.md',
-      '[feedback] 檔案不見的 · 1 個 session · 2026-10-02 · 列在目錄、檔案遺失：a.ts',
+      '[feedback] 檔案不見的 · 1 個 session · 2026-10-02 · 列在目錄、a.ts 不存在',
       '[project] 過期的 · 1 個 session · 2026-09-01 · 已過期',
       '[project] 失效的 · 1 個 session · 2026-10-09 · 失效 2026-10-07',
     ])
@@ -164,8 +164,27 @@ describe('distill actions', () => {
 
   test('takes repository-relative paths only', () => {
     const add = (paths: unknown) => parseActions(actions({ op: 'add_memory', type: 'project', title: 't', evidence: 'e', paths }), EMPTY).actions
-    expect(add(['./src/a.ts'])).toMatchObject([{ paths: ['src/a.ts'] }])
-    for (const bad of [['/etc/passwd'], ['../x'], ['a', 'b', 'c', 'd'], 'src/a.ts']) expect(add(bad)).toEqual([])
+    expect(add(['./src/a.ts'])).toMatchObject([{ paths: [{ path: 'src/a.ts' }] }])
+    for (const bad of [['/etc/passwd'], ['../x'], ['a', 'b', 'c', 'd'], 'src/a.ts', [{ path: '../x', anchor: 'function a' }]]) expect(add(bad)).toEqual([])
+  })
+
+  test('keeps an anchor of six or more characters that is not a bare keyword, else only the path', () => {
+    const add = (paths: unknown) => (parseActions(actions({ op: 'add_memory', type: 'project', title: 't', evidence: 'e', paths }), EMPTY).actions[0] as { paths: unknown }).paths
+    expect(add([{ path: 'a.ts', anchor: 'function migrate(' }, { path: 'b.ts', anchor: 'short' }, { path: 'c.ts', anchor: 'Export' }])).toEqual([
+      { path: 'a.ts', anchor: 'function migrate(' },
+      { path: 'b.ts' },
+      { path: 'c.ts' },
+    ])
+    expect(add([{ path: 'a.ts', anchor: 'has `tick`' }])).toEqual([{ path: 'a.ts' }])
+  })
+
+  test('writes anchors into the file and reads both the old and the new form back', () => {
+    const m = mem({ paths: [{ path: 'db/migrate.ts', anchor: 'runMigrations, then' }, { path: 'README.md' }] })
+    const text = renderMemory(m, 'zh-TW')
+    expect(text).toContain('**相關檔案：** `db/migrate.ts` → `runMigrations, then`, `README.md`')
+    expect(parseFile(text).paths).toEqual(m.paths)
+    expect(parseFile('---\nname: x\n---\n**Files:** `a.ts`, `b/c.ts`\n').paths).toEqual([{ path: 'a.ts' }, { path: 'b/c.ts' }])
+    expect(parseFile('---\nname: x\n---\n**Files:** a.ts, b.ts\n').paths).toEqual([{ path: 'a.ts' }, { path: 'b.ts' }])
   })
 
   test('marks a deleted memory invalidated, naming what replaced it', () => {
@@ -194,9 +213,13 @@ describe('distill actions', () => {
   })
 
   test('shows the model which related files are gone', () => {
-    const live: Notes = { ...EMPTY, memory: [mem({ paths: ['db/migrate.ts', 'README.md'] })] }
-    const prompt = distillPrompt(undefined, live, [], '(none)', new Map([['pm-project-a.md', ['db/migrate.ts']]]))
-    expect(prompt).toContain('M1 [project] 部署要先跑 migration | evidence: 2026-10-01｜x | files: db/migrate.ts, README.md (files that no longer exist: db/migrate.ts)')
+    const live: Notes = { ...EMPTY, memory: [mem({ paths: [{ path: 'db/migrate.ts' }, { path: 'README.md' }] })] }
+    const prompt = distillPrompt(undefined, live, [], '(none)', new Map([['pm-project-a.md', [{ path: 'db/migrate.ts' }]]]))
+    expect(prompt).toContain('M1 [project] 部署要先跑 migration | evidence: 2026-10-01｜x | files: db/migrate.ts, README.md (no longer found: db/migrate.ts is gone)')
+    const anchored: Notes = { ...EMPTY, memory: [mem({ paths: [{ path: 'db/migrate.ts', anchor: 'runMigrations' }] })] }
+    expect(distillPrompt(undefined, anchored, [], '(none)', new Map([['pm-project-a.md', [{ path: 'db/migrate.ts', anchor: 'runMigrations' }]]]))).toContain(
+      '| files: db/migrate.ts ("runMigrations") (no longer found: db/migrate.ts no longer contains "runMigrations")',
+    )
   })
 
   test('a merge answer may only update and invalidate', () => {
@@ -494,10 +517,12 @@ test('drops the conversation a /clear ended while the usage is high', { options:
 
 test('/project-memory list lists the memory folder without calling the model', async ($, on) => {
   const world = engine(on, [REPLY])
-  world.files.set(`${DIR}/pm-project-a.md`, renderMemory(mem({ paths: ['gone.ts'], evidence: ['2026-10-01 s1｜x'] }), 'zh-TW'))
+  world.files.set('/repo/kept.ts', 'export function migrate() {}')
+  world.files.set('/repo/moved.ts', 'export function newName() {}')
+  world.files.set(`${DIR}/pm-project-a.md`, renderMemory(mem({ paths: [{ path: 'gone.ts' }, { path: 'kept.ts', anchor: 'function migrate' }, { path: 'moved.ts', anchor: 'function oldName' }], evidence: ['2026-10-01 s1｜x'] }), 'zh-TW'))
   await $.session.start(START)
   const text = (await $.command.run({ command: 'project-memory', args: 'list' } as never)).text
-  expect(text).toBe(`${DIR} 的記憶與規則：\n- [project] 部署要先跑 migration · 1 個 session · 2026-10-01 · 列在目錄、檔案遺失：gone.ts`)
+  expect(text).toBe(`${DIR} 的記憶與規則：\n- [project] 部署要先跑 migration · 1 個 session · 2026-10-01 · 列在目錄、gone.ts 不存在、moved.ts 裡已找不到「function oldName」`)
   expect(world.prompts.length).toBe(0)
 })
 

@@ -1,7 +1,7 @@
 // The distill request: the prompt for the notes model, its JSON actions checked and applied.
 // Adapted from ctx-handoff-mod's distill.ts (MIT). Pure functions, no `$`.
-import { EVIDENCE_KEEP, PATHS_MAX, STALE_ACTIVE_DAYS, fileNameFor, isArchived, isInRepo, isMemoryType, withSession } from './notes'
-import type { Memory, MemoryType, Notes, Procedure, Rule } from './notes'
+import { EVIDENCE_KEEP, PATHS_MAX, STALE_ACTIVE_DAYS, fileNameFor, goneText, isArchived, isInRepo, isMemoryType, withSession } from './notes'
+import type { FileRef, Gone, Memory, MemoryType, Notes, Procedure, Rule } from './notes'
 import { PROGRESS_FIELD_MAX, PROGRESS_FILES_MAX, PROGRESS_FILE_MAX, PROGRESS_TASK_MAX, PROGRESS_TOTAL_MAX, isProgressState, progressSize } from './progress'
 import type { ProgressFields } from './progress'
 import { pick, writeIn, type Lang } from './config'
@@ -16,6 +16,14 @@ const RULE_NAME_MAX = 40
 const RULE_TEXT_MAX = 150
 const PROC_NAME_MAX = 40
 const PATH_MAX = 120
+const ANCHOR_MIN = 6
+const ANCHOR_MAX = 80
+// An anchor that is only a keyword is in nearly every file: it proves nothing.
+const KEYWORDS: ReadonlySet<string> = new Set(
+  ('function return export import default extends implements interface private public protected static readonly declare module ' +
+    'namespace require package struct switch continue finally delete typeof instanceof string number boolean object symbol unknown ' +
+    'undefined lambda global nonlocal assert except unsafe extern override virtual abstract sealed select fallthrough println console').split(' '),
+)
 const STEP_MIN = 2
 const STEP_MAX_COUNT = 8
 const STEP_MAX = 80
@@ -27,8 +35,9 @@ export const ACTIONS_END = '=== END ==='
 
 // What one numbered line shows besides its text: its files, and which of them are gone.
 // The prompts are for the model, so they are English; only the language the notes are written in follows the setting.
-const pathsNote = (paths: readonly string[], gone: readonly string[] = []) =>
-  `${paths.length > 0 ? ` | files: ${paths.join(', ')}` : ''}${gone.length > 0 ? ` (files that no longer exist: ${gone.join(', ')})` : ''}`
+const refText = (r: FileRef) => (r.anchor ? `${r.path} ("${r.anchor}")` : r.path)
+const pathsNote = (paths: readonly FileRef[], gone: readonly Gone[] = []) =>
+  `${paths.length > 0 ? ` | files: ${paths.map(refText).join(', ')}` : ''}${gone.length > 0 ? ` (no longer found: ${gone.map(g => goneText(g, 'en')).join('; ')})` : ''}`
 const memOneLine = (m: Memory) =>
   [`[${m.type}] ${m.title}`, m.how && `how: ${m.how}`, m.why && `why: ${m.why}`, m.evidence.length > 0 && `evidence: ${m.evidence.join('; ')}`]
     .filter(Boolean)
@@ -36,8 +45,8 @@ const memOneLine = (m: Memory) =>
 const procOneLine = (p: Procedure) => `when: ${p.when} | steps: ${p.steps.join(' → ')}`
 const inRepo = (x: { project?: string }) => isInRepo(x.project)
 
-// The numbered lists both prompts show. gone: a file's paths no longer in the repository.
-function numbered(notes: Notes, activeDays: readonly string[], gone: ReadonlyMap<string, string[]>) {
+// The numbered lists both prompts show. gone: a file's refs no longer found in the repository.
+function numbered(notes: Notes, activeDays: readonly string[], gone: ReadonlyMap<string, Gone[]>) {
   const mem = notes.memory.length > 0
     ? notes.memory.map((m, i) =>
       `M${i + 1} ${memOneLine(m)}${pathsNote(m.paths, gone.get(m.file))}${isArchived(m, activeDays) ? ` (archived: not confirmed for over ${STALE_ACTIVE_DAYS} working days)` : ''}`)
@@ -62,7 +71,7 @@ const FORMAT = [
   'Every line must be valid JSON: write double quotes inside a string as \\", and no line breaks.',
 ]
 
-export function distillPrompt(anchor: string | undefined, notes: Notes, activeDays: readonly string[], progress: string, gone: ReadonlyMap<string, string[]> = new Map(), lang: Lang = 'en') {
+export function distillPrompt(anchor: string | undefined, notes: Notes, activeDays: readonly string[], progress: string, gone: ReadonlyMap<string, Gone[]> = new Map(), lang: Lang = 'en') {
   return [
     'You work in the background on the conversation record attached to the user message, so that future work in this workspace goes better. You have no tools: output only the specified format, and a program writes the files.',
     ...common(lang),
@@ -78,14 +87,14 @@ export function distillPrompt(anchor: string | undefined, notes: Notes, activeDa
     `- title: one conclusion, at most 40 characters (over ${TITLE_MAX} characters and the whole entry is dropped); from this line alone one knows what to do or what to know; no backstory, dates, PR numbers or quotes`,
     `- how, why: one sentence each, at most ${FIELD_MAX} characters, optional; no stories, quotes or progress`,
     `- evidence: what happened and where it was verified (at most ${EVIDENCE_MAX} characters), for later curation; the program adds the date and session, do not write them`,
-    `- paths: when the entry is about specific files in the repo, list their paths relative to the repo root, at most ${PATHS_MAX}; omit it when the entry is not about specific files. The program checks at every distill whether the files still exist`,
+    `- paths: when the entry is about specific files in the repo, list them, at most ${PATHS_MAX}: path relative to the repo root, and anchor, a string copied exactly from that file that the entry relies on (a function or config key name, ${ANCHOR_MIN} to ${ANCHOR_MAX} characters, not a bare language keyword; omit it when there is none). Omit paths when the entry is not about specific files. The program checks at every distill that each file still exists and still contains its anchor`,
     '- one entry says one thing: three things learned in a conversation make three entries',
     '- user and feedback entries must carry a quote: the user\'s own words from the conversation, copied exactly (you may use … to skip the middle). The program compares it with the user messages; if the words are not found, the user did not say it, so make it a project or reference entry, or do not write it. What the assistant did on its own is not something the user asked for',
     'Do not record: what can be derived from the code, what CLAUDE.md already says, progress and to-dos, state that goes stale, which code was changed this time, guesses, any key or credential.',
     'Ask yourself: a month from now, in a new conversation in this workspace, is this entry still correct and still useful?',
     'Compare with the current memories: the same meaning, leave it; an addition or correction, update_memory; overturned, delete_memory; prefer update_memory, and never write a reworded duplicate.',
     'delete_memory and delete_rule do not delete the file but mark it invalid: when a new entry replaces it, fill superseded_by (a current number such as "M4", or the new entry\'s title).',
-    'For entries marked "files that no longer exist": if the file was only renamed or moved (the conversation or the paths show it), update with the new paths; if what it says no longer holds, delete to mark it invalid; if you cannot tell, leave it.',
+    'For entries marked "no longer found" (a file gone, or its anchor no longer in it): if the file was only renamed or moved, or the anchor only renamed (the conversation or the paths show it), update with the new paths and anchors; if what it says no longer holds, delete to mark it invalid; if you cannot tell, leave it.',
     'When the same thing is confirmed again in this conversation (used again, the user confirms it again, or a tool result proves it), use confirm_memory to add one piece of evidence; an archived entry that is confirmed comes back.',
     `project and reference entries not confirmed for ${STALE_ACTIVE_DAYS} working days (days a session was opened in this repo) are archived automatically; do not delete entries because there are many, only when overturned or duplicated, and then delete or merge.`,
     '',
@@ -107,13 +116,13 @@ export function distillPrompt(anchor: string | undefined, notes: Notes, activeDa
     '',
     'Output format (copy the markers; one JSON object per line, no other text; leave it empty when nothing changes):',
     ACTIONS_START,
-    '{"op":"add_memory","type":"feedback","title":"…","how":"…","why":"…","evidence":"…","quote":"…","paths":["src/…"]}',
-    '{"op":"update_memory","id":"M3","type":"project","title":"…","how":"…","why":"…","evidence":"new evidence, may be omitted","paths":["…"]}',
+    '{"op":"add_memory","type":"feedback","title":"…","how":"…","why":"…","evidence":"…","quote":"…","paths":[{"path":"src/…","anchor":"…"}]}',
+    '{"op":"update_memory","id":"M3","type":"project","title":"…","how":"…","why":"…","evidence":"new evidence, may be omitted","paths":[{"path":"…","anchor":"…"}]}',
     '{"op":"confirm_memory","id":"M2","evidence":"…"}',
     '{"op":"delete_memory","id":"M7","reason":"…","superseded_by":"M4"}',
-    '{"op":"add_rule","name":"…","rule":"…","applies":"…","not_applies":"…","evidence":"…","paths":["…"]}',
+    '{"op":"add_rule","name":"…","rule":"…","applies":"…","not_applies":"…","evidence":"…","paths":[{"path":"…","anchor":"…"}]}',
     '{"op":"confirm_rule","id":"R2","evidence":"…"}',
-    '{"op":"update_rule","id":"R2","rule":"…","paths":["…"]}',
+    '{"op":"update_rule","id":"R2","rule":"…","paths":[{"path":"…","anchor":"…"}]}',
     '{"op":"delete_rule","id":"R4","reason":"…","superseded_by":"…"}',
     '{"op":"set_progress","task":"…","state":"in_progress","verified":"…","next":"…","files":["…"]}',
     '{"op":"add_procedure","name":"…","when":"…","steps":["…","…","…"],"evidence":"…"}',
@@ -153,16 +162,16 @@ export function mergePrompt(notes: Notes, activeDays: readonly string[], listedC
 }
 
 export type Rejected = { count: number; samples: string[] }
-type MemoryFields = { type: MemoryType; title: string; how?: string; why?: string; evidence?: string; quote?: string; paths?: string[] }
+type MemoryFields = { type: MemoryType; title: string; how?: string; why?: string; evidence?: string; quote?: string; paths?: FileRef[] }
 // i: the index in the list the prompt numbered; deletes do not shift it.
 export type Action =
   | ({ op: 'add_memory'; evidence: string } & MemoryFields)
   | ({ op: 'update_memory'; i: number } & MemoryFields)
   | { op: 'confirm_memory'; i: number; evidence: string; quote?: string }
   | { op: 'delete_memory'; i: number; supersededBy?: string }
-  | { op: 'add_rule'; name: string; rule: string; applies: string; notApplies: string; evidence: string; paths?: string[] }
+  | { op: 'add_rule'; name: string; rule: string; applies: string; notApplies: string; evidence: string; paths?: FileRef[] }
   | { op: 'confirm_rule'; i: number; evidence: string }
-  | { op: 'update_rule'; i: number; rule: string; paths?: string[] }
+  | { op: 'update_rule'; i: number; rule: string; paths?: FileRef[] }
   | { op: 'delete_rule'; i: number; supersededBy?: string }
   | ({ op: 'set_progress' } & ProgressFields)
   | { op: 'add_procedure'; name: string; when: string; steps: string[]; evidence: string }
@@ -196,15 +205,34 @@ const missing = (lang: Lang, fields: Record<string, string | undefined>) => {
   return names.length > 0 ? pick(lang, { en: `missing ${names.join(', ')}`, 'zh-TW': `缺少 ${names.join('、')}` }) : undefined
 }
 
-// Repository-relative paths: at most PATHS_MAX, none absolute or climbing out. undefined: none given.
-function pathsOf(raw: unknown, lang: Lang): string[] | undefined | string {
+// An anchor worth checking: long enough, not a bare keyword, and writable between backticks.
+// Otherwise undefined, and the path is kept without one.
+function anchorOf(raw: unknown): string | undefined {
+  const a = str(raw)
+  if (a === undefined || [...a].length < ANCHOR_MIN || [...a].length > ANCHOR_MAX || a.includes('`')) return undefined
+
+  return KEYWORDS.has(a.toLowerCase()) ? undefined : a
+}
+
+// Repository-relative paths, each a string or { path, anchor }: at most PATHS_MAX, none absolute or
+// climbing out. undefined: none given.
+function pathsOf(raw: unknown, lang: Lang): FileRef[] | undefined | string {
   if (raw === undefined) return undefined
   if (!Array.isArray(raw)) return pick(lang, { en: 'paths must be an array', 'zh-TW': 'paths 要是陣列' })
-  const list = raw.map(str).filter((p): p is string => p !== undefined).map(p => p.replace(/^\.\//, ''))
+  const refs = raw
+    .map((x): FileRef | undefined => {
+      const o = x !== null && typeof x === 'object' ? (x as Record<string, unknown>) : { path: x }
+      const path = str(o.path)?.replace(/^\.\//, '')
+      const anchor = anchorOf(o.anchor)
+
+      return path === undefined ? undefined : { path, ...(anchor ? { anchor } : {}) }
+    })
+    .filter((r): r is FileRef => r !== undefined)
+  const list = refs.map(r => r.path)
   if (list.length > PATHS_MAX) return pick(lang, { en: `paths has more than ${PATHS_MAX}`, 'zh-TW': `paths 超過 ${PATHS_MAX} 個` })
   if (list.some(p => p.startsWith('/') || /^[A-Za-z]:/.test(p) || p.split('/').includes('..') || p.startsWith('~'))) return pick(lang, { en: 'paths must be relative paths in the repo', 'zh-TW': 'paths 要是 repo 裡的相對路徑' })
 
-  return list.some(p => [...p].length > PATH_MAX) ? pick(lang, { en: `a path is over ${PATH_MAX} characters`, 'zh-TW': `paths 超過 ${PATH_MAX} 字` }) : list
+  return list.some(p => [...p].length > PATH_MAX || p.includes('`')) ? pick(lang, { en: `a path is over ${PATH_MAX} characters`, 'zh-TW': `paths 超過 ${PATH_MAX} 字` }) : refs
 }
 
 // One JSON line to an action, or why it is not one (kept as a rejected sample).
@@ -428,8 +456,8 @@ export function applyActions(actions: readonly Action[], n: Notes, day: string, 
     return evidence || a.quote ? `${stamp}${bar}${[evidence, a.quote && t(`User's words: "${a.quote}"`, `使用者原話：「${a.quote}」`)].filter(Boolean).join(bar)}` : undefined
   }
   const keep = (list: string[], e: string | undefined) => (e ? [...list, e] : list).slice(-EVIDENCE_KEEP)
-  const memory: Memory[] = n.memory.map(m => ({ ...m, paths: [...m.paths], evidence: [...m.evidence] }))
-  const rules: Rule[] = n.rules.map(r => ({ ...r, paths: [...r.paths], sessions: [...r.sessions], evidence: [...r.evidence] }))
+  const memory: Memory[] = n.memory.map(m => ({ ...m, paths: m.paths.map(p => ({ ...p })), evidence: [...m.evidence] }))
+  const rules: Rule[] = n.rules.map(r => ({ ...r, paths: r.paths.map(p => ({ ...p })), sessions: [...r.sessions], evidence: [...r.evidence] }))
   const procedures = n.procedures.map(p => ({ ...p, steps: [...p.steps], sessions: [...p.sessions], evidence: [...p.evidence] })) as (Procedure | undefined)[]
   const addedMem: Memory[] = []
   const addedRules: Rule[] = []

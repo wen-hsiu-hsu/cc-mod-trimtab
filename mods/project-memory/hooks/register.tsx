@@ -5,7 +5,7 @@ import { configCommand, firstUse, LANGUAGE, loadConfig, nextExpiry, onLine, pick
 import { MERGE_OPS, applyActions, changesNote, distillPrompt, latestProgress, mergePrompt, parseActions } from './distill'
 import type { Rejected } from './distill'
 import { FILE_PREFIX, INDEX_CAP, INDEX_FILE, indexEntries, joinLive, listLines, listed, notesOf, readStore, renderMemory, renderRule, splitLive, storeOf, updateIndex, withActiveDay } from './notes'
-import type { Notes, RepoStore } from './notes'
+import type { Gone, Notes, RepoStore } from './notes'
 import { PROGRESS_FILE, progressForPrompt, renderProgress, withExclude } from './progress'
 import { PROMOTE_DESCRIPTION, PROMOTE_MIN_COUNT, PROMOTE_SCHEMA, PROMOTE_TOOL, applyPlaced, markAsked, promoteItems, promoteReport, promoteText, readReport } from './promote'
 import { lastAnchor, transcriptOf, userTextOf } from './transcript'
@@ -144,14 +144,27 @@ async function ownFiles($: EngineInterface, dir: string): Promise<{ file: string
   return files
 }
 
-// Each memory and rule file's paths that are no longer in the repository.
-async function gonePaths($: EngineInterface, notes: Notes, root: string): Promise<Map<string, string[]>> {
-  const gone = new Map<string, string[]>()
+// Each memory and rule file's refs no longer found: the file gone, or its anchor no longer in it.
+// A file that cannot be read counts as found.
+async function gonePaths($: EngineInterface, notes: Notes, root: string): Promise<Map<string, Gone[]>> {
+  const gone = new Map<string, Gone[]>()
+  const texts = new Map<string, Promise<string | undefined>>()
+  const textOf = (path: string) => {
+    if (!texts.has(path)) texts.set(path, $.fs.read(`${root}/${path}`).catch(() => undefined))
+
+    return texts.get(path)!
+  }
   for (const item of [...notes.memory, ...notes.rules]) {
     if (item.file === undefined || item.paths.length === 0) continue
-    const missing: string[] = []
+    const missing: Gone[] = []
     for (const p of item.paths) {
-      if (!(await $.fs.exists(`${root}/${p}`).catch(() => true))) missing.push(p)
+      if (!(await $.fs.exists(`${root}/${p.path}`).catch(() => true))) {
+        missing.push({ path: p.path })
+        continue
+      }
+      if (p.anchor === undefined) continue
+      const text = await textOf(p.path)
+      if (text !== undefined && !text.includes(p.anchor)) missing.push(p)
     }
     if (missing.length > 0) gone.set(item.file, missing)
   }
