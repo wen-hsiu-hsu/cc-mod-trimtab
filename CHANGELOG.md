@@ -5,6 +5,16 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
 ## [Unreleased]
 
+- `project-memory` 0.2.0:
+  - Added: automatic distilling is skipped while the 5-hour or 7-day usage
+    limit is used past `max_rate_used` (default 80)%. `status` shows why;
+    a conversation `/clear` ended meanwhile is dropped. `run` is not limited,
+    and without a subscription nothing changes.
+  - Added: `/project-memory list`, one line per memory and rule with the
+    sessions that confirmed it, the last confirmed date and its status.
+  - Added: a related file can carry an anchor string; each distill checks the
+    string is still in the file and flags it to the model when it is not.
+    Memory files write it as `` `path` → `anchor` ``; older files still read.
 - Docs: the README is now a short overview. Each mod's behaviour, commands,
   settings, cost and known limitations moved to `docs/mods/<mod>.md` (and
   `.zh-TW.md`); install and settings moved to `docs/install.md` and

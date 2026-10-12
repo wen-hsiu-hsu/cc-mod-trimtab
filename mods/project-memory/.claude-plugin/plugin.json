@@ -1,6 +1,6 @@
 {
   "name": "project-memory",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Distills the conversation in the background into project memory (the built-in memory) and a progress file; a rule confirmed in several sessions is proposed to you before it goes into CLAUDE.md, and a procedure becomes a project skill",
   "author": {
     "name": "wen-hsiu hsu"

@@ -41,6 +41,7 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 | bash-edit-snapshot（`tool-guard` 在 Bash 寫檔指令前用 `git stash create` 存快照，`/undo-bash [n]` 還原；`/rewind` 只追蹤 Edit／Write） | 2026-10-11 檢視約一個月的使用紀錄：Bash 寫檔（`sed -i`、`python3`、重導向、heredoc）很常見，但沒有一次造成損失，改錯的都在寫入前被檢查擋下或用 git 輕易救回；目標多是已 commit 的檔案，快照多保護的範圍很小 | Bash 寫檔讓未 commit 的內容遺失或要手動重建、且 `/rewind` 救不回；使用者因 Bash 改檔要求還原；或對未 commit 的檔案做大範圍取代出錯。做的時候寫檔偵測也複製到 `self-check` 的 `noteCall` |
 | classifier-retry（auto mode 分類器沒給判定時重試） | 實際發生的次數少；不確定同一個工具呼叫裡能否再呼叫一次 `next` | 頻率上升，或確認 API 支援重試 |
 | open-items 的 Haiku 抽取 | 每輪都要花 token；先觀察 track 工具與選項解析的漏抓率 | `/open-items stats` 的漏抓率明顯偏高（2026-10-07 開始記錄） |
+| project-memory 的 `<private>` 標記（訊息中標起來的段落不送去整理；claude-mem 的做法） | 2026-10-12 決定略過：`/project-memory off` 已能在這個 session 停止自動整理，送出前也已用 `secret-scrub` 的規則遮蔽金鑰 | 開著自動整理時需要只排除某一段（例如貼上客戶資料），而 `off` 再 `on` 不夠用；或發現敏感內容被寫進記憶 |
 | project-memory 只送相關的記憶給模型（Mem0 只送相似的前 10 筆） | 要 embedding 或相似度比對；記憶少時整份清單送得進去，`MEMORY.md` 也限 60 條 | 記憶（含失效前）超過約 150 條、或整理輸出常被截斷（debug log 的「丟棄 N 行」中出現 JSON 錯誤） |
 | project-memory 的離線評估集（照 LongMemEval 分類標 30–50 段對話的預期整理結果，量抽取與更新的錯誤率） | 成本較高，要先累積一段時間的真實整理結果才有素材 | 用過一個月以上，或懷疑整理品質（記錯、漏記、重複）時 |
 | 費用回報（見「費用回報」：每次呼叫的 toast、輸入框上方的各 mod 累計、依價格表估算金額） | 2026-10-11 查一個多月的 prompt 與 transcript：沒有一次問過 mod 呼叫模型花多少 token 或錢，也沒有因費用關功能；問過的是主對話的 context、訂閱額度與 cache 何時過期 | 開了 `keep_warm` 等背景呼叫後問「花了多少」、對用量表示意外，或 `/usage` 額度的消耗說不出來源。先做最窄的版本：`/<mod> status` 列累計 token 數，不估金額 |
@@ -75,3 +76,4 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 9. 2026-10-11 實測 `subagent-dispatch` 帳本：背景 agent 的每一步都記到（例：5 步、33,692 token）；真實的 fork 記成 fork；同一模型的 id 寫法一致，不會拆成兩列；終端機太窄時 pane 改放在輸入框上方。
 10. 2026-10-12 改名 `agent-dispatch` → `subagent-dispatch`：`$.store` 的檔名是 `<mod>_<marketplace>-<雜湊>.json`，雜湊依 plugin 算，所以新名稱用新檔案，舊帳本不會跟著搬，要手動併入（session key 不重疊）；舊 session 在 `/reload-plugins` 前仍寫舊檔。在隔離的 `CLAUDE_CONFIG_DIR` 驗證過新名稱可安裝、舊名稱找不到。
 11. 用 `--plugin-dir` 開的 session 讀 `pluginConfigs` 的 key 是 `<mod>` 或 `<mod>@inline`，讀不到 `<mod>@cc-mod-trimtab` 的值（2026-10-11），所以測試 session 測不到用 `/config` 常開的行為。
+12. `$.session.usage()` 回傳 `rateLimits: { kind, percentUsed, resetsAt? }[]`，`kind` 有 `five_hour`、`seven_day` 與 gateway 的 `spend_limit`；不是訂閱制或還沒讀到數值時是空陣列，呼叫不花 token（依本機型別檔，2026-10-12）。`project-memory` 的 `max_rate_used` 依此判斷；實際訂閱帳號上的數值還沒在執行中的 session 確認。
