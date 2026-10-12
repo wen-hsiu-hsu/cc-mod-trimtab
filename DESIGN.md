@@ -63,12 +63,22 @@
   - 終端機：有底色的空格（`backgroundColor`），不用 `█`。
   - desktop：`Svg`。判斷用 `e.surface !== 'terminal'`，不看 `'Svg' in parts`（runtime 一律提供所有元件）。
   - 有值的部分至少一格。
+- **單行清單**（焦點列動作的清單）：不分斷點，一筆一行，要能塞進 55 欄（dock 時的 body 寬）。
+  - 一行依序是 id、種類、內文，用 ` ` 隔開，`wrap="truncate-end"`。
+  - 焦點所在的那一列在下面展開，`paddingLeft` 對齊內文：全文（`wrap="wrap"`），再一行 `dimColor` 的時間與 branch，用 ` · ` 隔開。其他列不展開。
+  - 不按種類分組，種類寫在每一列上。
 
 ## 控制項
 
 - **按鈕裡只放文字**，不放 `Box`。
 - **Band 的按鈕**：預設 variant，每顆都有 hotkey。
-- **Pane 清單列上的操作按鈕**（完成、略過、打開某一列）：`plain dimColor`，可以沒有 hotkey。返回、更多、切換這類導覽按鈕一律要有（見「快捷鍵」）。
+- **Pane 清單列上的操作按鈕**（略過、打開某一列）：`plain dimColor`，可以沒有 hotkey。返回、更多、切換這類導覽按鈕一律要有（見「快捷鍵」）。
+- **焦點列動作**：每一列的動作都一樣時（open-items 的完成、不做、引用），不在每列放按鈕，改成清單下方一排，作用在焦點所在的那一列：
+  - 每一列是一顆 `plain` 按鈕，整行文字就是按鈕，`key` 寫成 `row:<id>`，Tab／↑↓ 在列之間移動。
+  - 用 `ui.focus` 記下焦點在哪一列；焦點不在任何一列時，按動作不做事。
+  - 動作按鈕 `plain`，每顆都有 hotkey，放在清單下方 `marginTop={1}`，`gap={2}`。
+  - 關掉的列留在原位：`dimColor` 加 `strikethrough`，文字前加狀態（`Done`／`完成`、`Won't do`／`不做`），焦點不動；再按一次同一個動作就復原。切換清單或重開 pane 時才移走。
+  - 不用 `$.ui.focus` 把焦點搬到下一列：實測焦點會落在剛按的動作按鈕上，或跳過一列。
 - **切換**：不用下拉的 `Select`，它展開時會把下方畫面往下推。用 `ui.tsx` 的 `switcher`：
   - 終端機：一顆 `plain` 按鈕「‹ 值 ›」，按一次換下一個值，最後一個之後回到第一個，hotkey 也做同樣的事。
   - desktop：一排分段按鈕，目前的值 `variant="primary"`，其他 `dimColor`，hotkey 掛在目前值的下一顆。
@@ -76,7 +86,7 @@
 
 ## 快捷鍵
 
-Pane 和 Band 上所有導覽按鈕都要有 hotkey，並列在提示列。清單列上的操作（完成、略過、打開某一列）可以沒有。
+Pane 和 Band 上所有導覽按鈕和焦點列動作都要有 hotkey，並列在提示列。每列各自的操作按鈕（略過、打開某一列）可以沒有。
 
 | 鍵 | 動作 | 用在 |
 | --- | --- | --- |
@@ -86,6 +96,10 @@ Pane 和 Band 上所有導覽按鈕都要有 hotkey，並列在提示列。清�
 | `g` | 切換分組 | subagent-dispatch |
 | `s` | 切換排序 | subagent-dispatch |
 | `c` | 複製 | open-items |
+| `d` | 完成焦點那一列 | open-items |
+| `x` | 不做焦點那一列 | open-items |
+| `q` | 引用焦點那一列到輸入框 | open-items |
+| `v` | 切換清單（未完成／最近完成） | open-items |
 | `o` | 打開 pane | open-items band |
 | `u` | 復原 | open-items band |
 | `r` | 重派 | subagent-dispatch band |
@@ -97,6 +111,8 @@ Pane 和 Band 上所有導覽按鈕都要有 hotkey，並列在提示列。清�
 - 同一個動作在每個 mod 用同一個鍵；新動作先查這張表，再加進來。
 - 確認框用數字，其他一律用小寫字母。
 - 不用 `Esc`、`Tab`、`Enter`、方向鍵：它們留給 pane 的焦點移動和關閉。
+- 只有 Tab 和 ↑↓ 會移動焦點；←→ pane 不會攔下，按了會切到別的 session，不要指望它。
+- `d` 在 subagent-dispatch band 是「略過這次提醒」，在 open-items pane 是「完成」。兩者同時出現時哪一個收到 `d` 還沒實測。
 
 ## Pane
 
@@ -105,6 +121,7 @@ Pane 和 Band 上所有導覽按鈕都要有 hotkey，並列在提示列。清�
 - **提示列**：放在最下面，`marginTop={1}`，`<Text dimColor wrap="wrap">`。用 `ui.tsx` 的 `hintLine` 產生：
   - 每項寫成「鍵 動作」，項目之間用 ` · ` 分隔。
   - 最後一項是 `Esc closes`／`Esc 關閉`（確認框不列）。
+  - 有焦點列動作的清單，第一項是 `Tab/↑↓ moves`／`Tab/↑↓ 移動`，接著列出每個動作，例如 `d done · x won't do · q quotes · v switches list`。
   - 按鈕上已經寫了動作的，寫成「‹ Back (b) returns」。
 - **空狀態**：`<Text dimColor wrap="wrap">`，一句話說沒有什麼，需要時在括號裡說明什麼時候會出現。例如 `No open items.`、`No usage recorded yet (…).`。
 
