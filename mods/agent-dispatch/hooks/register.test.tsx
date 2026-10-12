@@ -518,6 +518,8 @@ describe('usage ledger', () => {
     expect((await dot('a9'))?.props.color).toBe('gray')
     expect((await pane.find({ key: 'line:a9' }))?.text).toMatch(/task 9.*10,000.*Oct 12/)
     expect((await pane.find({ key: 'more' }))?.text).toContain('2 more')
+    // "More" is a way around the pane, not something waiting on the user: no yellow.
+    expect(((await pane.find({ key: 'more' }))?.children[0] as { props?: { color?: string } } | undefined)?.props?.color).toBeUndefined()
     expect((await pane.find({ key: 'more' }))?.props.hotkey).toBe('m')
 
     await pane.press({ key: 'more' })
@@ -641,6 +643,10 @@ describe('usage ledger', () => {
     expect(days?.type).toBe('Button')
     expect(days?.props.hotkey).toBe('p')
     expect(days?.text).toContain('‹ 30 days ›')
+    // The current value is bold: yellow means something waits on the user (DESIGN.md).
+    const value = days?.children[0] as { props: { bold?: boolean; color?: string } } | undefined
+    expect(value?.props.bold).toBe(true)
+    expect(value?.props.color).toBeUndefined()
     await term.press({ key: 'days' })
     expect((await term.find({ key: 'days' }))?.text).toContain('‹ 90 days ›')
     await term.press({ key: 'days' })

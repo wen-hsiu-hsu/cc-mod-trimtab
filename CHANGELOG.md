@@ -38,6 +38,11 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
   sort switch in place (one cycling button with `p`, `g`, `s` in the terminal,
   segments on desktop), so nothing below them moves. `N more` has the hotkey
   `m`, and the cache read line is shorter.
+- The stats pane follows `DESIGN.md`: a switch's current value is bold rather
+  than yellow (yellow now only means something waits on you), `N more` is no
+  longer yellow, and desktop bars take the subagent cyan of the terminal. The
+  interrupted-agents toast stays 8 seconds, and the command's argument hint
+  follows the interface language.
 
 ## [0.1.1] - 2026-10-11
 

@@ -4,6 +4,7 @@
 # - hooks/config.ts (layered settings), in every mod
 # - the configIO block of each register file
 # - hooks/scrub.ts of secret-scrub and project-memory
+# - hooks/ui.tsx (the screens' shared parts, DESIGN.md), in every mod that has one
 set -euo pipefail
 cd "$(dirname "$0")/../mods"
 status=0
@@ -43,6 +44,9 @@ done
 compare configIO "${blocks[@]}"
 
 compare scrub.ts secret-scrub/hooks/scrub.ts project-memory/hooks/scrub.ts
+
+uis=(*/hooks/ui.tsx)
+compare ui.tsx "${uis[@]}"
 
 [ $status -eq 0 ] && echo "複本一致"
 exit $status

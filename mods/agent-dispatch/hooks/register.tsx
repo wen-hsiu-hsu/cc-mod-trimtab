@@ -3,6 +3,7 @@ import type { EngineInterface, Register, RenderNode } from 'claude-code'
 
 import type { WatchedAgent } from '../types'
 import { configCommand, LANGUAGE, loadConfig, pick, type ConfigIO, type Lang, type Specs } from './config'
+import { CARD, COLORS, emptyState, hintLine, MAIN_SHADES, switcher as switchIn, TONE } from './ui'
 import {
   applyMeta,
   buildReport,
@@ -105,7 +106,7 @@ async function refresh($: EngineInterface, lang: Lang): Promise<void> {
         en: `agent-dispatch: ${newlyStopped.length} background agent(s) were interrupted; type /${MOD} ${REDISPATCH} to dispatch them again`,
         'zh-TW': `agent-dispatch：${newlyStopped.length} 個背景 agent 被中斷，輸入 /${MOD} ${REDISPATCH} 重派`,
       }),
-      { timeoutMs: 10000 },
+      { timeoutMs: 8000 },
     )
   }
   await showStatus($, lang)
@@ -239,24 +240,12 @@ function barCells(part: number, most: number, width: number): number {
 function svgBar(cells: number, width: number): string {
   const unit = 8
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width * unit}" height="10"><rect width="${cells * unit}" height="10" rx="2" fill="#2f6fb5"/></svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width * unit}" height="10"><rect width="${cells * unit}" height="10" rx="2" fill="${COLORS.sub.fill}"/></svg>`
 }
 
 // One colored part of a card's bar and its legend line: `ink` on the terminal, `fill` on desktop.
 // `tally` follows it on every card, `note` only on the overview's.
 type Part = { key: string; label: string; short?: string; tally?: string; note?: string; value: number; ink: string; fill: string }
-
-// main session purple, subagent cyan, named model yellow, default model gray, fork green.
-const COLORS = {
-  main: { ink: 'magenta', fill: '#8a5cc7' },
-  sub: { ink: 'cyan', fill: '#2f8fb0' },
-  named: { ink: 'yellow', fill: '#c98a12' },
-  default: { ink: 'gray', fill: '#8b8b93' },
-  fork: { ink: 'green', fill: '#3f9a4f' },
-} as const
-
-// The main session's models, one after another in the same bar.
-const MAIN_SHADES = [COLORS.main, { ink: 'magentaBright', fill: '#b48ee6' }, { ink: 'magenta', fill: '#6b3fa8' }]
 
 // `width` cells shared out by `values`, each part with any value at least one cell.
 function splitCells(values: number[], width: number): number[] {
@@ -355,7 +344,7 @@ export const register: Register = (on, options) => {
           en: 'Put the redispatch instructions for interrupted background agents in the prompt box (redispatch), or show token use by subagents and models (stats)',
           'zh-TW': '把被中斷的背景 agent 重派指示放進輸入框（redispatch），或看 subagent 與各模型的 token 用量（stats）',
         }),
-        argumentHint: 'redispatch | stats [--text] [days] | status',
+        argumentHint: pick(lang, { en: 'redispatch | stats [--text] [days] | status', 'zh-TW': 'redispatch | stats [--text] [天數] | status' }),
       })
     } catch (error) {
       $.ui.log(`session.start: /${MOD} not registered: ${String(error)}`, { to: 'debug' })
@@ -478,7 +467,7 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         <Box flexDirection="row">
-          <Text color="red" wrap="truncate-end">
+          <Text color={TONE.danger} wrap="truncate-end">
             {pick(lang, { en: `${lost.length} agent(s) interrupted`, 'zh-TW': `${lost.length} 個 agent 被中斷` })}
             {pick(lang, { en: ': ', 'zh-TW': '：' })}
             {lost.map(agent => agent.description).join(pick(lang, { en: ', ', 'zh-TW': '、' }))}{' '}
@@ -515,41 +504,8 @@ export const register: Register = (on, options) => {
       model: pick(lang, { en: 'model', 'zh-TW': '模型' }),
       type: pick(lang, { en: 'type', 'zh-TW': '種類' }),
     }
-    // Switches in place, so nothing below moves: in the terminal one button that steps to the
-    // next value (its hotkey too) and wraps, elsewhere a segment per value with the hotkey on the
-    // one after the current, so it steps forward the same way.
-    const switcher = (key: string, label: string, hotkey: string, options: { value: string; label: string }[], value: string, onPick: (value: string) => void) => {
-      if (e.surface === 'terminal') {
-        const at = Math.max(0, options.findIndex(option => option.value === value))
-        const next = options[(at + 1) % options.length]!.value
-
-        return (
-          <Box key={`switch:${key}`} flexDirection="row" flexShrink={0}>
-            <Text dimColor>{label}</Text>
-            <Button key={key} plain hotkey={hotkey} onPress={() => onPick(next)}>
-              <Text color="yellow">‹ {options[at]?.label ?? value} ›</Text>
-            </Button>
-          </Box>
-        )
-      }
-
-      const at = Math.max(0, options.findIndex(option => option.value === value))
-
-      return (
-        <Box key={`switch:${key}`} flexDirection="row" gap={1} flexShrink={0}>
-          <Text dimColor>{label}</Text>
-          {options.map((option, i) => (
-            <Button
-              key={`${key}:${option.value}`}
-              label={option.label}
-              {...(i === (at + 1) % options.length ? { hotkey } : {})}
-              {...(i === at ? { variant: 'primary' as const } : { dimColor: true })}
-              onPress={() => onPick(option.value)}
-            />
-          ))}
-        </Box>
-      )
-    }
+    const switcher = (key: string, label: string, hotkey: string, options: { value: string; label: string }[], value: string, onPick: (value: string) => void) =>
+      switchIn(parts, e.surface, key, label, hotkey, options, value, onPick)
     const spawnCount = (count: number) => pick(lang, { en: `${count} spawns`, 'zh-TW': `${count} 次` })
     const cellBar = (part: number, whole: number, width: number) => {
       const cells = barCells(part, whole, width)
@@ -612,7 +568,7 @@ export const register: Register = (on, options) => {
     ]
     const kindParts = kindPartsOf(report.spawned)
     const card = (key: string, title: string, aside: RenderNode, total: string, parts: Part[], legendKey: string) => (
-      <Box key={`card:${key}`} flexDirection="column" width={cardWidth} flexShrink={0} borderStyle="round" borderDimColor paddingX={1}>
+      <Box key={`card:${key}`} flexDirection="column" width={cardWidth} flexShrink={0} {...CARD}>
         <Box flexDirection="row" justifyContent="space-between" gap={1}>
           <Text dimColor>{title}</Text>
           {aside}
@@ -638,7 +594,7 @@ export const register: Register = (on, options) => {
       const split = kinds || parts.filter(part => part.value > 0).length > 1
 
       return (
-        <Box key={`card:${key}`} flexDirection="column" width={cardWidth} flexShrink={0} borderStyle="round" borderDimColor paddingX={1}>
+        <Box key={`card:${key}`} flexDirection="column" width={cardWidth} flexShrink={0} {...CARD}>
           <Box flexDirection="row" justifyContent="space-between" gap={1}>
             {total}
             {aside}
@@ -829,17 +785,18 @@ export const register: Register = (on, options) => {
           {listed.length > limit ? (
             <Box paddingLeft={2}>
               <Button key="more" plain hotkey="m" onPress={() => void update($, view, current => ({ ...current, limit: limit + PAGE }))}>
-                <Text color="yellow">{pick(lang, { en: `${listed.length - limit} more ▸`, 'zh-TW': `還有 ${listed.length - limit} 筆 ▸` })}</Text>
+                <Text>{pick(lang, { en: `${listed.length - limit} more ▸`, 'zh-TW': `還有 ${listed.length - limit} 筆 ▸` })}</Text>
               </Button>
             </Box>
           ) : null}
           </Box>
           )}
-          <Box marginTop={1}>
-            <Text dimColor wrap="wrap">
-              {pick(lang, { en: 'Enter opens a spawn · s sorts · m more · ‹ Back (b) returns · Esc closes', 'zh-TW': 'Enter 展開一筆 · s 排序 · m 更多 · ‹ 返回（b）回總覽 · Esc 關閉' })}
-            </Text>
-          </Box>
+          {hintLine(parts, lang, [
+            { en: 'Enter opens a spawn', 'zh-TW': 'Enter 展開一筆' },
+            { en: 's sorts', 'zh-TW': 's 排序' },
+            { en: 'm more', 'zh-TW': 'm 更多' },
+            { en: '‹ Back (b) returns', 'zh-TW': '‹ 返回（b）回總覽' },
+          ])}
         </Box>
       )
     }
@@ -862,11 +819,7 @@ export const register: Register = (on, options) => {
           </Box>
         )}
         {report.sessions.length === 0 ? (
-          <Box marginTop={1}>
-            <Text dimColor wrap="wrap">
-              {emptyText(lang)}
-            </Text>
-          </Box>
+          emptyState(parts, emptyText(lang))
         ) : (
           <Box flexDirection="column">
             <Box key="cards" flexDirection={paired ? 'row' : 'column'} marginTop={1} gap={paired ? 2 : 0}>
@@ -958,11 +911,12 @@ export const register: Register = (on, options) => {
                 </Box>
               )
             })}
-            <Box marginTop={1}>
-              <Text dimColor wrap="wrap">
-                {pick(lang, { en: 'Tab moves · Enter opens a row · p period · g group · Esc closes', 'zh-TW': 'Tab 移動 · Enter 打開一列 · p 期間 · g 分組 · Esc 關閉' })}
-              </Text>
-            </Box>
+            {hintLine(parts, lang, [
+              { en: 'Tab moves', 'zh-TW': 'Tab 移動' },
+              { en: 'Enter opens a row', 'zh-TW': 'Enter 打開一列' },
+              { en: 'p period', 'zh-TW': 'p 期間' },
+              { en: 'g group', 'zh-TW': 'g 分組' },
+            ])}
           </Box>
         )}
       </Box>
