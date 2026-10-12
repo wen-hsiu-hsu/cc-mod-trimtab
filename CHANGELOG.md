@@ -9,6 +9,7 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 | --- | --- |
 | `agent-dispatch` | 0.2.0 |
 | `open-items` | 0.3.2 |
+| `tool-guard` | 0.2.2 |
 
 - Added: `agent-dispatch` records each spawn and the main session's token use
   in a local ledger, one key per session (repo, start time, first prompt, and
@@ -47,6 +48,9 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 - `open-items` follows `DESIGN.md`: the pane is titled `open-items`, takes the
   focus and closes with `Esc`, lists its keys on its last line, and copies with
   `c`. A `/open-items` that cannot be registered says so in a toast.
+- `tool-guard` follows `DESIGN.md`: the confirm pane is titled
+  `tool-guard confirm`, and a block toast reads `tool-guard: blocked …` like
+  every other toast's `<mod>: ` start.
 
 ## [0.1.1] - 2026-10-11
 

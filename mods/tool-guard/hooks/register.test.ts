@@ -167,8 +167,15 @@ const ZH = '{"*":{"language":"zh-TW"}}'
 
 // The engine beneath the plugin: `answer` replies to each process the guard runs, panes are
 // placed or not, and Bash records the command it would have run.
-function engine(on: On, answer: (argv: string[]) => Reply, isPlaced = false, userFile = ZH): { ran: string[]; opened: Promise<void> } {
+function engine(
+  on: On,
+  answer: (argv: string[]) => Reply,
+  isPlaced = false,
+  userFile = ZH,
+): { ran: string[]; opened: Promise<void>; toasts: string[]; opens: Record<string, unknown>[] } {
   const ran: string[] = []
+  const toasts: string[] = []
+  const opens: Record<string, unknown>[] = []
   mock.store(on)
   mock.env(on, { HOME: '/home' })
   on('session.id', () => ({ value: 's1' }))
@@ -187,8 +194,9 @@ function engine(on: On, answer: (argv: string[]) => Reply, isPlaced = false, use
     markOpened = resolve
   })
   mock.clock(on)
-  on('ui.toast', () => ({ value: undefined }))
-  on('ui.open', () => {
+  on('ui.toast', ($, e) => (toasts.push(e.text), { value: undefined }))
+  on('ui.open', ($, e) => {
+    opens.push(e as never)
     markOpened()
 
     return { value: isPlaced ? { isPlaced: true } : { isPlaced: false, reason: 'narrow' } }
@@ -219,7 +227,7 @@ function engine(on: On, answer: (argv: string[]) => Reply, isPlaced = false, use
     return { result: { stdout: '', stderr: '', interrupted: false } }
   })
 
-  return { ran, opened }
+  return { ran, opened, toasts, opens }
 }
 
 // A repository on `branch` whose worktree holds `porcelain`, with `dropped` commits on the
@@ -510,4 +518,23 @@ test('a command waits in the pane with English buttons by default', async ($, on
   await pane.press({ key: 'cancel' })
   const result = await pending
   expect(result.deny).toContain('The user pressed Cancel')
+})
+
+test('the confirm pane follows DESIGN.md: titled for what it asks, and no Esc to close it', async ($, on) => {
+  const { opened, opens } = engine(on, repo('main', ' M src/a.ts\n'), true)
+  await begin($)
+  const pane = await $.ui.mount(PANE as never)
+  const pending = $.tool.call({ tool: 'Bash', command: 'git reset --hard' })
+  await opened
+  expect(opens[0]).toMatchObject({ title: 'tool-guard 確認', focus: true })
+  expect(opens[0]?.closeOnEscape).toBeUndefined()
+  await pane.press({ key: 'cancel' })
+  await pending
+})
+
+test('a block toast starts with the mod like every other toast', async ($, on) => {
+  const { toasts } = engine(on, repo('main', ' M src/a.ts\n'))
+  await begin($, false)
+  await $.tool.call({ tool: 'Bash', command: 'git reset --hard' })
+  expect(toasts).toContainEqual(expect.stringMatching(/^tool-guard：擋下 /))
 })

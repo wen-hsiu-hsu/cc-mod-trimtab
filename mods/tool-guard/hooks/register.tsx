@@ -28,6 +28,7 @@ import {
   type Risk,
 } from './rules'
 import { configCommand, LANGUAGE, loadConfig, pick, resolve, type ConfigIO, type Lang, type Resolved, type Specs } from './config'
+import { CONFIRM, TONE } from './ui'
 
 const MOD = 'tool-guard'
 const ALLOW = 'allow'
@@ -570,7 +571,7 @@ export const register: Register = (on, options) => {
     for (const call of config.values.commit_format === true ? calls : []) {
       const subject = call.sub === 'commit' ? commitSubject(e.command, call.args) : undefined
       if (subject !== undefined && badSubject(subject, pattern) && !takeAllowance(['subject'], await $.clock.now())) {
-        $.ui.toast(pick(lang, { en: 'tool-guard blocked: commit subject format', 'zh-TW': 'tool-guard 擋下：commit 標題格式' }))
+        $.ui.toast(pick(lang, { en: 'tool-guard: blocked commit subject format', 'zh-TW': 'tool-guard：擋下 commit 標題格式' }))
 
         return denial(
           ['subject'],
@@ -627,7 +628,7 @@ export const register: Register = (on, options) => {
       let reply: string | undefined
       try {
         if (isInteractive) {
-          const opened = await $.ui.open({ id: PANE, title: 'tool-guard', focus: true, rows: paneRows(previews) })
+          const opened = await $.ui.open({ id: PANE, title: pick(lang, { en: 'tool-guard confirm', 'zh-TW': 'tool-guard 確認' }), focus: true, rows: paneRows(previews) })
           if (opened.isPlaced) {
             answer = await waitForAnswer($, hold, next.signal)
           } else {
@@ -648,7 +649,7 @@ export const register: Register = (on, options) => {
 
       const what = describe(previews, lang)
       if (answer === 'unplaced') {
-        $.ui.toast(pick(lang, { en: `tool-guard blocked: ${rules.join(', ')}`, 'zh-TW': `tool-guard 擋下：${rules.join('、')}` }))
+        $.ui.toast(pick(lang, { en: `tool-guard: blocked ${rules.join(', ')}`, 'zh-TW': `tool-guard：擋下 ${rules.join('、')}` }))
 
         return denial(
           rules,
@@ -741,7 +742,7 @@ export const register: Register = (on, options) => {
     }
 
     return (
-      <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
+      <Box flexDirection="column" {...CONFIRM}>
         <Text wrap="truncate-end">
           <Text dimColor>{pick(lang, { en: 'Command ', 'zh-TW': '指令 ' })}</Text>
           <Text bold>{hold.command.replace(/\s+/g, ' ')}</Text>
@@ -751,7 +752,7 @@ export const register: Register = (on, options) => {
             <Text>
               <Text bold>{preview.label}</Text>
               <Text>  </Text>
-              <Text bold color="red">
+              <Text bold color={TONE.danger}>
                 {preview.summary}
               </Text>
             </Text>
