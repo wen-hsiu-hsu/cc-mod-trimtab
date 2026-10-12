@@ -67,7 +67,7 @@
   - 一行是固定欄寬的三欄：id（按鈕，見「焦點列動作」）、種類（`dimColor`）、內文（`wrap="truncate-end"`）。
   - 焦點所在的那一列，內文改成 `wrap="wrap"`，在自己那一欄裡折行，不另外重複全文；下面再一行 `dimColor` 的時間與 branch，用 ` · ` 隔開，`paddingLeft` 對齊內文。其他列不展開。
   - 不按種類分組，種類寫在每一列上，用短字樣：`待決定`／`問　題`／`延　後`／`bug`，英文 `Decide`／`Question`／`Deferred`／`Bug`。兩個字的中文中間放一個全形空格，跟三個字的對齊。
-  - 清單上方一行：左邊是切換清單的 `switcher`，右邊是作用在整份清單的按鈕（open-items 的「複製成 markdown」）。
+  - 清單上方一行：左邊是切換清單的 `switcher`，右邊是作用在整份清單的按鈕（open-items 的 `Copy whole list`／`複製整份清單`）。兩顆前面都直接寫鍵，`dimColor` 的 `鍵: `，例如 `v: ‹ 未完成 ›`、`c: 複製整份清單`（見「提示列」）。
 
 ## 控制項
 
@@ -88,7 +88,7 @@
 
 ## 快捷鍵
 
-Pane 和 Band 上所有導覽按鈕和焦點列動作都要有 hotkey，並列在提示列。每列各自的操作按鈕（略過、打開某一列）可以沒有。
+Pane 和 Band 上所有導覽按鈕和焦點列動作都要有 hotkey，並列在提示列（按鈕前面已經直接寫了 `鍵: ` 的除外）。每列各自的操作按鈕（略過、打開某一列）可以沒有。
 
 | 鍵 | 動作 | 用在 |
 | --- | --- | --- |
@@ -123,7 +123,11 @@ Pane 和 Band 上所有導覽按鈕和焦點列動作都要有 hotkey，並列�
 - **提示列**：放在最下面，`marginTop={1}`，`<Text dimColor wrap="wrap">`。用 `ui.tsx` 的 `hintLine` 產生：
   - 每項寫成「鍵 動作」，項目之間用 ` · ` 分隔。
   - 最後一項是 `Esc closes`／`Esc 關閉`（確認框不列）。
-  - 有焦點列動作的清單，第一項是 `Tab/↑↓ moves`／`Tab/↑↓ 移動`，接著列出每個動作，例如 `d done · x won't do · q quotes · v switches list`。
+  - 按鈕前面已經直接寫了 `鍵: ` 的（例如 `v: ‹ 未完成 ›`），提示列不再列。
+  - 有焦點列動作的清單，提示列分組，一組一行，組名放在固定寬度的左欄（`bold`），55 欄內不折行：
+    - `Navigate`／`導覽`：`Tab/↑↓ moves · Esc closes`／`Tab/↑↓ 移動 · Esc 關閉`。
+    - `Row`／`焦點列`：每個焦點列動作，例如 `d done · x won't do · q quotes`／`d 完成 · x 不做 · q 引用`。
+    - 沒有東西的組不畫；空清單只剩導覽那一組。
   - 按鈕上已經寫了動作的，寫成「‹ Back (b) returns」。
 - **空狀態**：`<Text dimColor wrap="wrap">`，一句話說沒有什麼，需要時在括號裡說明什麼時候會出現。例如 `No open items.`、`No usage recorded yet (…).`。
 
