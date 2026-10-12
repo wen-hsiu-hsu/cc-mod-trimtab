@@ -3,6 +3,7 @@ import type { EngineInterface, ModelForkResult, PluginOptions, Register, Timer }
 
 import type { HandoffKind, Offer } from '../types'
 import { configCommand, firstUse, LANGUAGE, loadConfig, nextExpiry, onLine, pick, resolve, type ConfigIO, type Lang, type Resolved, type Specs } from './config'
+import { TONE } from './ui'
 import {
   GATE_LOG_KEEP,
   GATE_SYSTEM,
@@ -65,7 +66,7 @@ const GATE_LOG_KEY = 'gate-log'
 const TICK_MS = 15_000
 // The TTL can change mid-session (usage overage drops it to 5m), so the transcript is read again after this long.
 const TTL_RECHECK_MS = 10 * 60_000
-const TONE_COLOR = { warn: 'yellow', hot: 'red' } as const
+const TONE_COLOR = { warn: TONE.attention, hot: TONE.danger } as const
 // Columns between the parts of the line.
 const GAP = 2
 
@@ -353,8 +354,8 @@ async function handOff(
         $.ui.log(`handoff: no summary (${reason})`, { to: 'debug' })
         $.ui.toast(
           pick(lang, {
-            en: `Handoff failed: no summary was produced (${reason}); staying in this session`,
-            'zh-TW': `交接失敗：沒有產生摘要（${reason}），仍在這個 session`,
+            en: `session-keeper: handoff failed, no summary was produced (${reason}); staying in this session`,
+            'zh-TW': `session-keeper：交接失敗，沒有產生摘要（${reason}），仍在這個 session`,
           }),
         )
         held = (await read($, handing))?.held ?? []
@@ -379,14 +380,14 @@ async function handOff(
     if (!filled.isFilled) {
       $.ui.toast(
         pick(lang, {
-          en: `The handoff summary is in ${PROGRESS_FILE}; it could not be put in the prompt box`,
-          'zh-TW': `交接摘要在 ${PROGRESS_FILE}，沒能放進輸入框`,
+          en: `session-keeper: the handoff summary is in ${PROGRESS_FILE}; it could not be put in the prompt box`,
+          'zh-TW': `session-keeper：交接摘要在 ${PROGRESS_FILE}，沒能放進輸入框`,
         }),
       )
     }
   } catch (error) {
     $.ui.log(`handoff: ${String(error)}`, { to: 'debug' })
-    $.ui.toast(pick(lang, { en: 'Handoff failed; see the debug log', 'zh-TW': '交接失敗，見 debug log' }))
+    $.ui.toast(pick(lang, { en: 'session-keeper: handoff failed; see the debug log', 'zh-TW': 'session-keeper：交接失敗，見 debug log' }))
     await restoreBox($, giveBack, held.length > 0 ? held : ((await read($, handing))?.held ?? []))
   } finally {
     await update($, handing, () => null)
@@ -828,7 +829,7 @@ export const register: Register = (on, options) => {
           </Text>
         )}
         {busy !== null && (
-          <Text color="yellow" wrap="truncate-end">
+          <Text color={TONE.attention} wrap="truncate-end">
             {pick(lang, {
               en: "Handing off: once the summary is written it runs /clear and puts it in the new session's prompt box; messages you type meanwhile go along",
               'zh-TW': '交接中：產生摘要後會 /clear，摘要放進新 session 的輸入框；這段時間打的訊息會一起帶過去',
@@ -837,7 +838,7 @@ export const register: Register = (on, options) => {
         )}
         {busy === null && pending !== null && (
           <Box flexDirection="row">
-            <Text color="yellow" wrap="truncate-end">
+            <Text color={TONE.attention} wrap="truncate-end">
               {question}{' '}
             </Text>
             <Button

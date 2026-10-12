@@ -125,6 +125,8 @@ type World = {
   verdict: { value: string }
   // Holds the summary fork back until resolved.
   hold: { value: Promise<void> | undefined }
+  // Set to have the summary fork come back without an answer, for this reason.
+  forkFails: { value: string | undefined }
 }
 
 // The suite asserts the zh-TW wording, so the user settings file says zh-TW unless a test gives another.
@@ -147,6 +149,7 @@ function world(on: On, ttl: '1h' | '5m' = '1h', userFile = ZH): World {
     contexts: [],
     verdict: { value: 'related' },
     hold: { value: undefined },
+    forkFails: { value: undefined },
   }
   mock.env(on, {})
   mock.store(on)
@@ -193,6 +196,9 @@ function world(on: On, ttl: '1h' | '5m' = '1h', userFile = ZH): World {
   on('model.fork', async ($, e) => {
     w.forks.push(e.prompt)
     await w.hold.value
+    if (w.forkFails.value !== undefined) {
+      return { value: { isAnswered: false, reason: w.forkFails.value } }
+    }
 
     return {
       value: { isAnswered: true, text: 'HANDOFF: 修好登入', usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } },
@@ -501,4 +507,16 @@ test('with zh-TW the handoff prompt asks for Traditional Chinese, and the model-
   expect(w.forks[0]).not.toMatch(/[\u4e00-\u9fff]/)
   expect(GATE_SYSTEM).not.toMatch(/[\u4e00-\u9fff]/)
   expect(w.files.get('/repo/.claude/progress.md')).toContain('# 交接（')
+})
+
+test('a failed handoff says so in a toast that starts with the mod', async ($, on) => {
+  const w = world(on)
+  w.forkFails.value = 'aborted'
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  await oneTurn($)
+  await $.command.run({ command: 'session-keeper', args: 'handoff 接著修登入' } as never)
+  for (let i = 0; i < 50 && w.toasts.length === 0; i++) {
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
+  }
+  expect(w.toasts).toEqual([expect.stringMatching(/^session-keeper：交接失敗，沒有產生摘要（aborted）/)])
 })

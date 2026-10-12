@@ -9,6 +9,7 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 | --- | --- |
 | `agent-dispatch` | 0.2.0 |
 | `open-items` | 0.3.2 |
+| `session-keeper` | 0.3.2 |
 | `tool-guard` | 0.2.2 |
 
 - Added: `agent-dispatch` records each spawn and the main session's token use
@@ -51,6 +52,8 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 - `tool-guard` follows `DESIGN.md`: the confirm pane is titled
   `tool-guard confirm`, and a block toast reads `tool-guard: blocked …` like
   every other toast's `<mod>: ` start.
+- `session-keeper`'s handoff toasts start with `session-keeper: ` like its
+  other toasts.
 
 ## [0.1.1] - 2026-10-11
 

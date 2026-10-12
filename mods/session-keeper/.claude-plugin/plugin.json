@@ -1,6 +1,6 @@
 {
   "name": "session-keeper",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Shows the prompt cache state on desktop, reads the cache once when idle so a 1h cache does not expire, and suggests handing off to a new session when the context is large",
   "author": {
     "name": "wen-hsiu hsu"
