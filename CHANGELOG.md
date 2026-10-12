@@ -3,8 +3,22 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
-## [Unreleased]
+## [0.3.0] - 2026-10-13
 
+| Mod | Version |
+| --- | --- |
+| `open-items` | 0.4.0 |
+| `project-memory` | 0.2.0 |
+
+- `open-items` 0.4.0:
+  - Changed: `/open-items stats` decides a miss at the next prompt. An answer
+    that ends on a question without a `track` call counts only when you reply
+    with more than 14 characters; a short reply ("ok", "commit") or a prompt you
+    did not type is not a miss. It shows the questions, the untracked ones and
+    the misses. The earlier counts are reset, as most of their misses were
+    confirmations.
+  - Changed: the `track` tool asks a deferred item to say when to come back
+    to it.
 - `project-memory` 0.2.0:
   - Added: automatic distilling is skipped while the 5-hour or 7-day usage
     limit is used past `max_rate_used` (default 80)%. `status` shows why;
