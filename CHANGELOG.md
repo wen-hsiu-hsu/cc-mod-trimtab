@@ -3,6 +3,24 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [0.5.0] - 2026-10-13
+
+| Mod | Version |
+| --- | --- |
+| `open-items` | 0.6.0 |
+- `open-items` 0.6.0:
+  - Changed: the pane groups items by kind, each group framed by a line in its
+    color; `g` switches to no groups or to groups by branch, `s` sorts oldest
+    or newest first. The Deferred group starts folded (`m` shows it) when
+    other groups are listed.
+  - Changed: every item shows its whole text with its age and branch below,
+    not only the focused one.
+  - Added: a bold count on top, with a bar split by kind and a legend.
+  - Changed: `v` lists what the repo resolved in the last 7 days, from any
+    session, instead of this session's last 5; decisions and drops show their
+    reason. The empty pane says how many were resolved in that time.
+  - Changed: the copy button reads `Copy all`.
+
 ## [0.4.0] - 2026-10-13
 
 | Mod | Version |
