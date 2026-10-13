@@ -365,6 +365,78 @@ export function kindLabel(kind: ItemKind, lang: Lang): string {
   return pick(lang, KIND_LABEL[kind])
 }
 
+// The pane's kind column, one per row. A two-character Chinese label has a full-width space in the
+// middle, so it lines up with the three-character one.
+export const KIND_SHORT: Record<ItemKind, Text> = {
+  decision: { en: 'Decide', 'zh-TW': '待決定' },
+  question: { en: 'Question', 'zh-TW': '問　題' },
+  deferred: { en: 'Deferred', 'zh-TW': '延　後' },
+  bug: { en: 'Bug', 'zh-TW': 'bug' },
+}
+
+export function kindShort(kind: ItemKind, lang: Lang): string {
+  return pick(lang, KIND_SHORT[kind])
+}
+
+// ---- Terminal cells ----
+
+// East Asian wide and full-width characters take two cells.
+const WIDE = /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]|[\u{1f300}-\u{1faff}\u{20000}-\u{3fffd}]/u
+
+export function cells(text: string): number {
+  let n = 0
+  for (const ch of text) {
+    n += WIDE.test(ch) ? 2 : 1
+  }
+
+  return n
+}
+
+/**
+ * `text` broken into lines of at most `width` cells: a Latin word moves whole to the next line
+ * when it fits on one, wide characters break anywhere.
+ */
+export function wrapCells(text: string, width: number): string[] {
+  const max = Math.max(1, width)
+  const tokens = text.match(/\s+|[!-~]+?(?=\s|[^!-~]|$)|./gsu) ?? []
+  const lines: string[] = []
+  let line = ''
+  let used = 0
+  const push = (): void => {
+    lines.push(line.trimEnd())
+    line = ''
+    used = 0
+  }
+  for (const token of tokens) {
+    const size = cells(token)
+    if (/^\s+$/.test(token)) {
+      if (used > 0 && used + size <= max) {
+        line += token
+        used += size
+      } else if (used > 0) {
+        push()
+      }
+      continue
+    }
+    if (used > 0 && used + size > max && size <= max) {
+      push()
+    }
+    for (const ch of size > max ? [...token] : [token]) {
+      const w = cells(ch)
+      if (used > 0 && used + w > max) {
+        push()
+      }
+      line += ch
+      used += w
+    }
+  }
+  if (line !== '' || lines.length === 0) {
+    push()
+  }
+
+  return lines
+}
+
 // `hint` follows the counts: the command where nothing can be pressed (the status line).
 export function bandText(items: readonly OpenItem[], hint = '  /open-items', lang: Lang = 'en'): string {
   const open = items.filter(item => !item.isDone)

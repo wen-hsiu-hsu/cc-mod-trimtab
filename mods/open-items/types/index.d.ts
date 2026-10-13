@@ -46,6 +46,14 @@ export type OptionRef = { label: string; text: string }
 // those the person then answered at length, the ones that may have left something untracked.
 export type MissStats = { questions: number; untracked: number; missed: number }
 
+// A row closed or reopened in the pane while it is open: it stays in place until the list
+// switches or the pane opens again. `was` and `note` are what reopening took off a resolved item,
+// so pressing the same key again puts them back.
+export type KeptRow = { id: string; was?: Outcome; note?: string }
+
+// Which list the pane shows.
+export type PaneView = 'open' | 'resolved'
+
 declare module 'claude-code' {
   interface PluginState {
     // loadedFor: the session id whose stored items were last brought in.
@@ -54,6 +62,8 @@ declare module 'claude-code' {
     // panelResolved: uids resolved or dropped in the pane since the last prompt, told to the model with the next.
     // tracked: the main loop called `track` since its last answer.
     // asked: the last line of the latest answer that ended with a question and no `track` call, until the next prompt.
+    // view: the pane's list. focused: the key of the pane row the focus ring last landed on ('' for none).
+    // kept: rows closed or reopened in the pane since it opened.
     'open-items': {
       items: OpenItem[]
       options: OptionRef[]
@@ -63,6 +73,9 @@ declare module 'claude-code' {
       panelResolved: string[]
       tracked: boolean
       asked: string
+      view: PaneView
+      focused: string
+      kept: KeptRow[]
     }
   }
 }

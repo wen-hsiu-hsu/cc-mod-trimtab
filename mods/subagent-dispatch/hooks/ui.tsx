@@ -49,7 +49,7 @@ export function switcher(
 
     return (
       <Box key={`switch:${key}`} flexDirection="row" flexShrink={0}>
-        <Text dimColor>{label}</Text>
+        {label !== '' && <Text dimColor>{label}</Text>}
         <Button key={key} plain hotkey={hotkey} onPress={() => onPick(next)}>
           <Text bold>‹ {options[at]?.label ?? value} ›</Text>
         </Button>
@@ -59,7 +59,7 @@ export function switcher(
 
   return (
     <Box key={`switch:${key}`} flexDirection="row" gap={1} flexShrink={0}>
-      <Text dimColor>{label}</Text>
+      {label !== '' && <Text dimColor>{label}</Text>}
       {options.map((option, i) => (
         <Button
           key={`${key}:${option.value}`}
@@ -74,16 +74,41 @@ export function switcher(
 }
 
 // A pane's last line: each key and what it does, then how to close it unless `closes` is false
-// (a pane that waits for an answer).
+// (a pane that waits for an answer). The key keeps the default color and the rest is dim, so the
+// eye finds the keys first: the first word ("d done"), or the key in brackets ("‹ Back (b) returns").
 export function hintLine({ Box, Text }: Kit, lang: Lang, items: Words[], closes = true): RenderNode {
   const all = closes ? [...items, { en: 'Esc closes', 'zh-TW': 'Esc 關閉' }] : items
+  const parts = all.flatMap((item, i) => {
+    const text = pick(lang, item)
+    const m = /^(.*?[(（])(\S)([)）].*)$/.exec(text) ?? (text.startsWith('‹') ? null : /^()(\S+)(.*)$/.exec(text))
+    const sep = i === 0 ? [] : [<Text key={`sep${i}`} dimColor>{' · '}</Text>]
+    if (m === null) {
+      return [...sep, <Text key={`all${i}`} dimColor>{text}</Text>]
+    }
+
+    return [
+      ...sep,
+      ...(m[1] === '' ? [] : [<Text key={`pre${i}`} dimColor>{m[1]}</Text>]),
+      <Text key={`key${i}`}>{m[2]}</Text>,
+      <Text key={`does${i}`} dimColor>{m[3]}</Text>,
+    ]
+  })
 
   return (
     <Box key="hint" marginTop={1}>
-      <Text dimColor wrap="wrap">
-        {all.map(item => pick(lang, item)).join(' · ')}
-      </Text>
+      <Text wrap="wrap">{parts}</Text>
     </Box>
+  )
+}
+
+// A key written right before the button it presses, as in `v: ‹ open ›`: the key in the default
+// color, the colon dim.
+export function keyLabel({ Text }: Kit, key: string): RenderNode {
+  return (
+    <Text key={`keyLabel:${key}`}>
+      {key}
+      <Text dimColor>: </Text>
+    </Text>
   )
 }
 

@@ -3,6 +3,22 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [Unreleased]
+
+- `open-items` 0.5.0:
+  - Changed: the pane shows one line per item (id, kind, text) instead of
+    each item's buttons. Tab or ↑↓ moves between items and opens the one you
+    are on to its whole text, age and branch; `d` marks it done, `x` won't do,
+    `q` quotes it. A closed item stays in place, struck through, and the same
+    key opens it again. Kinds are colored: Decide yellow, Bug red, Question
+    cyan, Deferred dim.
+  - Added: `v` switches the pane to the recently resolved items, where `d`
+    reopens one.
+  - Changed: the copy button reads `Copy whole list`.
+- `session-keeper` 0.3.3, `subagent-dispatch` 0.2.1, `tool-guard` 0.2.3:
+  - Changed: a pane's hint line draws each key in the default color and what
+    it does dimmed.
+
 ## [0.3.0] - 2026-10-13
 
 | Mod | Version |

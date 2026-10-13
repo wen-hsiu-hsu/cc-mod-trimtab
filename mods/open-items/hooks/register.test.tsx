@@ -15,6 +15,8 @@ import {
   parseOptions,
   readLog,
   readStored,
+  cells,
+  wrapCells,
   trimItems,
   unchosen,
 } from './items'
@@ -145,6 +147,15 @@ test('ages, the load summary and the markdown list', () => {
   expect(markdownList(marked)).toBe('## Open items\n\n### To decide\n\n- o1: 要不要加快取 (feat/x)\n\n### Deferred\n\n- o2: 補文件\n')
 })
 
+test('wrapCells counts wide characters as two cells and keeps Latin words whole', () => {
+  expect(cells('待決定 ab')).toBe(9)
+  expect(wrapCells('一二三四五六', 5)).toEqual(['一二', '三四', '五六'])
+  expect(wrapCells('fix the pane width', 9)).toEqual(['fix the', 'pane', 'width'])
+  expect(wrapCells('改 pane 寬度', 6)).toEqual(['改', 'pane', '寬度'])
+  expect(wrapCells('abcdefghij', 4)).toEqual(['abcd', 'efgh', 'ij'])
+  expect(wrapCells('', 4)).toEqual([''])
+})
+
 test('trimItems drops the oldest resolved items before any open one', () => {
   const list = [item('o1'), item('o2', { isDone: true }), item('o3'), item('o4', { isDone: true }), item('o5')]
   expect(trimItems(list, 4).map(i => i.id)).toEqual(['o1', 'o3', 'o4', 'o5'])
@@ -252,6 +263,7 @@ function engine(on: On, stored: Record<string, unknown> = {}, where: Where = {},
     value: { exitCode: 0, stdout: e.argv.includes('--short') ? 'abc1234\n' : `${where.branch ?? 'main'}\n`, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
   }))
   on('ui.status', () => ({ value: undefined }))
+  on('ui.focus', () => ({}))
   on('ui.open', ($, e) => (opened.push(e.id), openedWith.push(e as never), { value: { isPlaced: true } }) as never)
 
   return store
@@ -281,23 +293,93 @@ test('track add and resolve go through the tool call and show in the band', asyn
   await after.unmount()
 })
 
-test('the pane resolves an item with its button', async ($, on) => {
-  engine(on)
+// The focus ring landing on a row, as Tab or ↑↓ moves it there.
+async function focusRow($: Engine, id: string): Promise<void> {
+  await $.ui.focus({ component: 'Pane', requestId: 'open-items', plugin: 'open-items', element: `row:${id}`, origin: { kind: 'person' } } as never)
+}
+
+test('the pane acts on the focused row, keeps a closed row in place, and the same key reopens it', async ($, on) => {
+  const store = engine(on)
   await started($)
   await $.tool.call({ tool: TRACK, action: 'add', kind: 'bug', text: '登入偶爾失敗' } as never)
-  const pane = await $.ui.mount({
-    plugin: 'open-items',
-    surface: 'terminal',
-    component: 'Pane',
-    requestId: 'open-items',
-    props: { title: '待處理項目', isFocused: true, bodyColumns: 80, placement: 'inline' },
-  } as never)
+  await $.tool.call({ tool: TRACK, action: 'add', kind: 'deferred', text: '補文件' } as never)
+  const pane = await $.ui.mount({ ...PANE_MOUNT, props: { ...PANE_MOUNT.props, bodyColumns: 80 } } as never)
+  expect((await pane.find({ key: 'row:o1' }))?.props.label).toBe('o1')
   expect((await pane.find({ type: 'Text', text: /登入偶爾失敗/ }))?.text).toBe('登入偶爾失敗')
+  // Nothing is focused yet: the keys do nothing, and no row shows its age.
+  await pane.press({ key: 'done' })
+  expect(await pane.find({ type: 'Text', text: /^剛剛/ })).toBeUndefined()
+  expect(JSON.stringify((await $.tool.call({ tool: TRACK, action: 'list' } as never)).result)).toContain('o1')
+
+  await focusRow($, 'o1')
   expect(await pane.find({ type: 'Text', text: /^剛剛/ })).toBeDefined()
-  await pane.press({ key: 'quote-o1' })
+  await pane.press({ key: 'quote' })
   expect(filled).toEqual(['關於 o1（未解決 bug）「登入偶爾失敗」：'])
-  await pane.press({ key: 'done-o1' })
-  expect(await pane.find({ type: 'Text', text: /完成：登入偶爾失敗/ })).toBeDefined()
+  await pane.press({ key: 'done' })
+  const closed = await pane.find({ type: 'Text', text: /完成 登入偶爾失敗/ })
+  expect(closed?.props).toMatchObject({ strikethrough: true, dimColor: true })
+  expect(String((await $.tool.call({ tool: TRACK, action: 'list' } as never)).result)).not.toContain('o1')
+
+  // Again on the same row: open again, under a new uid so the store's tombstone does not close it.
+  await pane.press({ key: 'done' })
+  expect((await pane.find({ type: 'Text', text: /登入偶爾失敗/ }))?.text).toBe('登入偶爾失敗')
+  expect(String((await $.tool.call({ tool: TRACK, action: 'list' } as never)).result)).toContain('o1')
+  expect(readStored(store.get('items:/repo')).items.map(item => item.text)).toContain('登入偶爾失敗')
+
+  // x on a row closed with d changes it to won't do.
+  await pane.press({ key: 'done' })
+  await pane.press({ key: 'drop' })
+  expect(await pane.find({ type: 'Text', text: /不做 登入偶爾失敗/ })).toBeDefined()
+  await pane.unmount()
+
+  // Opened again, the closed row is gone.
+  await $.command.run({ command: 'open-items', args: '' } as never)
+  const again = await $.ui.mount(PANE_MOUNT as never)
+  expect(await again.find({ type: 'Text', text: /登入偶爾失敗/ })).toBeUndefined()
+  expect(await again.find({ type: 'Text', text: /補文件/ })).toBeDefined()
+  await again.unmount()
+})
+
+test('the resolved list reopens the focused row with d and puts the resolution back on a second d', async ($, on) => {
+  const store = engine(on)
+  await started($)
+  await $.tool.call({ tool: TRACK, action: 'add', kind: 'decision', text: '要不要加快取' } as never)
+  await $.tool.call({ tool: TRACK, action: 'resolve', id: 'o1', note: '要，先做讀取' } as never)
+  const log = () => readLog(store.get('log:/repo')).map(entry => entry.text)
+  expect(log()).toEqual(['要不要加快取'])
+  const pane = await $.ui.mount(PANE_MOUNT as never)
+  expect((await pane.find({ key: 'empty' }))?.text).toBe('目前沒有待處理項目。')
+  await pane.press({ key: 'view' })
+  expect((await pane.find({ key: 'view' }))?.text).toContain('最近完成')
+  await focusRow($, 'o1')
+  expect(await pane.find({ type: 'Text', text: '要，先做讀取' })).toBeDefined()
+  await pane.press({ key: 'reopen' })
+  expect(await pane.find({ type: 'Text', text: /重新打開 要不要加快取/ })).toBeDefined()
+  expect(log()).toEqual([])
+  expect(String((await $.tool.call({ tool: TRACK, action: 'list' } as never)).result)).toContain('要不要加快取')
+  await pane.press({ key: 'reopen' })
+  expect(await pane.find({ type: 'Text', text: /完成 要不要加快取/ })).toBeDefined()
+  expect(log()).toEqual(['要不要加快取'])
+  expect(readLog(store.get('log:/repo'))[0]?.note).toBe('要，先做讀取')
+  await pane.unmount()
+})
+
+test('the focused row wraps its whole text to the body width, each line behind the kind-colored side line', async ($, on) => {
+  engine(on)
+  await started($)
+  const text = '這是一段很長的待決定事項，用來確認焦點列會依照 pane 的寬度自己折行並在每行前畫線'
+  await $.tool.call({ tool: TRACK, action: 'add', kind: 'decision', text } as never)
+  const pane = await $.ui.mount({ ...PANE_MOUNT, props: { ...PANE_MOUNT.props, bodyColumns: 55 } } as never)
+  expect((await pane.find({ type: 'Text', text: '待決定' }))?.props.color).toBe('yellow')
+  expect((await pane.find({ type: 'Text', text: /很長/ }))?.props.wrap).toBe('truncate-end')
+  await focusRow($, 'o1')
+  const lines = await pane.findAll({ type: 'Text', text: /./ })
+  const bars = lines.filter(t => t.text === '│')
+  expect(bars.length).toBeGreaterThanOrEqual(2)
+  expect(bars.every(t => t.props.color === 'yellow')).toBe(true)
+  const body = lines.filter(t => text.includes(t.text) && t.text.length > 1 && t.text !== '待決定')
+  expect(body.map(t => t.text).join('')).toBe(text)
+  expect(body.every(t => cells(t.text) <= 55 - 5 - 7)).toBe(true)
   await pane.unmount()
 })
 
@@ -515,7 +597,9 @@ test('dropping keeps the reason in the repo log, which history reads in a later 
   expect(history).not.toContain('補文件')
 
   const pane = await $.ui.mount(PANE_MOUNT as never)
-  expect(await pane.find({ type: 'Text', text: /不做：補文件/ })).toBeDefined()
+  await pane.press({ key: 'view' })
+  expect(await pane.find({ type: 'Text', text: /不做 補文件/ })).toBeDefined()
+  await focusRow($, 'o2')
   expect(await pane.find({ type: 'Text', text: /^README 已涵蓋$/ })).toBeDefined()
   await pane.unmount()
 })
@@ -527,8 +611,10 @@ test('items closed in the pane are told to the model with the next prompt, once'
   await $.tool.call({ tool: TRACK, action: 'add', kind: 'bug', text: '登入偶爾失敗' } as never)
   await $.tool.call({ tool: TRACK, action: 'add', kind: 'deferred', text: '補文件' } as never)
   const pane = await $.ui.mount(PANE_MOUNT as never)
-  await pane.press({ key: 'done-o1' })
-  await pane.press({ key: 'drop-o2' })
+  await focusRow($, 'o1')
+  await pane.press({ key: 'done' })
+  await focusRow($, 'o2')
+  await pane.press({ key: 'drop' })
   await pane.unmount()
 
   const first = await $.prompt.submit({ text: '繼續', origin: { kind: 'composer' } } as never)
@@ -547,7 +633,8 @@ test('a prompt dropped beneath changes nothing, so the next one defers and tells
   await started($)
   await $.tool.call({ tool: TRACK, action: 'add', kind: 'bug', text: '登入偶爾失敗' } as never)
   const pane = await $.ui.mount(PANE_MOUNT as never)
-  await pane.press({ key: 'done-o1' })
+  await focusRow($, 'o1')
+  await pane.press({ key: 'done' })
   await pane.unmount()
   await $.turn.complete({ answer: ABC, reason: 'answer', durationMs: 1, isAborted: false, turnId: 't1' } as never)
 
@@ -630,8 +717,14 @@ test('items keep their branch; the pane shows age and branch, the load toast cou
   expect(toasts).toContain('open-items：上次留下 2 個待處理項目（1 個在其他 branch、2 個超過 7 天）')
   await $.tool.call({ tool: TRACK, action: 'add', kind: 'question', text: '要不要加快取' } as never)
   const pane = await $.ui.mount(PANE_MOUNT as never)
+  await focusRow($, 'o1')
   expect(await pane.find({ type: 'Text', text: /10 天前 · feat\/x/ })).toBeDefined()
+  // Older than 7 days: the kind and the text are dim.
+  expect((await pane.find({ type: 'Text', text: '延　後' }))?.props.dimColor).toBe(true)
+  expect((await pane.find({ type: 'Text', text: '登入偶爾失敗' }))?.props.dimColor).toBe(true)
+  await focusRow($, 'o3')
   expect(await pane.find({ type: 'Text', text: /剛剛 · main/ })).toBeDefined()
+  expect((await pane.find({ type: 'Text', text: '問　題' }))?.props.color).toBe('cyan')
   await pane.unmount()
 })
 
@@ -651,7 +744,8 @@ test('the wording is English by default: the band, the pane and the commands', a
   expect(await ui.find({ key: 'open', text: 'Open' })).toBeDefined()
   await ui.unmount()
   const pane = await $.ui.mount(PANE_MOUNT as never)
-  expect(await pane.find({ type: 'Text', text: 'To decide' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: 'Decide' })).toBeDefined()
+  await focusRow($, 'o1')
   expect(await pane.find({ type: 'Text', text: /^just now/ })).toBeDefined()
   await pane.unmount()
   const run = (args: string) => $.command.run({ command: 'open-items', args } as never)
@@ -682,12 +776,26 @@ test('the pane follows DESIGN.md: named after the mod, focused, Esc closes it, k
   const empty = await $.ui.mount(PANE_MOUNT as never)
   expect((await empty.find({ key: 'empty' }))?.text).toBe('No open items.')
   expect((await empty.find({ key: 'hint' }))?.text).toBe('Esc closes')
+  expect(await empty.find({ key: 'done' })).toBeUndefined()
   await empty.unmount()
 
   await $.tool.call({ tool: TRACK, action: 'add', kind: 'decision', text: 'cache it?' } as never)
   const pane = await $.ui.mount(PANE_MOUNT as never)
-  expect((await pane.find({ key: 'copy' }))?.props.hotkey).toBe('c')
-  expect((await pane.find({ key: 'hint' }))?.text).toBe('Tab moves · Enter presses a button · c copies · Esc closes')
+  expect((await pane.find({ key: 'view' }))?.props.hotkey).toBe('v')
+  expect((await pane.find({ key: 'copy' }))?.props).toMatchObject({ hotkey: 'c', label: 'Copy whole list' })
+  expect((await pane.find({ key: 'act:done' }))?.text).toBe('d: Done')
+  expect((await pane.find({ key: 'done' }))?.props.hotkey).toBe('d')
+  expect((await pane.find({ key: 'drop' }))?.props.hotkey).toBe('x')
+  expect((await pane.find({ key: 'quote' }))?.props.hotkey).toBe('q')
+  expect((await pane.find({ key: 'hint' }))?.text).toBe('Tab/↑↓ moves · Esc closes')
+  // The keys keep the default color; what they do is dim.
+  const hint = (await pane.findAll({ type: 'Text', text: /./ })).filter(t => ['Tab/↑↓', ' moves', 'Esc', ' closes'].includes(t.text))
+  expect(hint.map(t => [t.text, t.props.dimColor === true])).toEqual([
+    ['Tab/↑↓', false],
+    [' moves', true],
+    ['Esc', false],
+    [' closes', true],
+  ])
   await pane.unmount()
 })
 

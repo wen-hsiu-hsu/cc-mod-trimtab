@@ -1,14 +1,15 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
-import type { ItemKind, MissStats, OpenItem, OptionRef, Outcome, Tombstone } from '../types'
+import type { ItemKind, KeptRow, MissStats, OpenItem, OptionRef, Outcome, PaneView, Tombstone } from '../types'
 import { configCommand, LANGUAGE, loadConfig, pick, type ConfigIO, type Lang, type Specs } from './config'
-import { emptyState, hintLine, TONE } from './ui'
+import { emptyState, hintLine, keyLabel, switcher, TONE } from './ui'
 import {
   KINDS,
   appendLog,
   bandText,
   carriedNote,
+  cells,
   clip,
   combine,
   compactNote,
@@ -18,6 +19,7 @@ import {
   isLogged,
   isStale,
   kindLabel,
+  kindShort,
   listLines,
   loadSummary,
   markdownList,
@@ -31,6 +33,7 @@ import {
   toStored,
   trimItems,
   unchosen,
+  wrapCells,
 } from './items'
 
 const items = atom({ plugin: 'open-items', key: 'items' } as const, [])
@@ -41,6 +44,9 @@ const autoDeferred = atom({ plugin: 'open-items', key: 'autoDeferred' } as const
 const panelResolved = atom({ plugin: 'open-items', key: 'panelResolved' } as const, [])
 const tracked = atom({ plugin: 'open-items', key: 'tracked' } as const, false)
 const asked = atom({ plugin: 'open-items', key: 'asked' } as const, '')
+const view = atom({ plugin: 'open-items', key: 'view' } as const, 'open' as PaneView)
+const focused = atom({ plugin: 'open-items', key: 'focused' } as const, '')
+const kept = atom({ plugin: 'open-items', key: 'kept' } as const, [])
 
 const COMMAND = 'open-items'
 const SPECS: Specs = { language: LANGUAGE }
@@ -54,6 +60,7 @@ const MAX_NOTE = 160
 const RESOLVED_SHOWN = 5
 // The pane's id column: ids are o1…o200, so four cells plus a gap keep the texts aligned.
 const ID_COLUMNS = 5
+const ROW = 'row:'
 
 const PROMPT_RULES =
   'open-items: when you ask the user to decide something, leave a question open, defer an item, ' +
@@ -146,8 +153,77 @@ async function resolveItem($: EngineInterface, lang: Lang, id: string, how: Reso
   return resolved
 }
 
+// Takes back a resolution: the item opens again under a new uid, since the old one's tombstone
+// stays in the store (and in other sessions' lists), and its log entry goes.
+async function reopenItem($: EngineInterface, lang: Lang, id: string): Promise<OpenItem | undefined> {
+  await ensureLoaded($, lang)
+  const now = await $.clock.now()
+  const target = (await read($, items)).find(item => item.id === id && item.isDone)
+  if (target === undefined) {
+    return undefined
+  }
+  const { doneAt: _doneAt, outcome: _outcome, note: _note, ...rest } = target
+  const reopened: OpenItem = { ...rest, uid: `${target.uid}:r${now}`, isDone: false }
+  const list = await update($, items, current => current.map(item => (item.uid === target.uid ? reopened : item)))
+  await writeStored($, list)
+  const logKey = `log:${await repoRoot($)}`
+  const log = readLog(await $.store.get(logKey))
+  if (log.some(entry => entry.uid === target.uid)) {
+    await $.store.set(logKey, log.filter(entry => entry.uid !== target.uid))
+  }
+  await update($, panelResolved, current => current.filter(uid => uid !== target.uid))
+  await showStatus($, lang)
+
+  return target
+}
+
 async function openPane($: EngineInterface, lang: Lang): Promise<void> {
+  await update($, view, () => 'open' as PaneView)
+  await update($, focused, () => '')
+  await update($, kept, () => [])
   await $.ui.open({ id: PANE, title: COMMAND, focus: true, closeOnEscape: true })
+}
+
+// What the focused-row keys do. In the open list d and x close the row, or reopen it when pressed
+// again; in the resolved list d reopens it, and pressing it again puts the resolution back.
+async function actOnRow($: EngineInterface, lang: Lang, id: string, action: Outcome): Promise<void> {
+  const item = (await read($, items)).find(i => i.id === id)
+  if (item === undefined) {
+    return
+  }
+  const rows = await read($, kept)
+  const row = rows.find(r => r.id === id)
+  const keep = (next: KeptRow): Promise<KeptRow[]> => update($, kept, current => [...current.filter(r => r.id !== id), next])
+  if ((await read($, view)) === 'resolved') {
+    if (item.isDone) {
+      await reopenItem($, lang, id)
+      await keep({ id, ...(item.outcome === undefined ? {} : { was: item.outcome }), ...(item.note === undefined ? {} : { note: item.note }) })
+    } else {
+      await resolveItem($, lang, id, { outcome: row?.was ?? 'done', note: row?.note ?? '', fromPanel: false })
+    }
+
+    return
+  }
+  if (item.isDone) {
+    await reopenItem($, lang, id)
+    if ((item.outcome ?? 'done') === action) {
+      return
+    }
+  }
+  await resolveItem($, lang, id, { outcome: action, note: '', fromPanel: true })
+  if (row === undefined) {
+    await keep({ id })
+  }
+}
+
+async function quoteRow($: EngineInterface, lang: Lang, item: OpenItem): Promise<void> {
+  await $.prompt.fill({
+    text: pick(lang, {
+      en: `About ${item.id} (${kindLabel(item.kind, lang)}) "${item.text}": `,
+      'zh-TW': `關於 ${item.id}（${kindLabel(item.kind, lang)}）「${item.text}」：`,
+    }),
+    mode: 'insert',
+  })
 }
 
 // Per repository: a worktree's repo root is the main working tree's, so every worktree shares it.
@@ -653,145 +729,156 @@ export const register: Register = (on, pluginOptions) => {
     )
   })
 
+  // The ring's last stop on a row is the row the keys act on; another button keeps it, so Tab onto
+  // the actions still acts on that row, while the engine's own stops (the close mark) clear it.
+  on('ui.focus', { requestId: PANE }, async ($, e, next) => {
+    if (e.element === undefined || e.element.startsWith(ROW)) {
+      await update($, focused, () => e.element ?? '')
+    }
+
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // One line per item in fixed columns: the id (the row's only button, so Tab and ↑↓ step through
+  // the rows), the kind, the text cut at the edge. The focused row opens to its whole text, wrapped
+  // here so each line can carry the kind's side line, then its age and branch.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const parts = $.ui.resolve(e)
     const { Box, Button, Text } = parts
     const list = await read($, items)
     const now = await $.clock.now()
-    const open = list.filter(item => !item.isDone)
-    const done = list.filter(item => item.isDone).slice(-RESOLVED_SHOWN)
+    const which = await read($, view)
+    const at = await read($, focused)
+    const keptIds = new Set((await read($, kept)).map(row => row.id))
+    const hasOpen = list.some(item => !item.isDone)
+    const rows =
+      which === 'open'
+        ? list.filter(item => !item.isDone || keptIds.has(item.id))
+        : list.filter(item => item.isDone || keptIds.has(item.id)).slice(-RESOLVED_SHOWN)
+    const target = rows.find(item => `${ROW}${item.id}` === at)
+    const kindColumns = Math.max(...KINDS.map(kind => cells(kindShort(kind, lang)))) + 1
+    const textColumns = Math.max(10, e.props.bodyColumns - ID_COLUMNS - kindColumns)
+    const word = (en: string, zh: string): string => pick(lang, { en, 'zh-TW': zh })
+    const status = (item: OpenItem): string => {
+      if (which === 'resolved') {
+        return item.isDone ? (item.outcome === 'dropped' ? word("Won't do", '不做') : word('Done', '完成')) : word('Reopened', '重新打開')
+      }
 
-    // Two lines per item: the id and the whole text, wrapped; under it the age, the branch and the
-    // buttons, drawn plain and dim so a dozen of them do not outweigh the items.
+      return item.isDone ? (item.outcome === 'dropped' ? word("Won't do", '不做') : word('Done', '完成')) : ''
+    }
+    const ink = (item: OpenItem, isDim: boolean) => {
+      if (isDim || item.kind === 'deferred') {
+        return { dimColor: true }
+      }
+
+      return { color: item.kind === 'decision' ? TONE.attention : item.kind === 'bug' ? TONE.danger : 'cyan' }
+    }
+
+    const row = (item: OpenItem) => {
+      // Closed in the open list: struck through. The resolved list is dim except a reopened row.
+      const isStruck = which === 'open' && item.isDone
+      const isDim = isStruck || (which === 'resolved' && item.isDone) || isStale(item, now)
+      const label = status(item)
+      const text = label === '' ? item.text : `${label} ${item.text}`
+      const kindInk = ink(item, isDim)
+      const textStyle = { dimColor: isDim, strikethrough: isStruck }
+      const isAt = item === target
+      const lines = isAt ? wrapCells(text, textColumns) : [text]
+      const extra = isAt
+        ? [
+            ...lines.slice(1).map(line => ({ line, isMeta: false })),
+            ...(item.note === undefined ? [] : wrapCells(item.note, textColumns).map(line => ({ line, isMeta: true }))),
+            { line: metaText(item, now, lang), isMeta: true },
+          ]
+        : []
+
+      return (
+        <Box key={`line:${item.id}`} flexDirection="column">
+          <Box flexDirection="row">
+            <Box width={ID_COLUMNS} flexShrink={0}>
+              <Button key={`${ROW}${item.id}`} label={item.id} plain onPress={() => undefined} />
+            </Box>
+            <Box width={kindColumns} flexShrink={0}>
+              <Text {...kindInk}>{kindShort(item.kind, lang)}</Text>
+            </Box>
+            <Box flexGrow={1} flexShrink={1}>
+              {isAt ? (
+                <Text {...textStyle}>{lines[0]}</Text>
+              ) : (
+                <Text wrap="truncate-end" {...textStyle}>
+                  {text}
+                </Text>
+              )}
+            </Box>
+          </Box>
+          {extra.map(({ line, isMeta }, i) => (
+            <Box key={`more:${item.id}:${i}`} flexDirection="row" paddingLeft={ID_COLUMNS}>
+              <Box width={kindColumns} flexShrink={0}>
+                <Text {...kindInk}>│</Text>
+              </Box>
+              <Text {...(isMeta ? { dimColor: true } : textStyle)}>{line}</Text>
+            </Box>
+          ))}
+        </Box>
+      )
+    }
+
+    const action = (key: string, hotkey: string, label: string, onPress: () => void) => (
+      <Box key={`act:${key}`} flexDirection="row" flexShrink={0}>
+        {keyLabel(parts, hotkey)}
+        <Button key={key} label={label} plain hotkey={hotkey} onPress={onPress} />
+      </Box>
+    )
+    const onTarget = (fn: (item: OpenItem) => Promise<unknown>) => () => {
+      if (target !== undefined) {
+        void fn(target)
+      }
+    }
+    const quote = action('quote', 'q', word('Quote', '引用'), onTarget(item => quoteRow($, lang, item)))
+
     return (
       <Box flexDirection="column">
-        {open.length === 0 && emptyState(parts, pick(lang, { en: 'No open items.', 'zh-TW': '目前沒有待處理項目。' }))}
-        {KINDS.map(kind => {
-          const group = open.filter(item => item.kind === kind)
-          if (group.length === 0) {
-            return undefined
-          }
-
-          return (
-            <Box key={`group-${kind}`} flexDirection="column" marginBottom={1}>
-              <Box flexDirection="row" gap={1}>
-                <Text bold>{kindLabel(kind, lang)}</Text>
-                <Text dimColor>{group.length}</Text>
-              </Box>
-              {group.map(item => {
-                const stale = isStale(item, now)
-
-                return (
-                  <Box key={`row-${item.id}`} flexDirection="column" marginTop={1}>
-                    <Box flexDirection="row">
-                      <Box width={ID_COLUMNS} flexShrink={0}>
-                        <Text dimColor={stale}>{item.id}</Text>
-                      </Box>
-                      <Box flexGrow={1} flexShrink={1}>
-                        <Text wrap="wrap" dimColor={stale}>
-                          {item.text}
-                        </Text>
-                      </Box>
-                    </Box>
-                    <Box flexDirection="row" justifyContent="space-between" paddingLeft={ID_COLUMNS}>
-                      <Box flexShrink={0}>
-                        <Text dimColor>{metaText(item, now, lang)}</Text>
-                      </Box>
-                      <Box flexDirection="row" gap={2} flexShrink={0}>
-                        <Button
-                          key={`done-${item.id}`}
-                          label={pick(lang, { en: 'Done', 'zh-TW': '完成' })}
-                          plain
-                          dimColor
-                          onPress={() => void resolveItem($, lang, item.id, { outcome: 'done', note: '', fromPanel: true })}
-                        />
-                        <Button
-                          key={`drop-${item.id}`}
-                          label={pick(lang, { en: "Won't do", 'zh-TW': '不做' })}
-                          plain
-                          dimColor
-                          onPress={() => void resolveItem($, lang, item.id, { outcome: 'dropped', note: '', fromPanel: true })}
-                        />
-                        <Button
-                          key={`quote-${item.id}`}
-                          label={pick(lang, { en: 'Quote', 'zh-TW': '引用' })}
-                          plain
-                          dimColor
-                          onPress={() =>
-                            void $.prompt.fill({
-                              text: pick(lang, {
-                                en: `About ${item.id} (${kindLabel(item.kind, lang)}) "${item.text}": `,
-                                'zh-TW': `關於 ${item.id}（${kindLabel(item.kind, lang)}）「${item.text}」：`,
-                              }),
-                              mode: 'insert',
-                            })
-                          }
-                        />
-                      </Box>
-                    </Box>
-                  </Box>
-                )
-              })}
-            </Box>
-          )
-        })}
-        {done.length > 0 && (
-          <Box flexDirection="column" marginBottom={1}>
-            <Text bold dimColor>
-              {pick(lang, { en: 'Recently resolved', 'zh-TW': '最近完成' })}
-            </Text>
-            {done.map(item => (
-              <Box key={`resolved-${item.id}`} flexDirection="column" marginTop={1}>
-                <Box flexDirection="row">
-                  <Box width={ID_COLUMNS} flexShrink={0}>
-                    <Text dimColor>{item.id}</Text>
-                  </Box>
-                  <Box flexGrow={1} flexShrink={1}>
-                    <Text wrap="wrap" dimColor>
-                      {item.outcome === 'dropped' ? pick(lang, { en: "Won't do", 'zh-TW': '不做' }) : pick(lang, { en: 'Done', 'zh-TW': '完成' })}
-                      {pick(lang, { en: ': ', 'zh-TW': '：' })}
-                      {item.text}
-                    </Text>
-                  </Box>
-                </Box>
-                {item.note !== undefined && (
-                  <Box paddingLeft={ID_COLUMNS}>
-                    <Text wrap="wrap" dimColor>
-                      {item.note}
-                    </Text>
-                  </Box>
-                )}
-              </Box>
-            ))}
-          </Box>
-        )}
-        {open.length > 0 && (
-          <Box flexDirection="row" justifyContent="flex-end">
-            <Button
-              key="copy"
-              label={pick(lang, { en: 'Copy as markdown', 'zh-TW': '複製成 markdown' })}
-              hotkey="c"
-              plain
-              dimColor
-              onPress={press =>
-                void copyList($, lang, press.surface).then(text =>
-                  $.ui.toast(`open-items${pick(lang, { en: ': ', 'zh-TW': '：' })}${text.split('\n')[0]}`),
-                )
-              }
-            />
-          </Box>
-        )}
-        {hintLine(
-          parts,
-          lang,
-          open.length === 0
-            ? []
-            : [
-                { en: 'Tab moves', 'zh-TW': 'Tab 移動' },
-                { en: 'Enter presses a button', 'zh-TW': 'Enter 按下按鈕' },
-                { en: 'c copies', 'zh-TW': 'c 複製' },
+        <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
+          <Box flexDirection="row" flexShrink={0}>
+            {keyLabel(parts, 'v')}
+            {switcher(
+              parts,
+              e.surface,
+              'view',
+              '',
+              'v',
+              [
+                { value: 'open', label: word('Open', '未完成') },
+                { value: 'resolved', label: word('Recently resolved', '最近完成') },
               ],
+              which,
+              value =>
+                void update($, view, () => value as PaneView)
+                  .then(() => update($, kept, () => []))
+                  .then(() => update($, focused, () => '')),
+            )}
+          </Box>
+          {which === 'open' &&
+            hasOpen &&
+            action('copy', 'c', word('Copy whole list', '複製整份清單'), () =>
+              void copyList($, lang, e.surface).then(text => $.ui.toast(`open-items${word(': ', '：')}${text.split('\n')[0]}`)),
+            )}
+        </Box>
+        {rows.length === 0 &&
+          emptyState(parts, which === 'open' ? word('No open items.', '目前沒有待處理項目。') : word('Nothing resolved yet.', '還沒有完成的項目。'))}
+        {rows.map(row)}
+        {rows.length > 0 && (
+          <Box flexDirection="row" gap={2} marginTop={1}>
+            {which === 'open'
+              ? [
+                  action('done', 'd', word('Done', '完成'), onTarget(item => actOnRow($, lang, item.id, 'done'))),
+                  action('drop', 'x', word("Won't do", '不做'), onTarget(item => actOnRow($, lang, item.id, 'dropped'))),
+                  quote,
+                ]
+              : [action('reopen', 'd', word('Reopen', '重新打開'), onTarget(item => actOnRow($, lang, item.id, 'done'))), quote]}
+          </Box>
         )}
+        {hintLine(parts, lang, rows.length === 0 ? [] : [{ en: 'Tab/↑↓ moves', 'zh-TW': 'Tab/↑↓ 移動' }])}
       </Box>
     )
   })
