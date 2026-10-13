@@ -107,6 +107,11 @@ function isTombstone(value: unknown): value is Tombstone {
   return typeof t === 'object' && t !== null && typeof t.uid === 'string' && typeof t.doneAt === 'number'
 }
 
+// A tombstone's item is dropped when unreadable, so a bad one cannot reach the pane.
+function readTombstone(t: Tombstone): Tombstone {
+  return t.item === undefined || isItem(t.item) ? t : { uid: t.uid, doneAt: t.doneAt }
+}
+
 /** A stored value as `{ items, done }`; the older form was a bare array of open items. */
 export function readStored(value: unknown): Stored {
   if (Array.isArray(value)) {
@@ -119,7 +124,7 @@ export function readStored(value: unknown): Stored {
 
   return {
     items: Array.isArray(stored.items) ? stored.items.filter(isItem).map(withUid) : [],
-    done: Array.isArray(stored.done) ? stored.done.filter(isTombstone) : [],
+    done: Array.isArray(stored.done) ? stored.done.filter(isTombstone).map(readTombstone) : [],
   }
 }
 
@@ -127,7 +132,7 @@ export function readStored(value: unknown): Stored {
 export function toStored(items: readonly OpenItem[], now: number): Stored {
   return {
     items: items.filter(item => !item.isDone),
-    done: items.filter(item => item.isDone).map(item => ({ uid: item.uid, doneAt: item.doneAt ?? now })),
+    done: items.filter(item => item.isDone).map(item => ({ uid: item.uid, doneAt: item.doneAt ?? now, item })),
   }
 }
 
@@ -136,9 +141,11 @@ export function toStored(items: readonly OpenItem[], now: number): Stored {
  * resolved in one session stays resolved; `b`'s copy of an item replaces `a`'s in place.
  */
 export function combine(a: Stored, b: Stored, now: number, max: number): Stored {
-  const done = new Map<string, number>()
+  const done = new Map<string, Tombstone>()
   for (const t of [...a.done, ...b.done]) {
-    done.set(t.uid, Math.max(done.get(t.uid) ?? 0, t.doneAt))
+    const had = done.get(t.uid)
+    const item = t.item ?? had?.item
+    done.set(t.uid, { uid: t.uid, doneAt: Math.max(had?.doneAt ?? 0, t.doneAt), ...(item === undefined ? {} : { item }) })
   }
   const open = new Map<string, OpenItem>()
   for (const item of [...a.items, ...b.items]) {
@@ -146,13 +153,28 @@ export function combine(a: Stored, b: Stored, now: number, max: number): Stored 
       open.set(item.uid, { ...item, isDone: false })
     }
   }
-  const tombstones = [...done]
-    .map(([uid, doneAt]) => ({ uid, doneAt }))
+  // The item is kept only while the pane lists it (STALE_MS), the uid for TOMBSTONE_MS.
+  const tombstones = [...done.values()]
+    .map(t => (t.item !== undefined && t.doneAt <= now - STALE_MS ? { uid: t.uid, doneAt: t.doneAt } : t))
     .filter(t => t.doneAt > now - TOMBSTONE_MS)
     .sort((x, y) => x.doneAt - y.doneAt)
     .slice(-MAX_TOMBSTONES)
 
   return { items: [...open.values()].slice(-max), done: tombstones }
+}
+
+/**
+ * Items resolved in the last 7 days that `have` (the session's list) lacks, newest last, for the
+ * pane's resolved list. One reopened since (a uid carrying the old one plus `:r`) is left out.
+ */
+export function recentResolved(stored: Stored, have: readonly OpenItem[], now: number): OpenItem[] {
+  const known = [...stored.items.map(item => item.uid), ...stored.done.map(t => t.uid), ...have.map(item => item.uid)]
+  const mine = new Set(have.map(item => item.uid))
+
+  return stored.done
+    .filter(t => t.item !== undefined && t.doneAt > now - STALE_MS && !mine.has(t.uid))
+    .filter(t => !known.some(uid => uid.startsWith(`${t.uid}:r`)))
+    .map(t => ({ ...t.item!, uid: t.uid, isDone: true, doneAt: t.doneAt }))
 }
 
 const MAX_LOG = 300
@@ -545,4 +567,43 @@ export function markdownList(items: readonly OpenItem[], lang: Lang = 'en'): str
   }).filter(Boolean)
 
   return `## ${pick(lang, { en: 'Open items', 'zh-TW': '待處理項目' })}\n\n${groups.join('\n\n')}\n`
+}
+
+// ---- The pane ----
+
+// The order of the pane's kind groups, its count bar and legend: what waits on the person first.
+export const PANE_KINDS: readonly ItemKind[] = ['decision', 'bug', 'question', 'deferred']
+
+/** `width` cells shared out by `values`, each part with any value at least one cell. */
+export function splitCells(values: readonly number[], width: number): number[] {
+  const total = values.reduce((sum, value) => sum + value, 0)
+  if (total === 0) {
+    return values.map(() => 0)
+  }
+  const out = values.map(value => (value > 0 ? Math.max(1, Math.round((value / total) * width)) : 0))
+  // Rounding can miss the width by a cell or two: the largest part takes the difference.
+  const largest = out.indexOf(Math.max(...out))
+  out[largest] = Math.max(1, (out[largest] ?? 0) + width - out.reduce((sum, cell) => sum + cell, 0))
+
+  return out
+}
+
+/** Oldest first or newest first, by when the item was resolved in the resolved list, else added. */
+export function sortItems(items: readonly OpenItem[], newest: boolean, byDone: boolean): OpenItem[] {
+  const at = (item: OpenItem): number => (byDone ? (item.doneAt ?? item.createdAt) : item.createdAt)
+
+  return [...items].sort((a, b) => (newest ? at(b) - at(a) : at(a) - at(b)))
+}
+
+/** The items by branch: `current` first, the others in the order they first appear; '' has none. */
+export function branchGroups(items: readonly OpenItem[], current: string): { branch: string; items: OpenItem[] }[] {
+  const names = [...new Set(items.map(item => item.branch ?? ''))]
+  const sorted = names.includes(current) ? [current, ...names.filter(name => name !== current)] : names
+
+  return sorted.map(name => ({ branch: name, items: items.filter(item => (item.branch ?? '') === name) }))
+}
+
+/** The resolved list's dim line: how long ago it was resolved, its kind and branch. */
+export function resolvedMeta(item: OpenItem, now: number, lang: Lang = 'en'): string {
+  return [ageText(now - (item.doneAt ?? now), lang), kindShort(item.kind, lang).replace('　', ''), item.branch].filter(Boolean).join(' · ')
 }

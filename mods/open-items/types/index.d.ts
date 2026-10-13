@@ -23,7 +23,8 @@ export type OpenItem = {
 }
 
 // A resolved item in the store: kept so a session that still has it open cannot bring it back.
-export type Tombstone = { uid: string; doneAt: number }
+// `item`: the resolved item itself, kept while it is in the pane's last 7 days list.
+export type Tombstone = { uid: string; doneAt: number; item?: OpenItem }
 
 // The store's value per repo: the open items and the tombstones of resolved ones.
 export type Stored = { items: OpenItem[]; done: Tombstone[] }
@@ -54,6 +55,10 @@ export type KeptRow = { id: string; was?: Outcome; note?: string }
 // Which list the pane shows.
 export type PaneView = 'open' | 'resolved'
 
+export type PaneGroup = 'kind' | 'none' | 'branch'
+
+export type PaneOrder = 'old' | 'new'
+
 declare module 'claude-code' {
   interface PluginState {
     // loadedFor: the session id whose stored items were last brought in.
@@ -64,6 +69,8 @@ declare module 'claude-code' {
     // asked: the last line of the latest answer that ended with a question and no `track` call, until the next prompt.
     // view: the pane's list. focused: the key of the pane row the focus ring last landed on ('' for none).
     // kept: rows closed or reopened in the pane since it opened.
+    // group, order: how the pane groups and sorts its list. unfolded: the deferred group is open.
+    // branch: the branch the session was on when the pane opened ('' when unknown).
     'open-items': {
       items: OpenItem[]
       options: OptionRef[]
@@ -76,6 +83,10 @@ declare module 'claude-code' {
       view: PaneView
       focused: string
       kept: KeptRow[]
+      group: PaneGroup
+      order: PaneOrder
+      unfolded: boolean
+      branch: string
     }
   }
 }

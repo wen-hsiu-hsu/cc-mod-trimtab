@@ -176,6 +176,15 @@ test('combine keeps both sides and lets a tombstone win', () => {
   expect(combine(merged, { items: [], done: [] }, now + 31 * 24 * 3600 * 1000, 200).done).toEqual([])
 })
 
+test('a tombstone keeps its item from either side for 7 days, then only its uid', () => {
+  const day = 24 * 3600 * 1000
+  const done = { ...item('o1'), isDone: true }
+  const merged = combine({ items: [], done: [{ uid: 'u-o1', doneAt: 0, item: done }] }, { items: [], done: [{ uid: 'u-o1', doneAt: 0 }] }, day, 200)
+  expect(merged.done).toEqual([{ uid: 'u-o1', doneAt: 0, item: done }])
+  expect(combine(merged, { items: [], done: [] }, 8 * day, 200).done).toEqual([{ uid: 'u-o1', doneAt: 0 }])
+  expect(readStored({ items: [], done: [{ uid: 'x', doneAt: 1, item: 'bad' }] }).done).toEqual([{ uid: 'x', doneAt: 1 }])
+})
+
 test('readStored reads the older bare array and gives its items a uid', () => {
   const legacy = readStored([{ id: 'o1', kind: 'bug', text: 'x', source: 'model', isDone: false, createdAt: 5 }])
   expect(legacy.items[0]?.uid).toBe('legacy:5:bug:x')
@@ -306,13 +315,12 @@ test('the pane acts on the focused row, keeps a closed row in place, and the sam
   const pane = await $.ui.mount({ ...PANE_MOUNT, props: { ...PANE_MOUNT.props, bodyColumns: 80 } } as never)
   expect((await pane.find({ key: 'row:o1' }))?.props.label).toBe('o1')
   expect((await pane.find({ type: 'Text', text: /登入偶爾失敗/ }))?.text).toBe('登入偶爾失敗')
-  // Nothing is focused yet: the keys do nothing, and no row shows its age.
+  // Every row shows its age; nothing is focused yet, so the keys do nothing.
+  expect(await pane.find({ type: 'Text', text: /^剛剛/ })).toBeDefined()
   await pane.press({ key: 'done' })
-  expect(await pane.find({ type: 'Text', text: /^剛剛/ })).toBeUndefined()
   expect(JSON.stringify((await $.tool.call({ tool: TRACK, action: 'list' } as never)).result)).toContain('o1')
 
   await focusRow($, 'o1')
-  expect(await pane.find({ type: 'Text', text: /^剛剛/ })).toBeDefined()
   await pane.press({ key: 'quote' })
   expect(filled).toEqual(['關於 o1（未解決 bug）「登入偶爾失敗」：'])
   await pane.press({ key: 'done' })
@@ -336,6 +344,8 @@ test('the pane acts on the focused row, keeps a closed row in place, and the sam
   await $.command.run({ command: 'open-items', args: '' } as never)
   const again = await $.ui.mount(PANE_MOUNT as never)
   expect(await again.find({ type: 'Text', text: /登入偶爾失敗/ })).toBeUndefined()
+  // Deferred is the only group left, so it is not folded.
+  expect(await again.find({ key: 'more' })).toBeUndefined()
   expect(await again.find({ type: 'Text', text: /補文件/ })).toBeDefined()
   await again.unmount()
 })
@@ -348,38 +358,129 @@ test('the resolved list reopens the focused row with d and puts the resolution b
   const log = () => readLog(store.get('log:/repo')).map(entry => entry.text)
   expect(log()).toEqual(['要不要加快取'])
   const pane = await $.ui.mount(PANE_MOUNT as never)
-  expect((await pane.find({ key: 'empty' }))?.text).toBe('目前沒有待處理項目。')
+  expect((await pane.find({ key: 'empty' }))?.text).toBe('沒有未完成的項目（Claude 登記待決定、問題、bug 或延後的事情時會列在這裡）。')
+  // Nothing open: a dim 0, and how many were resolved in the last 7 days; only the list switch.
+  expect((await pane.find({ type: 'Text', text: '0' }))?.props).toMatchObject({ bold: true, dimColor: true })
+  expect(await pane.find({ type: 'Text', text: /^最近 7 天完成 1 項$/ })).toBeDefined()
+  expect(await pane.find({ key: 'group' })).toBeUndefined()
+  expect(await pane.find({ key: 'copy' })).toBeUndefined()
   await pane.press({ key: 'view' })
-  expect((await pane.find({ key: 'view' }))?.text).toContain('最近完成')
+  expect((await pane.find({ key: 'view' }))?.text).toContain('最近 7 天完成')
+  expect(await pane.find({ key: 'group' })).toBeUndefined()
+  expect(await pane.find({ key: 'order' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '完　成' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '要不要加快取 → 要，先做讀取' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /^剛剛 · 待決定 · main$/ })).toBeDefined()
   await focusRow($, 'o1')
-  expect(await pane.find({ type: 'Text', text: '要，先做讀取' })).toBeDefined()
   await pane.press({ key: 'reopen' })
   expect(await pane.find({ type: 'Text', text: /重新打開 要不要加快取/ })).toBeDefined()
   expect(log()).toEqual([])
   expect(String((await $.tool.call({ tool: TRACK, action: 'list' } as never)).result)).toContain('要不要加快取')
   await pane.press({ key: 'reopen' })
-  expect(await pane.find({ type: 'Text', text: /完成 要不要加快取/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '要不要加快取 → 要，先做讀取' })).toBeDefined()
   expect(log()).toEqual(['要不要加快取'])
   expect(readLog(store.get('log:/repo'))[0]?.note).toBe('要，先做讀取')
   await pane.unmount()
 })
 
-test('the focused row wraps its whole text to the body width, each line behind the kind-colored side line', async ($, on) => {
+test('every row wraps its whole text to the body width, the kind group framed by its side line', async ($, on) => {
   engine(on)
   await started($)
-  const text = '這是一段很長的待決定事項，用來確認焦點列會依照 pane 的寬度自己折行並在每行前畫線'
+  const text = '這是一段很長的待決定事項，用來確認每一列都會依照 pane 的寬度自己折行並在每行前畫線'
   await $.tool.call({ tool: TRACK, action: 'add', kind: 'decision', text } as never)
+  await $.tool.call({ tool: TRACK, action: 'add', kind: 'decision', text: '要不要加快取' } as never)
   const pane = await $.ui.mount({ ...PANE_MOUNT, props: { ...PANE_MOUNT.props, bodyColumns: 55 } } as never)
-  expect((await pane.find({ type: 'Text', text: '待決定' }))?.props.color).toBe('yellow')
-  expect((await pane.find({ type: 'Text', text: /很長/ }))?.props.wrap).toBe('truncate-end')
-  await focusRow($, 'o1')
+  // The kind is written once, at the group's left; its side line runs down every line of the group.
+  // (The legend's own label is the dim one.)
+  const kinds = (await pane.findAll({ type: 'Text', text: '待決定' })).filter(t => t.text === '待決定' && t.props.dimColor !== true)
+  expect(kinds.map(t => t.props)).toEqual([{ bold: true, color: 'yellow' }])
   const lines = await pane.findAll({ type: 'Text', text: /./ })
   const bars = lines.filter(t => t.text === '│')
-  expect(bars.length).toBeGreaterThanOrEqual(2)
-  expect(bars.every(t => t.props.color === 'yellow')).toBe(true)
-  const body = lines.filter(t => text.includes(t.text) && t.text.length > 1 && t.text !== '待決定')
+  // Text lines, the dim line of each item and the blank line between them.
+  const body = lines.filter(t => text.includes(t.text) && t.text !== '待決定' && t.props.dimColor === false)
   expect(body.map(t => t.text).join('')).toBe(text)
-  expect(body.every(t => cells(t.text) <= 55 - 5 - 7)).toBe(true)
+  expect(body.length).toBeGreaterThanOrEqual(2)
+  expect(bars.length).toBe(body.length + 1 + 2 + 1)
+  expect(bars.every(t => t.props.color === 'yellow')).toBe(true)
+  expect(body.every(t => cells(t.text) <= 55 - 7 - 2 - 5)).toBe(true)
+  await pane.unmount()
+})
+
+test('the count bar splits by kind; g groups by nothing or by branch, s sorts newest first', async ($, on) => {
+  const item = { source: 'model', isDone: false, branch: 'feat/x' } as const
+  engine(
+    on,
+    {
+      'items:/repo': {
+        items: [
+          { ...item, id: 'o1', uid: 'a', kind: 'bug', text: '登入偶爾失敗', createdAt: 1 },
+          { ...item, id: 'o2', uid: 'b', kind: 'decision', text: '要不要加快取', createdAt: 2 },
+          { ...item, id: 'o3', uid: 'c', kind: 'decision', text: '要不要拆模組', createdAt: 3 },
+        ],
+        done: [],
+      },
+    },
+    { branch: 'feat/x', now: 60_000 },
+  )
+  await started($)
+  await $.command.run({ command: 'open-items', args: '' } as never)
+  const pane = await $.ui.mount({ ...PANE_MOUNT, props: { ...PANE_MOUNT.props, bodyColumns: 55 } } as never)
+  // A bold 3, then 53 cells of bar: decisions (yellow) before bugs (red), in proportion.
+  expect((await pane.find({ type: 'Text', text: '3' }))?.props.bold).toBe(true)
+  const segments = (await pane.findAll({ type: 'Text', text: /^ +$/ })).filter(t => t.props.backgroundColor !== undefined)
+  expect(segments.map(t => [t.props.backgroundColor, t.text.length])).toEqual([
+    ['yellow', 35],
+    ['red', 18],
+  ])
+  expect((await pane.findAll({ type: 'Text', text: '●' })).filter(t => t.text === '●').map(t => t.props.color)).toEqual(['yellow', 'red'])
+  // Grouped by kind: decisions first, then bugs.
+  const order = async () => (await pane.findAll({ type: 'Text', text: /^要不要|^登入/ })).map(t => t.text)
+  expect(await order()).toEqual(['要不要加快取', '要不要拆模組', '登入偶爾失敗'])
+  expect((await pane.find({ key: 'group' }))?.props.hotkey).toBe('g')
+
+  await pane.press({ key: 'group' })
+  expect((await pane.find({ key: 'group' }))?.text).toContain('不分組')
+  expect(await order()).toEqual(['登入偶爾失敗', '要不要加快取', '要不要拆模組'])
+  expect((await pane.findAll({ type: 'Text', text: '待決定' })).filter(t => t.text === '待決定' && t.props.color === 'yellow')).toHaveLength(2)
+  await pane.press({ key: 'order' })
+  expect((await pane.find({ key: 'order' }))?.text).toContain('新到舊')
+  expect(await order()).toEqual(['要不要拆模組', '要不要加快取', '登入偶爾失敗'])
+
+  await pane.press({ key: 'group' })
+  expect((await pane.find({ key: 'group' }))?.text).toContain('依 branch')
+  expect((await pane.find({ type: 'Text', text: 'feat/x' }))?.props.bold).toBe(true)
+  expect(await pane.find({ type: 'Text', text: '目前 · 3' })).toBeDefined()
+  // Under a branch the dim line is the age alone.
+  expect(await pane.find({ type: 'Text', text: /^剛剛 · / })).toBeUndefined()
+  expect(await pane.find({ type: 'Text', text: '剛剛' })).toBeDefined()
+  await pane.unmount()
+})
+
+test('the resolved list reads the last 7 days of the repo from the store, without the reopened ones', async ($, on) => {
+  const day = 86_400_000
+  const item = { source: 'model', isDone: true, createdAt: 0, branch: 'main' } as const
+  engine(
+    on,
+    {
+      'items:/repo': {
+        items: [{ ...item, isDone: false, id: 'o9', uid: 'c:r5', kind: 'bug', text: '重新打開的' }],
+        done: [
+          { uid: 'a', doneAt: 9 * day, item: { ...item, id: 'o1', uid: 'a', kind: 'decision', text: '要不要加快取', outcome: 'done', note: '要' } },
+          { uid: 'b', doneAt: 2 * day, item: { ...item, id: 'o2', uid: 'b', kind: 'deferred', text: '太舊的', outcome: 'done' } },
+          { uid: 'c', doneAt: 9 * day, item: { ...item, id: 'o3', uid: 'c', kind: 'bug', text: '重新打開的', outcome: 'done' } },
+          { uid: 'd', doneAt: 9 * day },
+        ],
+      },
+    },
+    { now: 10 * day },
+  )
+  await started($)
+  const pane = await $.ui.mount(PANE_MOUNT as never)
+  await pane.press({ key: 'view' })
+  expect(await pane.find({ type: 'Text', text: '要不要加快取 → 要' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /太舊的/ })).toBeUndefined()
+  expect(await pane.findAll({ type: 'Text', text: /重新打開的/ })).toHaveLength(0)
+  expect(await pane.find({ type: 'Text', text: '1 天前 · 待決定 · main' })).toBeDefined()
   await pane.unmount()
 })
 
@@ -598,9 +699,8 @@ test('dropping keeps the reason in the repo log, which history reads in a later 
 
   const pane = await $.ui.mount(PANE_MOUNT as never)
   await pane.press({ key: 'view' })
-  expect(await pane.find({ type: 'Text', text: /不做 補文件/ })).toBeDefined()
-  await focusRow($, 'o2')
-  expect(await pane.find({ type: 'Text', text: /^README 已涵蓋$/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '不　做' })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: '補文件 → README 已涵蓋' })).toBeDefined()
   await pane.unmount()
 })
 
@@ -613,6 +713,10 @@ test('items closed in the pane are told to the model with the next prompt, once'
   const pane = await $.ui.mount(PANE_MOUNT as never)
   await focusRow($, 'o1')
   await pane.press({ key: 'done' })
+  // The deferred group is folded while another group is listed: m opens it.
+  expect((await pane.find({ key: 'more' }))?.props).toMatchObject({ hotkey: 'm', label: '展開 1 項 ▸' })
+  await pane.press({ key: 'more' })
+  expect((await pane.find({ key: 'more' }))?.props.label).toBe('收起')
   await focusRow($, 'o2')
   await pane.press({ key: 'drop' })
   await pane.unmount()
@@ -717,14 +821,13 @@ test('items keep their branch; the pane shows age and branch, the load toast cou
   expect(toasts).toContain('open-items：上次留下 2 個待處理項目（1 個在其他 branch、2 個超過 7 天）')
   await $.tool.call({ tool: TRACK, action: 'add', kind: 'question', text: '要不要加快取' } as never)
   const pane = await $.ui.mount(PANE_MOUNT as never)
-  await focusRow($, 'o1')
+  await pane.press({ key: 'more' })
   expect(await pane.find({ type: 'Text', text: /10 天前 · feat\/x/ })).toBeDefined()
   // Older than 7 days: the kind and the text are dim.
-  expect((await pane.find({ type: 'Text', text: '延　後' }))?.props.dimColor).toBe(true)
+  expect((await pane.findAll({ type: 'Text', text: '延　後' })).filter(t => t.text === '延　後').every(t => t.props.dimColor === true)).toBe(true)
   expect((await pane.find({ type: 'Text', text: '登入偶爾失敗' }))?.props.dimColor).toBe(true)
-  await focusRow($, 'o3')
   expect(await pane.find({ type: 'Text', text: /剛剛 · main/ })).toBeDefined()
-  expect((await pane.find({ type: 'Text', text: '問　題' }))?.props.color).toBe('cyan')
+  expect((await pane.findAll({ type: 'Text', text: '問　題' })).find(t => t.text === '問　題' && t.props.bold === true)?.props.color).toBe('cyan')
   await pane.unmount()
 })
 
@@ -774,7 +877,7 @@ test('the pane follows DESIGN.md: named after the mod, focused, Esc closes it, k
   expect(openedWith[0]).toMatchObject({ title: 'open-items', focus: true, closeOnEscape: true })
 
   const empty = await $.ui.mount(PANE_MOUNT as never)
-  expect((await empty.find({ key: 'empty' }))?.text).toBe('No open items.')
+  expect((await empty.find({ key: 'empty' }))?.text).toMatch(/^No open items \(/)
   expect((await empty.find({ key: 'hint' }))?.text).toBe('Esc closes')
   expect(await empty.find({ key: 'done' })).toBeUndefined()
   await empty.unmount()
@@ -782,7 +885,7 @@ test('the pane follows DESIGN.md: named after the mod, focused, Esc closes it, k
   await $.tool.call({ tool: TRACK, action: 'add', kind: 'decision', text: 'cache it?' } as never)
   const pane = await $.ui.mount(PANE_MOUNT as never)
   expect((await pane.find({ key: 'view' }))?.props.hotkey).toBe('v')
-  expect((await pane.find({ key: 'copy' }))?.props).toMatchObject({ hotkey: 'c', label: 'Copy whole list' })
+  expect((await pane.find({ key: 'copy' }))?.props).toMatchObject({ hotkey: 'c', label: 'Copy all' })
   expect((await pane.find({ key: 'done' }))?.props.hotkey).toBe('d')
   expect((await pane.find({ key: 'drop' }))?.props.hotkey).toBe('x')
   expect((await pane.find({ key: 'quote' }))?.props.hotkey).toBe('q')

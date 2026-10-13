@@ -1,12 +1,16 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, RenderSurface } from 'claude-code'
+import type { EngineInterface, Register, RenderNode, RenderSurface } from 'claude-code'
 
-import type { ItemKind, KeptRow, MissStats, OpenItem, OptionRef, Outcome, PaneView, Tombstone } from '../types'
+import type { ItemKind, KeptRow, MissStats, OpenItem, OptionRef, Outcome, PaneGroup, PaneOrder, PaneView, Tombstone } from '../types'
 import { configCommand, LANGUAGE, loadConfig, pick, type ConfigIO, type Lang, type Specs } from './config'
 import { emptyState, hintLine, switcher, TONE } from './ui'
 import {
   KINDS,
+  PANE_KINDS,
+  STALE_MS,
+  ageText,
   appendLog,
+  branchGroups,
   bandText,
   carriedNote,
   cells,
@@ -29,7 +33,11 @@ import {
   parseOptions,
   readLog,
   readStored,
+  recentResolved,
   renumber,
+  resolvedMeta,
+  sortItems,
+  splitCells,
   toStored,
   trimItems,
   unchosen,
@@ -47,6 +55,10 @@ const asked = atom({ plugin: 'open-items', key: 'asked' } as const, '')
 const view = atom({ plugin: 'open-items', key: 'view' } as const, 'open' as PaneView)
 const focused = atom({ plugin: 'open-items', key: 'focused' } as const, '')
 const kept = atom({ plugin: 'open-items', key: 'kept' } as const, [])
+const group = atom({ plugin: 'open-items', key: 'group' } as const, 'kind' as PaneGroup)
+const order = atom({ plugin: 'open-items', key: 'order' } as const, 'old' as PaneOrder)
+const unfolded = atom({ plugin: 'open-items', key: 'unfolded' } as const, false)
+const paneBranch = atom({ plugin: 'open-items', key: 'branch' } as const, '')
 
 const COMMAND = 'open-items'
 const SPECS: Specs = { language: LANGUAGE }
@@ -61,6 +73,28 @@ const RESOLVED_SHOWN = 5
 // The pane's id column: ids are o1…o200, so four cells plus a gap keep the texts aligned.
 const ID_COLUMNS = 5
 const ROW = 'row:'
+
+// Each kind's part of the count bar: `ink` on the terminal (a background, so deferred is gray rather
+// than dim), `fill` in desktop's Svg (DESIGN.md, kind colors).
+const KIND_BAR: Record<ItemKind, { ink: string; fill: string }> = {
+  decision: { ink: TONE.attention, fill: '#c98a12' },
+  bug: { ink: TONE.danger, fill: '#c0504d' },
+  question: { ink: 'cyan', fill: '#2f8fb0' },
+  deferred: { ink: 'gray', fill: '#8b8b93' },
+}
+
+function svgStack(parts: { cells: number; fill: string }[]): string {
+  const unit = 8
+  let x = 0
+  const rects = parts.map(part => {
+    const rect = part.cells === 0 ? '' : `<rect x="${x * unit}" width="${part.cells * unit}" height="8" fill="${part.fill}"/>`
+    x += part.cells
+
+    return rect
+  })
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${x * unit}" height="8">${rects.join('')}</svg>`
+}
 
 const PROMPT_RULES =
   'open-items: when you ask the user to decide something, leave a question open, defer an item, ' +
@@ -181,6 +215,9 @@ async function openPane($: EngineInterface, lang: Lang): Promise<void> {
   await update($, view, () => 'open' as PaneView)
   await update($, focused, () => '')
   await update($, kept, () => [])
+  await update($, unfolded, () => false)
+  const { branch: now } = await gitWhere($)
+  await update($, paneBranch, () => now ?? '')
   await $.ui.open({ id: PANE, title: COMMAND, focus: true, closeOnEscape: true })
 }
 
@@ -312,11 +349,16 @@ async function ensureLoaded($: EngineInterface, lang: Lang): Promise<void> {
   const current = await read($, items)
   const have = new Set(current.flatMap(item => [item.uid, `${item.kind}:${item.text}`]))
   const open = stored.items.filter(item => !have.has(item.uid) && !have.has(`${item.kind}:${item.text}`))
-  if (open.length === 0) {
+  // What the repo resolved in the last 7 days comes along for the pane's resolved list.
+  const recent = recentResolved(stored, current, await $.clock.now())
+  if (open.length + recent.length === 0) {
     return
   }
   // Stored ids come first; items added before the load get fresh ids after them.
-  await update($, items, () => trimItems(renumber(open, current), MAX_ITEMS))
+  await update($, items, () => trimItems(renumber([...open, ...recent], current), MAX_ITEMS))
+  if (open.length === 0) {
+    return
+  }
   await update($, announce, () => true)
   await showStatus($, lang)
   const summary = loadSummary(open, (await gitWhere($)).branch, await $.clock.now(), lang)
@@ -739,105 +781,247 @@ export const register: Register = (on, pluginOptions) => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  // One line per item in fixed columns: the id (the row's only button, so Tab and ↑↓ step through
-  // the rows), the kind, the text cut at the edge. The focused row opens to its whole text, wrapped
-  // here so each line can carry the kind's side line, then its age and branch.
+  // Every item in full: the id (the row's only button, so Tab and ↑↓ step through the rows), the
+  // text wrapped here so each line can carry its group's side line, then its age and branch. Grouped
+  // by kind (the default), by branch, or not; a count with a bar of the kinds on top.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const parts = $.ui.resolve(e)
     const { Box, Button, Text } = parts
+    // The runtime hands every surface every component, so the surface decides (DESIGN.md).
+    const Svg = e.surface !== 'terminal' && 'Svg' in parts ? parts.Svg : undefined
     const list = await read($, items)
     const now = await $.clock.now()
     const which = await read($, view)
     const at = await read($, focused)
+    const grouping = which === 'resolved' ? 'none' : await read($, group)
+    const newest = (await read($, order)) === 'new'
+    const isUnfolded = await read($, unfolded)
+    const current = await read($, paneBranch)
     const keptIds = new Set((await read($, kept)).map(row => row.id))
-    const hasOpen = list.some(item => !item.isDone)
-    const rows =
+    const open = list.filter(item => !item.isDone)
+    const recent = list.filter(item => item.isDone && (item.doneAt ?? now) > now - STALE_MS)
+    const rows = sortItems(
       which === 'open'
         ? list.filter(item => !item.isDone || keptIds.has(item.id))
-        : list.filter(item => item.isDone || keptIds.has(item.id)).slice(-RESOLVED_SHOWN)
-    const target = rows.find(item => `${ROW}${item.id}` === at)
-    const kindColumns = Math.max(...KINDS.map(kind => cells(kindShort(kind, lang)))) + 1
-    const textColumns = Math.max(10, e.props.bodyColumns - ID_COLUMNS - kindColumns)
+        : list.filter(item => (item.isDone && (item.doneAt ?? now) > now - STALE_MS) || keptIds.has(item.id)),
+      newest,
+      which === 'resolved',
+    )
+    // The deferred group folds when grouped by kind, unless it is all there is.
+    const canFold = grouping === 'kind' && rows.some(item => item.kind !== 'deferred')
+    const isFolded = (item: OpenItem): boolean => canFold && item.kind === 'deferred' && !isUnfolded
+    const target = rows.find(item => `${ROW}${item.id}` === at && !isFolded(item))
     const word = (en: string, zh: string): string => pick(lang, { en, 'zh-TW': zh })
-    const status = (item: OpenItem): string => {
-      if (which === 'resolved') {
-        return item.isDone ? (item.outcome === 'dropped' ? word("Won't do", '不做') : word('Done', '完成')) : word('Reopened', '重新打開')
-      }
-
-      return item.isDone ? (item.outcome === 'dropped' ? word("Won't do", '不做') : word('Done', '完成')) : ''
-    }
-    const ink = (item: OpenItem, isDim: boolean) => {
-      if (isDim || item.kind === 'deferred') {
+    const kindColumns = Math.max(...KINDS.map(kind => cells(kindShort(kind, lang)))) + 1
+    // Grouped by kind: the kind and its side line on the left; by branch: the side line alone.
+    const lead = grouping === 'kind' ? kindColumns + 2 : grouping === 'branch' ? 2 : 0
+    const hasKindColumn = grouping !== 'kind'
+    const textColumns = Math.max(10, e.props.bodyColumns - lead - ID_COLUMNS - (hasKindColumn ? kindColumns : 0))
+    const ink = (kind: ItemKind, isDim: boolean) => {
+      if (isDim || kind === 'deferred') {
         return { dimColor: true }
       }
 
-      return { color: item.kind === 'decision' ? TONE.attention : item.kind === 'bug' ? TONE.danger : 'cyan' }
+      return { color: kind === 'decision' ? TONE.attention : kind === 'bug' ? TONE.danger : 'cyan' }
     }
+    const outcomeWord = (item: OpenItem): string => (item.outcome === 'dropped' ? word("Won't do", '不做') : word('Done', '完成'))
 
-    const row = (item: OpenItem, index: number) => {
-      // Closed in the open list: struck through. The resolved list is dim except a reopened row.
+    // The lines of one item, without its group's lead: the text wrapped to its column, then the
+    // dim line. A closed row in the open list is struck through; the resolved list is dim.
+    const itemLines = (item: OpenItem) => {
       const isStruck = which === 'open' && item.isDone
-      const isDim = isStruck || (which === 'resolved' && item.isDone) || isStale(item, now)
-      const label = status(item)
-      const text = label === '' ? item.text : `${label} ${item.text}`
-      const kindInk = ink(item, isDim)
+      const isDim = isStruck || (which === 'resolved' && item.isDone) || (which === 'open' && isStale(item, now))
+      const prefix = which === 'resolved' ? (item.isDone ? '' : word('Reopened', '重新打開')) : item.isDone ? outcomeWord(item) : ''
+      const note = which === 'resolved' && item.isDone && item.note !== undefined ? ` → ${item.note}` : ''
+      const text = `${prefix === '' ? '' : `${prefix} `}${item.text}${note}`
+      const meta =
+        which === 'resolved' && item.isDone ? resolvedMeta(item, now, lang) : grouping === 'branch' ? ageText(now - item.createdAt, lang) : metaText(item, now, lang)
+      const side =
+        which === 'resolved' ? (
+          <Text dimColor>{item.isDone ? (item.outcome === 'dropped' ? word("Won't do", '不　做') : word('Done', '完　成')) : ''}</Text>
+        ) : (
+          <Text {...ink(item.kind, isDim)}>{kindShort(item.kind, lang)}</Text>
+        )
       const textStyle = { dimColor: isDim, strikethrough: isStruck }
-      const isAt = item === target
-      const lines = isAt ? wrapCells(text, textColumns) : [text]
-      const extra = isAt
-        ? [
-            ...lines.slice(1).map(line => ({ line, isMeta: false })),
-            ...(item.note === undefined ? [] : wrapCells(item.note, textColumns).map(line => ({ line, isMeta: true }))),
-            { line: metaText(item, now, lang), isMeta: true },
-          ]
-        : []
+      const lines = wrapCells(text, textColumns)
 
-      return (
-        <Box key={`line:${item.id}`} flexDirection="column" marginTop={index === 0 ? 0 : 1}>
-          <Box flexDirection="row">
+      return [
+        ...lines.map((line, i) => (
+          <Box key={`text:${item.id}:${i}`} flexDirection="row">
             <Box width={ID_COLUMNS} flexShrink={0}>
-              <Button key={`${ROW}${item.id}`} label={item.id} plain onPress={() => undefined} />
+              {i === 0 && <Button key={`${ROW}${item.id}`} label={item.id} plain onPress={() => undefined} />}
             </Box>
-            <Box width={kindColumns} flexShrink={0}>
-              <Text {...kindInk}>{kindShort(item.kind, lang)}</Text>
-            </Box>
-            <Box flexGrow={1} flexShrink={1}>
-              {isAt ? (
-                <Text {...textStyle}>{lines[0]}</Text>
-              ) : (
-                <Text wrap="truncate-end" {...textStyle}>
-                  {text}
-                </Text>
-              )}
-            </Box>
-          </Box>
-          {extra.map(({ line, isMeta }, i) => (
-            <Box key={`more:${item.id}:${i}`} flexDirection="row" paddingLeft={ID_COLUMNS}>
+            {hasKindColumn && (
               <Box width={kindColumns} flexShrink={0}>
-                <Text {...kindInk}>│</Text>
+                {i === 0 && side}
               </Box>
-              <Text {...(isMeta ? { dimColor: true } : textStyle)}>{line}</Text>
-            </Box>
-          ))}
-        </Box>
-      )
+            )}
+            <Text {...textStyle}>{line}</Text>
+          </Box>
+        )),
+        <Box key={`meta:${item.id}`} flexDirection="row" paddingLeft={ID_COLUMNS + (hasKindColumn ? kindColumns : 0)}>
+          <Text dimColor>{meta}</Text>
+        </Box>,
+      ]
     }
+    // Items one after another with a line between them, the blank line a node of its own so a
+    // group's side line runs through it.
+    const spaced = (list: readonly OpenItem[]) =>
+      list.flatMap((item, i) => [...(i === 0 ? [] : [<Text key={`gap:${item.id}`}> </Text>]), ...itemLines(item)])
+    // A group's lines behind its lead: a left column (the kind, on the first line only) and a side line.
+    const framed = (key: string, label: RenderNode | undefined, sideInk: object, lines: RenderNode[]) =>
+      lines.map((line, i) => (
+        <Box key={`${key}:${i}`} flexDirection="row">
+          {label !== undefined && (
+            <Box width={kindColumns} flexShrink={0}>
+              {i === 0 && label}
+            </Box>
+          )}
+          <Box width={2} flexShrink={0}>
+            <Text {...sideInk}>│</Text>
+          </Box>
+          {line}
+        </Box>
+      ))
+    const more = (count: number) =>
+      isUnfolded
+        ? action('more', 'm', word('Hide', '收起'), () => void update($, unfolded, () => false))
+        : action('more', 'm', word(`Show ${count} ▸`, `展開 ${count} 項 ▸`), () => void update($, unfolded, () => true))
+
+    const groups = (): RenderNode[] => {
+      if (grouping === 'none') {
+        return [<Box key="rows" flexDirection="column">{spaced(rows)}</Box>]
+      }
+      if (grouping === 'branch') {
+        return branchGroups(rows, current).map(({ branch, items: inGroup }, g) => (
+          <Box key={`branch:${branch}`} flexDirection="column" marginTop={g === 0 ? 0 : 1}>
+            <Box flexDirection="row" gap={2}>
+              <Text bold>{branch === '' ? word('no branch', '沒有 branch') : branch}</Text>
+              <Text dimColor>{branch !== '' && branch === current ? word(`current · ${inGroup.length}`, `目前 · ${inGroup.length}`) : String(inGroup.length)}</Text>
+            </Box>
+            {framed(`b:${branch}`, undefined, { dimColor: true }, spaced(inGroup))}
+          </Box>
+        ))
+      }
+
+      const firstKind = PANE_KINDS.find(kind => rows.some(item => item.kind === kind))
+
+      return PANE_KINDS.flatMap(kind => {
+        const inGroup = rows.filter(item => item.kind === kind)
+        if (inGroup.length === 0) {
+          return []
+        }
+        const isDim = inGroup.every(item => item.isDone)
+        const label = (
+          <Text bold {...ink(kind, isDim)}>
+            {kindShort(kind, lang)}
+          </Text>
+        )
+        const folding = kind === 'deferred' && canFold
+        const lines = folding && !isUnfolded ? [] : spaced(inGroup)
+        const tail = folding ? [...(lines.length === 0 ? [] : [<Text key="gap:more"> </Text>]), more(inGroup.length)] : []
+
+        return [
+          <Box key={`kind:${kind}`} flexDirection="column" marginTop={kind === firstKind ? 0 : 1}>
+            {framed(`k:${kind}`, label, ink(kind, isDim), [...lines, ...tail])}
+          </Box>,
+        ]
+      })
+    }
+
+    // The count: a bold total and a bar of its parts filling the rest of the line, a legend below.
+    type Part = { key: string; label: string; value: number; ink: string; fill: string }
+    const segments: Part[] =
+      which === 'resolved'
+        ? [
+            { key: 'done', label: word('Done', '完成'), value: recent.filter(item => item.outcome !== 'dropped').length, ink: 'white', fill: '#8b8b93' },
+            { key: 'dropped', label: word("Won't do", '不做'), value: recent.filter(item => item.outcome === 'dropped').length, ink: 'gray', fill: '#4a4a4a' },
+          ]
+        : PANE_KINDS.map(kind => ({
+            key: kind,
+            label: kindShort(kind, lang),
+            value: open.filter(item => item.kind === kind).length,
+            ...KIND_BAR[kind],
+          }))
+    const total = segments.reduce((sum, part) => sum + part.value, 0)
+    const barWidth = Math.max(4, e.props.bodyColumns - cells(String(total)) - 1)
+    const bar = () => {
+      if (total === 0) {
+        return Svg !== undefined ? (
+          <Svg source={svgStack([{ cells: barWidth, fill: '#3a3a3a' }])} alt="0" width={barWidth * 8} height={8} />
+        ) : (
+          <Text dimColor backgroundColor="gray">
+            {' '.repeat(barWidth)}
+          </Text>
+        )
+      }
+      const widths = splitCells(
+        segments.map(part => part.value),
+        barWidth,
+      )
+      if (Svg !== undefined) {
+        const alt = segments.filter(part => part.value > 0).map(part => `${part.label} ${part.value}`).join(', ')
+
+        return <Svg source={svgStack(segments.map((part, i) => ({ cells: widths[i] ?? 0, fill: part.fill })))} alt={alt} width={barWidth * 8} height={8} />
+      }
+
+      return <Text>{segments.map((part, i) => ((widths[i] ?? 0) === 0 ? '' : <Text key={part.key} backgroundColor={part.ink}>{' '.repeat(widths[i] ?? 0)}</Text>))}</Text>
+    }
+    const legend =
+      which === 'open' && total === 0 ? (
+        <Text dimColor wrap="wrap">
+          {word('Resolved in the last 7 days: ', '最近 7 天完成 ')}
+          <Text bold dimColor={false}>
+            {String(recent.length)}
+          </Text>
+          {word('', ' 項')}
+        </Text>
+      ) : (
+        <Text wrap="wrap">
+          {segments
+            .filter(part => part.value > 0)
+            .map((part, i) => [
+              i === 0 ? '' : '  ',
+              <Text key={`dot:${part.key}`} color={part.ink === 'gray' && which === 'open' ? undefined : part.ink} dimColor={part.ink === 'gray' && which === 'open'}>
+                ●
+              </Text>,
+              ' ',
+              <Text key={`label:${part.key}`} dimColor>
+                {part.label}
+              </Text>,
+              ' ',
+              <Text key={`n:${part.key}`} bold>
+                {String(part.value)}
+              </Text>,
+            ])}
+        </Text>
+      )
 
     // A plain Button with a hotkey draws its key itself: `d: Done`.
-    const action = (key: string, hotkey: string, label: string, onPress: () => void) => (
-      <Button key={key} label={label} plain hotkey={hotkey} onPress={onPress} />
-    )
+    function action(key: string, hotkey: string, label: string, onPress: () => void) {
+      return <Button key={key} label={label} plain hotkey={hotkey} onPress={onPress} />
+    }
     const onTarget = (fn: (item: OpenItem) => Promise<unknown>) => () => {
       if (target !== undefined) {
         void fn(target)
       }
     }
     const quote = action('quote', 'q', word('Quote', '引用'), onTarget(item => quoteRow($, lang, item)))
+    const isEmpty = rows.length === 0
 
     return (
       <Box flexDirection="column">
-        <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
-          <Box flexDirection="row" flexShrink={0}>
+        <Box key="count" flexDirection="column" marginBottom={1}>
+          <Box flexDirection="row" gap={1}>
+            <Text bold dimColor={total === 0}>
+              {String(total)}
+            </Text>
+            {bar()}
+          </Box>
+          <Box paddingLeft={cells(String(total)) + 1}>{legend}</Box>
+        </Box>
+        <Box key="switches" flexDirection="row" flexWrap="wrap" justifyContent="space-between" columnGap={2} marginBottom={1}>
+          <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
             {switcher(
               parts,
               e.surface,
@@ -846,7 +1030,7 @@ export const register: Register = (on, pluginOptions) => {
               'v',
               [
                 { value: 'open', label: word('Open', '未完成') },
-                { value: 'resolved', label: word('Recently resolved', '最近完成') },
+                { value: 'resolved', label: word('Last 7 days', '最近 7 天完成') },
               ],
               which,
               value =>
@@ -854,17 +1038,55 @@ export const register: Register = (on, pluginOptions) => {
                   .then(() => update($, kept, () => []))
                   .then(() => update($, focused, () => '')),
             )}
+            {!isEmpty &&
+              which === 'open' &&
+              switcher(
+                parts,
+                e.surface,
+                'group',
+                '',
+                'g',
+                [
+                  { value: 'kind', label: word('By kind', '依種類') },
+                  { value: 'none', label: word('No groups', '不分組') },
+                  { value: 'branch', label: word('By branch', '依 branch') },
+                ],
+                grouping,
+                value => void update($, group, () => value as PaneGroup),
+              )}
+            {!isEmpty &&
+              switcher(
+                parts,
+                e.surface,
+                'order',
+                '',
+                's',
+                [
+                  { value: 'old', label: word('Oldest first', '舊到新') },
+                  { value: 'new', label: word('Newest first', '新到舊') },
+                ],
+                newest ? 'new' : 'old',
+                value => void update($, order, () => value as PaneOrder),
+              )}
           </Box>
           {which === 'open' &&
-            hasOpen &&
-            action('copy', 'c', word('Copy whole list', '複製整份清單'), () =>
+            open.length > 0 &&
+            action('copy', 'c', word('Copy all', '複製全部'), () =>
               void copyList($, lang, e.surface).then(text => $.ui.toast(`open-items${word(': ', '：')}${text.split('\n')[0]}`)),
             )}
         </Box>
-        {rows.length === 0 &&
-          emptyState(parts, which === 'open' ? word('No open items.', '目前沒有待處理項目。') : word('Nothing resolved yet.', '還沒有完成的項目。'))}
-        {rows.map(row)}
-        {rows.length > 0 && (
+        {isEmpty &&
+          emptyState(
+            parts,
+            which === 'open'
+              ? word(
+                  'No open items (they show here when Claude tracks a decision, a question, a bug or a deferred item).',
+                  '沒有未完成的項目（Claude 登記待決定、問題、bug 或延後的事情時會列在這裡）。',
+                )
+              : word('Nothing resolved in the last 7 days.', '最近 7 天沒有完成的項目。'),
+          )}
+        {!isEmpty && groups()}
+        {!isEmpty && (
           <Box flexDirection="row" gap={2} marginTop={1}>
             {which === 'open'
               ? [
@@ -875,7 +1097,7 @@ export const register: Register = (on, pluginOptions) => {
               : [action('reopen', 'd', word('Reopen', '重新打開'), onTarget(item => actOnRow($, lang, item.id, 'done'))), quote]}
           </Box>
         )}
-        {hintLine(parts, lang, rows.length === 0 ? [] : [{ en: 'Tab/↑↓ moves', 'zh-TW': 'Tab/↑↓ 移動' }])}
+        {hintLine(parts, lang, isEmpty ? [] : [{ en: 'Tab/↑↓ moves', 'zh-TW': 'Tab/↑↓ 移動' }])}
       </Box>
     )
   })

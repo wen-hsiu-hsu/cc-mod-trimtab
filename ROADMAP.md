@@ -13,7 +13,7 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 3. 第一次寫 `.claude/cc-mod-trimtab.local.json` 時加進 `.git/info/exclude`：只有自動測試。
 4. `subagent-dispatch` 帳本跨 `/clear` 的 session 命名與 agent 步數歸屬：只有自動測試。
 5. GitHub 的 private vulnerability reporting 是否已開啟（`SECURITY.md` 依賴它）。
-6. open-items 面板改版（焦點列動作、焦點列自己折行加 `│`、按鍵一般亮度說明 dimColor）：只有自動測試，還沒在 Claude Code 裡看過；同時要確認 `d` 在 subagent-dispatch band 與 open-items 面板同時出現時誰收到。
+6. open-items 面板改版（焦點列動作、分組與單邊線 `│`、比例長條計數、每項全文、按鍵一般亮度說明 dimColor）：只有自動測試，還沒在 Claude Code 裡看過，特別是 55 欄 dock 寬度下長條、圖例與切換列會不會折行；同時要確認 `d` 在 subagent-dispatch band 與 open-items 面板同時出現時誰收到。
 
 ## 待辦
 
