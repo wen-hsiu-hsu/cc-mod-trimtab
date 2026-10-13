@@ -69,3 +69,4 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 17. 2026-10-13 確認 GitHub 的 private vulnerability reporting 已開啟，`SECURITY.md` 指的回報管道可用。
 18. 2026-10-13 在 Claude Code 裡看過 open-items 面板改版（焦點列動作、分組與單邊線 `│`、比例長條計數、每項全文、按鍵說明）：顯示正常。
 19. 2026-10-13 實際看到用模型的功能在一個 session 第一次觸發時的 toast：顯示正常。
+20. 2026-10-13 在 2.1.296 用臨時 mod 加 `claude -p --plugin-dir` 實測 `$.session.usage().cost`（訂閱帳號，`rateLimits` 有 `five_hour`、`seven_day`）：`cost.usd` 有值；`turn.step` 的 `next` 回來時已加上這一步；subagent 的步數也算在內；session 結束時的總額等於各步差額的加總。mod 自己的 `$.model.complete` 不算進去（呼叫前後與 1.5 秒後都沒變）。兩個 agent 並行時，各步「呼叫前後」的差額會重疊、加總比總額多；改用「這次讀到的值減上次讀到的值」，總額對得上，同時結束的步數才可能記錯名下。
