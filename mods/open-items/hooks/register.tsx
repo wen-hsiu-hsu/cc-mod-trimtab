@@ -3,7 +3,7 @@ import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
 import type { ItemKind, KeptRow, MissStats, OpenItem, OptionRef, Outcome, PaneView, Tombstone } from '../types'
 import { configCommand, LANGUAGE, loadConfig, pick, type ConfigIO, type Lang, type Specs } from './config'
-import { emptyState, hintLine, keyLabel, switcher, TONE } from './ui'
+import { emptyState, hintLine, switcher, TONE } from './ui'
 import {
   KINDS,
   appendLog,
@@ -774,7 +774,7 @@ export const register: Register = (on, pluginOptions) => {
       return { color: item.kind === 'decision' ? TONE.attention : item.kind === 'bug' ? TONE.danger : 'cyan' }
     }
 
-    const row = (item: OpenItem) => {
+    const row = (item: OpenItem, index: number) => {
       // Closed in the open list: struck through. The resolved list is dim except a reopened row.
       const isStruck = which === 'open' && item.isDone
       const isDim = isStruck || (which === 'resolved' && item.isDone) || isStale(item, now)
@@ -793,7 +793,7 @@ export const register: Register = (on, pluginOptions) => {
         : []
 
       return (
-        <Box key={`line:${item.id}`} flexDirection="column">
+        <Box key={`line:${item.id}`} flexDirection="column" marginTop={index === 0 ? 0 : 1}>
           <Box flexDirection="row">
             <Box width={ID_COLUMNS} flexShrink={0}>
               <Button key={`${ROW}${item.id}`} label={item.id} plain onPress={() => undefined} />
@@ -823,11 +823,9 @@ export const register: Register = (on, pluginOptions) => {
       )
     }
 
+    // A plain Button with a hotkey draws its key itself: `d: Done`.
     const action = (key: string, hotkey: string, label: string, onPress: () => void) => (
-      <Box key={`act:${key}`} flexDirection="row" flexShrink={0}>
-        {keyLabel(parts, hotkey)}
-        <Button key={key} label={label} plain hotkey={hotkey} onPress={onPress} />
-      </Box>
+      <Button key={key} label={label} plain hotkey={hotkey} onPress={onPress} />
     )
     const onTarget = (fn: (item: OpenItem) => Promise<unknown>) => () => {
       if (target !== undefined) {
@@ -840,7 +838,6 @@ export const register: Register = (on, pluginOptions) => {
       <Box flexDirection="column">
         <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
           <Box flexDirection="row" flexShrink={0}>
-            {keyLabel(parts, 'v')}
             {switcher(
               parts,
               e.surface,

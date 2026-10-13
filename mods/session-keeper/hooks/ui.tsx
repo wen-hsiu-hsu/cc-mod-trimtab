@@ -101,17 +101,6 @@ export function hintLine({ Box, Text }: Kit, lang: Lang, items: Words[], closes 
   )
 }
 
-// A key written right before the button it presses, as in `v: ‹ open ›`: the key in the default
-// color, the colon dim.
-export function keyLabel({ Text }: Kit, key: string): RenderNode {
-  return (
-    <Text key={`keyLabel:${key}`}>
-      {key}
-      <Text dimColor>: </Text>
-    </Text>
-  )
-}
-
 // What a pane shows when it has nothing to list; under a header, the caller sets it a line apart.
 export function emptyState({ Box, Text }: Kit, text: string): RenderNode {
   return (

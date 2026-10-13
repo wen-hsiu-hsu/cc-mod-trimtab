@@ -783,7 +783,6 @@ test('the pane follows DESIGN.md: named after the mod, focused, Esc closes it, k
   const pane = await $.ui.mount(PANE_MOUNT as never)
   expect((await pane.find({ key: 'view' }))?.props.hotkey).toBe('v')
   expect((await pane.find({ key: 'copy' }))?.props).toMatchObject({ hotkey: 'c', label: 'Copy whole list' })
-  expect((await pane.find({ key: 'act:done' }))?.text).toBe('d: Done')
   expect((await pane.find({ key: 'done' }))?.props.hotkey).toBe('d')
   expect((await pane.find({ key: 'drop' }))?.props.hotkey).toBe('x')
   expect((await pane.find({ key: 'quote' }))?.props.hotkey).toBe('q')
