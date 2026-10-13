@@ -17,6 +17,7 @@ Keeps undecided questions, unresolved bugs and deferred items outside the contex
   - `g` switches the grouping: by kind (the default: Decide, Bug, Question, Deferred, each framed by a line in its color), no groups (the kind on each item), or by branch (the current branch first).
   - The Deferred group starts folded when other groups are listed; `m` shows or hides it.
   - `s` sorts oldest first or newest first.
+  - The action keys and the hint line stay at the bottom of the pane when it is docked at the side.
   - The keys act on the item you are on: `d` done, `x` won't do, `q` quote it into the input box. A closed item stays in place, struck through, until you switch lists or open the pane again; the same key again opens it back up.
   - `v` switches to what the repo resolved in the last 7 days, from any session, with each decision's or drop's reason after its text; `d` reopens one and a second `d` puts its resolution back.
   - `c` copies the whole open list as markdown.

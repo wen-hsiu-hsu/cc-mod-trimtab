@@ -890,6 +890,9 @@ test('the pane follows DESIGN.md: named after the mod, focused, Esc closes it, k
   expect((await pane.find({ key: 'drop' }))?.props.hotkey).toBe('x')
   expect((await pane.find({ key: 'quote' }))?.props.hotkey).toBe('q')
   expect((await pane.find({ key: 'hint' }))?.text).toBe('Tab/↑↓ moves · Esc closes')
+  // The actions keep two lines from the list; a spacer pushes them to the foot of a docked pane.
+  expect((await pane.find({ key: 'actions' }))?.props.marginTop).toBe(2)
+  expect((await pane.find({ key: 'spacer' }))?.props.flexGrow).toBe(1)
   // The keys keep the default color; what they do is dim.
   const hint = (await pane.findAll({ type: 'Text', text: /./ })).filter(t => ['Tab/↑↓', ' moves', 'Esc', ' closes'].includes(t.text))
   expect(hint.map(t => [t.text, t.props.dimColor === true])).toEqual([

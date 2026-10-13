@@ -1008,9 +1008,12 @@ export const register: Register = (on, pluginOptions) => {
     }
     const quote = action('quote', 'q', word('Quote', '引用'), onTarget(item => quoteRow($, lang, item)))
     const isEmpty = rows.length === 0
+    // A dock is as tall as its room: fill it, so the actions and the hint line sit at its foot. An
+    // inline pane's frame fits the tree, so it keeps its own height.
+    const room = e.props.placement === 'dock' ? (e.props.scroll as { bodyRows?: number } | undefined)?.bodyRows : undefined
 
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" {...(room === undefined ? {} : { minHeight: room })}>
         <Box key="count" flexDirection="column" marginBottom={1}>
           <Box flexDirection="row" gap={1}>
             <Text bold dimColor={total === 0}>
@@ -1086,8 +1089,10 @@ export const register: Register = (on, pluginOptions) => {
               : word('Nothing resolved in the last 7 days.', '最近 7 天沒有完成的項目。'),
           )}
         {!isEmpty && groups()}
+        {/* Takes up what the list leaves, so the keys sit at the bottom of a docked pane. */}
+        <Box key="spacer" flexGrow={1} />
         {!isEmpty && (
-          <Box flexDirection="row" gap={2} marginTop={1}>
+          <Box key="actions" flexDirection="row" gap={2} marginTop={2}>
             {which === 'open'
               ? [
                   action('done', 'd', word('Done', '完成'), onTarget(item => actOnRow($, lang, item.id, 'done'))),
