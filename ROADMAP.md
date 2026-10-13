@@ -9,12 +9,8 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 ## 待實測
 
 1. 2.1.296 自己產生的型別檔與 2.1.288 版是否一致（見「查證結果」2；目前只拿得到 2.1.288 版）。
-2. 用模型的功能在一個 session 第一次觸發時的 toast：只有自動測試。
-3. 第一次寫 `.claude/cc-mod-trimtab.local.json` 時加進 `.git/info/exclude`：只有自動測試。
-4. `subagent-dispatch` 帳本跨 `/clear` 的 session 命名與 agent 步數歸屬：只有自動測試。
-5. GitHub 的 private vulnerability reporting 是否已開啟（`SECURITY.md` 依賴它）。
-6. open-items 面板改版（焦點列動作、分組與單邊線 `│`、比例長條計數、每項全文、按鍵一般亮度說明 dimColor）：只有自動測試，還沒在 Claude Code 裡看過，特別是 55 欄 dock 寬度下長條、圖例與切換列會不會折行。
-
+2. 第一次寫 `.claude/cc-mod-trimtab.local.json` 時加進 `.git/info/exclude`：只有自動測試。
+3. `subagent-dispatch` 帳本跨 `/clear` 的 session 命名與 agent 步數歸屬：只有自動測試。
 ## 待辦
 
 目前沒有。
@@ -83,3 +79,6 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 14. 2026-10-13 用 prototype 在 2.1.296 實測 pane 的焦點：只有 Tab 與 ↑↓ 會移動焦點；←→ pane 不攔，會切到別的 session；用 `$.ui.focus` 在關掉一列後把焦點搬到下一列，焦點會落在剛按的動作按鈕上或跳過一列；整行做成按鈕時截斷的開頭會重複出現。→ ADR 0021。
 15. Button 的 `hotkey` 只在它所在的區塊（band 或自己的 pane）有焦點時生效，輸入框打字不觸發；同一區塊兩顆同鍵時後畫的贏（依 2.1.296 型別檔 `ButtonProps.hotkey`，2026-10-13）。所以 subagent-dispatch band 的 `d`（略過）與 open-items pane 的 `d`（完成）不衝突。
 16. 2026-10-13 在 2.1.296 的 subagent-dispatch stats pane 實際看到：`Button` 裡的 `<Text wrap="truncate-end">` 在中英混合的文字上不會截斷，而是折到下一行，連帶把同一行右邊的次數擠下去；名稱照 pane 寬度先截好之後，次數仍會被擠下，名稱要再多留兩格，次數的 `Box` 固定寬度、`flexShrink={0}` 才保持一行。→ DESIGN.md「控制項」。
+17. 2026-10-13 確認 GitHub 的 private vulnerability reporting 已開啟，`SECURITY.md` 指的回報管道可用。
+18. 2026-10-13 在 Claude Code 裡看過 open-items 面板改版（焦點列動作、分組與單邊線 `│`、比例長條計數、每項全文、按鍵說明）：顯示正常。
+19. 2026-10-13 實際看到用模型的功能在一個 session 第一次觸發時的 toast：顯示正常。
