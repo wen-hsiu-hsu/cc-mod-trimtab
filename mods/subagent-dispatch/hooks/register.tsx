@@ -500,8 +500,10 @@ export const register: Register = (on, options) => {
     const wide = body >= WIDE_COLUMNS
     const all = report.main + report.sub
     const most = Math.max(1, ...rows.map(row => row.tokens))
-    // A row's bar takes what its line leaves after the tokens and the share.
-    const barWidth = clamp(body - 18, 8, 60)
+    // A row is a card (its border and padding take four columns); its bar takes what the line leaves
+    // after the tokens and the share.
+    const rowInner = Math.max(8, body - 4)
+    const barWidth = clamp(rowInner - 18, 8, 60)
     const byLabel: Record<GroupBy, string> = {
       repo: 'repo',
       session: 'session',
@@ -893,33 +895,33 @@ export const register: Register = (on, options) => {
               <Box key="group-line">{groupSwitch}</Box>
             </Box>
             {rows.map(row => {
-              // Each row is a block, a blank line from the next: its name, then a dim rule out to its spawns at
-              // the right (no rule when the name fills the room, which is cut to fit); a session's time and
-              // repo; then its bar with the tokens and share at the right.
+              // Each row is a card: its name with its spawns at the right, a session's time and repo, then its
+              // bar with the tokens and share at the right. The name is cut by cells to leave the count its
+              // own fixed width (a Button's text wraps instead of truncating once CJK and Latin mix), with two
+              // columns to spare for what the terminal draws around a button.
               const session = by === 'session' ? row.detail[0]?.session : undefined
               const count = spawnCount(row.spawns)
-              const room = Math.max(1, body - cells(count) - 1)
-              const label = fit(session === undefined ? row.label : promptOf(session), room)
-              const fill = room - cells(label) - 1
+              const label = fit(session === undefined ? row.label : promptOf(session), Math.max(1, rowInner - cells(count) - 3))
 
               return (
-                <Box key={`line-${row.key}`} flexDirection="column" marginTop={1}>
+                <Box key={`line-${row.key}`} flexDirection="column" {...CARD}>
                   <Box key={`name:${row.key}`} flexDirection="row" gap={1}>
-                    {/* A Button holds only text, so the name is the button and the rule and count sit beside it. */}
-                    <Box flexShrink={0}>
+                    {/* A Button holds only text, so the name is the button and the count sits beside it. */}
+                    <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
                       <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key, sort: 'tokens', limit: PAGE, spawn: '' }))}>
                         <Text wrap="truncate-end">{label}</Text>
                       </Button>
                     </Box>
-                    <Box flexGrow={1} flexShrink={1}>{fill > 0 ? <Text dimColor>{'─'.repeat(fill)}</Text> : null}</Box>
-                    <Box flexShrink={0}>
-                      <Text dimColor>{count}</Text>
+                    <Box width={cells(count)} flexShrink={0}>
+                      <Text dimColor wrap="truncate-end">
+                        {count}
+                      </Text>
                     </Box>
                   </Box>
                   {session === undefined ? null : (
                     <Box key={`meta:${row.key}`}>
                       <Text dimColor wrap="truncate-end">
-                        {fit(`${stamp(lang, session.started)} · ${repoName(lang, session.repo)}`, body)}
+                        {fit(`${stamp(lang, session.started)} · ${repoName(lang, session.repo)}`, rowInner)}
                       </Text>
                     </Box>
                   )}

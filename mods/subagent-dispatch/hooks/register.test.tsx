@@ -663,7 +663,7 @@ describe('usage ledger', () => {
     }
   })
 
-  test('a row name is cut to one line by its cells, and a rule fills what a short name leaves', async ($, on) => {
+  test('a row is a card whose name is cut to one line by its cells, leaving its spawns count whole', async ($, on) => {
     const world = await twoWeeks($, on)
     world.store[`ledger:long`] = {
       updated: world.now,
@@ -676,13 +676,13 @@ describe('usage ledger', () => {
     await stats($, 'stats')
     const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 52 }, surface: 'terminal' } as never)
     await choose(pane, 'group', 'session')
+    const card = await pane.find({ key: `line-/repo|${world.now - 1000}` })
+    expect(card?.props.borderStyle).toBe('round')
     const long = (await pane.find({ key: `row:/repo|${world.now - 1000}` }))?.text ?? ''
     expect(long.endsWith('…')).toBe(true)
-    // A wide character that would overflow leaves its cell empty.
-    expect(cells(long)).toBeLessThanOrEqual(52 - cells('0 spawns') - 1)
-    expect(cells(long)).toBeGreaterThanOrEqual(52 - cells('0 spawns') - 2)
-    expect((await pane.find({ key: `name:/repo|${world.now - 1000}` }))?.text).not.toMatch(/─/)
-    expect((await pane.find({ key: 'name:/old|' + new Date(2026, 9, 5, 9).getTime() }))?.text).toMatch(/^last week─+1 spawns$/)
+    expect(cells(long)).toBeLessThanOrEqual(52 - 4 - cells('0 spawns') - 3)
+    expect((await pane.find({ key: `name:/repo|${world.now - 1000}` }))?.text).toMatch(/…0 spawns$/)
+    expect((await pane.find({ key: 'name:/old|' + new Date(2026, 9, 5, 9).getTime() }))?.text).toBe('last week1 spawns')
     await pane.unmount()
   })
 
