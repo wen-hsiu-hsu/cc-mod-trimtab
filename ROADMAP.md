@@ -15,18 +15,6 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 
 目前沒有。
 
-## 費用回報
-
-暫緩（見「暫緩」），設計先留著。
-
-- 一次性觸發：toast 顯示 token 數與估算金額。
-- 有模型參與的功能：輸入框上方常駐顯示各 mod 自己的累計（不跨 mod 加總），例如 `keep 3x 12.4k tok ~$0.04`。
-- 只有拿得到 API 回傳 usage 的功能才顯示；拿不到就不顯示。
-  - `$.model.fork`（保持快取、交接摘要）與 `$.model.complete`（Haiku 交接判斷、Sonnet 整理）都回傳 `usage`（四種 token 數；失敗時是失敗前已花掉的量），可顯示。
-  - `$.model.classify` 只回傳標籤，沒有 usage；目前沒有 mod 用它。
-- 金額依價格表估算並標明「依 API 價格估算」與價格日期；訂閱制實際不依 token 計費。價格表裡沒有的模型只顯示 token 數。
-- 價格表在每個需要的 mod 各放一份，加進 `scripts/check-copies.sh`（比照 `scrub.ts`）。
-
 ## mod 規劃
 
 提案依「實際發生過的問題 × 效益 ÷ 實作量」篩選；已做的設計見 [ADR](docs/adr/README.md)。
@@ -42,7 +30,6 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 | project-memory 的 `<private>` 標記（訊息中標起來的段落不送去整理；claude-mem 的做法） | 2026-10-12 決定略過：`/project-memory off` 已能在這個 session 停止自動整理，送出前也已用 `secret-scrub` 的規則遮蔽金鑰 | 開著自動整理時需要只排除某一段（例如貼上客戶資料），而 `off` 再 `on` 不夠用；或發現敏感內容被寫進記憶 |
 | project-memory 只送相關的記憶給模型（Mem0 只送相似的前 10 筆） | 要 embedding 或相似度比對；記憶少時整份清單送得進去，`MEMORY.md` 也限 60 條 | 記憶（含失效前）超過約 150 條、或整理輸出常被截斷（debug log 的「丟棄 N 行」中出現 JSON 錯誤） |
 | project-memory 的離線評估集（照 LongMemEval 分類標 30–50 段對話的預期整理結果，量抽取與更新的錯誤率） | 成本較高，要先累積一段時間的真實整理結果才有素材 | 用過一個月以上，或懷疑整理品質（記錯、漏記、重複）時 |
-| 費用回報（見「費用回報」：每次呼叫的 toast、輸入框上方的各 mod 累計、依價格表估算金額） | 2026-10-11 查一個多月的 prompt 與 transcript：沒有一次問過 mod 呼叫模型花多少 token 或錢，也沒有因費用關功能；問過的是主對話的 context、訂閱額度與 cache 何時過期 | 開了 `keep_warm` 等背景呼叫後問「花了多少」、對用量表示意外，或 `/usage` 額度的消耗說不出來源。先做最窄的版本：`/<mod> status` 列累計 token 數，不估金額 |
 | `tool-guard` 的 cmd-rewrite（Bash 執行前依 repo 設定的 `{ "match", "replace" }` 改寫指令，例如 `npx vitest run` 換成 `npm run test:brief --`；改寫時提示一次，進版控的規則第一次生效前要使用者核准） | 2026-10-11 查一個多月的 prompt 與 transcript：沒有一次因為 Claude 沒照 CLAUDE.md 的指令規則而糾正；唯一一條「該用 X 不要用 Y」的規則才加 5 天，之後還沒有 session 可看 | 有這類規則的 repo 累積 5 個以上 session 後，仍有 2 次以上被糾正或照舊跑錯的指令。先做最窄的版本：設定檔寫死的字面 match／replace |
 | `tool-guard` 的學來的守門（`/tool-guard suggest` 把 memory 中出現 3 次以上的規則交給模型草擬工具呼叫前的比對式，核准才生效；上游 `guards.ts`） | 同一次查證：沒有同一種工具呼叫錯誤在不同 session 被糾正 3 次以上；反覆出現的糾正是寫作風格與流程，比對式擋不了；規則提升已由 `project-memory` 的「3 個 session 證實」處理 | 同一個工具呼叫錯誤在不同 session 被糾正 3 次以上，且寫得成字面比對式。先做使用者自己在設定檔寫 block／warn 比對式，不用模型草擬 |
 | `subagent-dispatch` 的分派提醒（subagent 跑在 Opus 但 description 看不出理由、或同一個 session fork 偏多時跳 toast，只提醒不擋；先在 `stats` 標出符合的派出，看誤判再開 toast，開 toast 時給它自己的開關） | 2026-10-12 查帳本（新舊檔名共 23 次派出）：Sonnet 11、Haiku 9、fork 3，沒有一次跑在 Opus，一個 session 最多 fork 2 次。帳本已記模型、指定模型、fork 與 description，之後可直接從帳本算，不必先加欄位 | 帳本出現 3 次以上 description 沒寫理由的 Opus 派出（非 fork），或有 session fork 3 次以上。先做最窄的版本：`stats` 摘要多一行計數並在列表標出，不跳 toast |
@@ -64,7 +51,7 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 ## 查證結果
 
 1. `userConfig` 不能依專案設定：`pluginConfigs` 只從使用者或 managed 設定讀取（[mods reference](https://code.claude.com/docs/en/plugins/mods/reference)）；2026-10-09 在 2.1.295 實測，repo 的 `.claude/settings.json`、`.claude/settings.local.json` 不會生效（用 `--plugin-dir` 加 `claude -p`，正式安裝的互動模式沒測）。→ repo 層由 mod 自己讀檔。
-2. usage：`$.model.fork` 與 `$.model.complete` 都回傳 `{ isAnswered, text, usage }`，`usage` 有 input、output、cache read、cache write 四種 token 數，沒有金額；`classify` 只回傳標籤。依本機 2.1.288 產生的型別檔（2026-10-11 確認；GitHub 上的 `mods/types/claude-code.d.ts` 是 2.1.277 寫的，`complete` 還只回傳文字）。repo 的 `session-keeper`、`project-memory` 已在 2.1.296 上用 `isAnswered`／`text`。→ 見「費用回報」。
+2. usage：`$.model.fork` 與 `$.model.complete` 都回傳 `{ isAnswered, text, usage }`，`usage` 有 input、output、cache read、cache write 四種 token 數，沒有金額；`classify` 只回傳標籤。依本機 2.1.288 產生的型別檔（2026-10-11 確認；GitHub 上的 `mods/types/claude-code.d.ts` 是 2.1.277 寫的，`complete` 還只回傳文字）。repo 的 `session-keeper`、`project-memory` 已在 2.1.296 上用 `isAnswered`／`text`。
 3. `cc-mod-trimtab` 重名：網路搜尋沒找到同名的 Claude Code、MCP 或 agent 專案；未做 GitHub 全站搜尋。
 4. 2026-10-06 已在 CLI 實測 output-trimmer 的結果改寫、agent-dispatch（原 agent-watch）的中斷偵測、tool-guard（原 shell-guard）的攔截與放行、secret-scrub 的遮蔽、open-items 的自動延後與 compact 行為。
 5. `$.store` 是 plugin 自己的一個 JSON 檔，放在使用者的 Claude Code 設定目錄，跨 session 與熱重載保留（2.1.296 型別檔）。所有 session 共用同一份，所以 session 層的值（`set --session`、`on`）以 sessionId 為 key 存，一週沒寫入的 session 在其他 session 寫入時清掉（0.1.1 起）。2026-10-11 實測：0.1.0 時 A 開 `keep_warm` 後 B `set`，A 的值被蓋回預設；0.1.1 後兩個 session 各自保留。
