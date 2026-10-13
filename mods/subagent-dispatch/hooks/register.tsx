@@ -185,7 +185,8 @@ async function fillRedispatch($: EngineInterface, lang: Lang): Promise<string> {
 
 // `meta` belongs to session `sid`; `agents` maps an agent id to the ledger key it was spawned
 // under, at most AGENT_KEYS of them; `redraw` says a redraw of the stats pane is waiting;
-// `backfilling` is the backfill running in this process.
+// `backfilling` is the backfill running in this process; `snapshot` is the store as the pane last
+// read it.
 type LedgerState = {
   recording: boolean
   writing: Promise<void>
@@ -194,11 +195,17 @@ type LedgerState = {
   agents: Map<string, string>
   redraw: boolean
   backfilling?: Promise<void>
+  snapshot?: Snapshot
 }
+
+// Every ledger as stored, every day row by its day, and when they were read.
+type Snapshot = { at: number; ledgers: unknown[]; dayRows: Record<string, unknown> }
 
 const AGENT_KEYS = 500
 // A write redraws the stats pane this long after it, once for every write meanwhile.
 const REDRAW_MS = 1000
+// A redraw of the pane this soon after the last read of the store reuses it.
+const SNAPSHOT_MS = 30_000
 
 // `/clear` starts a new session id in the same process without a session.start: the new
 // session starts now and is named after its own first prompt.
@@ -243,9 +250,10 @@ function record($: EngineInterface, state: LedgerState, where: string, change: (
 }
 
 // The pane reads the ledgers from `$.store`, whose writes redraw nothing by themselves. Parallel
-// subagents write at every step, so the writes of a second share one redraw. It also redraws
-// this mod's band above the prompt, which reads one value.
+// subagents write at every step, so the writes of a second share one redraw, which reads the store
+// afresh. It also redraws this mod's band above the prompt, which reads one value.
 function redrawStats($: EngineInterface, state: LedgerState): void {
+  state.snapshot = undefined
   if (state.redraw) {
     return
   }
@@ -267,14 +275,26 @@ async function pruneLedgers($: EngineInterface): Promise<void> {
   }
 }
 
-// Every ledger as stored, and every day row by its day.
-async function loadStore($: EngineInterface): Promise<{ ledgers: unknown[]; dayRows: Record<string, unknown> }> {
+// Every ledger as stored, and every day row by its day: a read per key.
+async function loadStore($: EngineInterface): Promise<Snapshot> {
   const keys = await $.store.keys()
   const ledgers = await Promise.all(keys.filter(name => name.startsWith(LEDGER_PREFIX)).map(key => $.store.get(key)))
   const dayKeys = keys.filter(name => name.startsWith(DAY_PREFIX))
   const rows = await Promise.all(dayKeys.map(key => $.store.get(key)))
 
-  return { ledgers, dayRows: Object.fromEntries(dayKeys.map((key, i) => [key.slice(DAY_PREFIX.length), rows[i]])) }
+  return { at: await $.clock.now(), ledgers, dayRows: Object.fromEntries(dayKeys.map((key, i) => [key.slice(DAY_PREFIX.length), rows[i]])) }
+}
+
+// The store for a render of the pane. Reading every key is most of a render's time once there are
+// a few hundred sessions, and a resize redraws many times a second, so a redraw within SNAPSHOT_MS
+// reuses the last read; this session's writes and opening the pane drop it.
+async function paneStore($: EngineInterface, state: LedgerState): Promise<Snapshot> {
+  const now = await $.clock.now()
+  if (state.snapshot === undefined || now - state.snapshot.at >= SNAPSHOT_MS) {
+    state.snapshot = await loadStore($)
+  }
+
+  return state.snapshot
 }
 
 async function loadReport($: EngineInterface, days: number): Promise<Report> {
@@ -678,6 +698,8 @@ export const register: Register = (on, options) => {
     }
     const [command, ...rest] = e.args.trim().split(/\s+/)
     if (command === STATS) {
+      ledger.snapshot = undefined
+
       return { text: await stats($, lang, rest, interactive) }
     }
     if (command === BACKFILL) {
@@ -822,7 +844,7 @@ export const register: Register = (on, options) => {
     const shown = await read($, view)
     const by = (GROUP_BYS as readonly string[]).includes(shown.by) ? (shown.by as GroupBy) : 'repo'
     const now = await $.clock.now()
-    const store = await loadStore($)
+    const store = await paneStore($, ledger)
     const body = e.props.bodyColumns
     const today = dayOf(now)
     // The heatmap's weeks and days; a chosen day it no longer reaches (the pane narrowed) is let go.
@@ -861,7 +883,7 @@ export const register: Register = (on, options) => {
     // The cache read line ends with when the ledgers were read; where both do not fit, the time goes
     // on the next line, at the left.
     const cacheText = pick(lang, { en: `Cache read ${n(report.cacheRead)}, not counted`, 'zh-TW': `快取讀取 ${n(report.cacheRead)}，不計入` })
-    const updatedText = pick(lang, { en: `Updated ${clockTime(report.at)}`, 'zh-TW': `更新於 ${clockTime(report.at)}` })
+    const updatedText = pick(lang, { en: `Updated ${clockTime(store.at)}`, 'zh-TW': `更新於 ${clockTime(store.at)}` })
     const spawnCount = (count: number) => pick(lang, { en: `${count} spawns`, 'zh-TW': `${count} 次` })
     const cellBar = (part: number, whole: number, width: number) => {
       const cells = barCells(part, whole, width)

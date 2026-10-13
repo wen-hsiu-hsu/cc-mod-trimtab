@@ -3,6 +3,17 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [0.8.1] - 2026-10-14
+
+| Mod | Version |
+| --- | --- |
+| `subagent-dispatch` | 0.5.1 |
+- `subagent-dispatch` 0.5.1:
+  - Fixed: the stats pane redraws slowly while the terminal is resized. A
+    redraw within 30 seconds of the last read of the ledgers reuses it instead
+    of reading every key again; this session's own writes and opening the pane
+    read them afresh.
+
 ## [0.8.0] - 2026-10-14
 
 | Mod | Version |

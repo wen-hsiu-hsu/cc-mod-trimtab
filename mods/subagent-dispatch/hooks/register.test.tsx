@@ -958,11 +958,11 @@ describe('heatmap', () => {
         'ledger:quiet': ledgerOf(at(10, 10, 9), at(10, 10, 9), {}),
         'day:2026-06-01': { main: { 'claude-opus-4': tally(4321) }, sub: {}, spawned: ZEROS, at: 0 },
       }
-      engine(on, { value: 'running' }, userFile, world)
+      const clock = engine(on, { value: 'running' }, userFile, world)
       await $.session.start({ cwd: '/repo', surface, isInteractive: true })
       await $.command.run({ command: 'subagent-dispatch', args: 'stats' } as never)
 
-      return world
+      return Object.assign(world, { clock })
     }
     const mount = ($: T, bodyColumns = 110, surface: 'terminal' | 'desktop' = 'terminal') => $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface } as never)
     const dayCells = async (pane: Mounted) => (await pane.findAll({ type: 'Button' })).filter(node => String(node.props.key).startsWith('day:'))
@@ -1092,6 +1092,26 @@ describe('heatmap', () => {
       await pane.press({ key: 'day:2026-10-04' })
       expect(await pane.find({ type: 'Text', text: /^10\/04（日）沒有資料（帳本與每日摘要都沒有這天/ })).toBeDefined()
       await pane.unmount()
+    })
+
+    test('a redraw within 30 seconds reuses the store as last read; a write of its own or opening the pane reads it again', async ($, on) => {
+      const world = await heatWorld($, on)
+      const tokensCard = async (columns: number) => {
+        const pane = await mount($, columns)
+        const text = (await pane.find({ key: 'card:tokens' }))?.text ?? ''
+        await pane.unmount()
+
+        return text
+      }
+      expect(await tokensCard(110)).toMatch(/3,200/)
+      // Another session writes: a resize does not read the store again.
+      world.store['ledger:other'] = ledgerOf(at(10, 12, 9), at(10, 12, 10), { '2026-10-12': { m: tally(1000) } })
+      expect(await tokensCard(80)).toMatch(/3,200/)
+      await world.clock.advance(30_000)
+      expect(await tokensCard(52)).toMatch(/4,200/)
+      world.store['ledger:other2'] = ledgerOf(at(10, 12, 9), at(10, 12, 10), { '2026-10-12': { m: tally(10) } })
+      await $.command.run({ command: 'subagent-dispatch', args: 'stats' } as never)
+      expect(await tokensCard(110)).toMatch(/4,210/)
     })
 
     test('the desktop pane draws the heatmap as one Svg', async ($, on) => {
