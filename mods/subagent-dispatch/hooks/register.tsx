@@ -8,6 +8,7 @@ import {
   applyMeta,
   buildReport,
   cells,
+  clockTime,
   countKinds,
   dayLabel,
   elapsed,
@@ -899,13 +900,16 @@ export const register: Register = (on, options) => {
                 'spawned',
               )}
             </Box>
-            <Box key="cache-read">
+            <Box key="cache-read" flexDirection="row" justifyContent="space-between" gap={1}>
               <Text dimColor wrap="wrap">
                 {pick(lang, {
                   en: `Cache read ${n(report.cacheRead)}, not counted`,
                   'zh-TW': `快取讀取 ${n(report.cacheRead)}，不計入`,
                 })}
               </Text>
+              <Box flexShrink={0}>
+                <Text dimColor>{pick(lang, { en: `Updated ${clockTime(report.at)}`, 'zh-TW': `更新於 ${clockTime(report.at)}` })}</Text>
+              </Box>
             </Box>
             <Box key="list" flexDirection="column" marginTop={1}>
               {rule('list-rule')}

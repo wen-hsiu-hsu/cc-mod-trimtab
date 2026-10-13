@@ -147,6 +147,14 @@ export function stamp(lang: Lang, ms: number): string {
   return `${monthDay(lang, d.getMonth() + 1, d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`
 }
 
+// A local time of day to the second: `19:04:05`.
+export function clockTime(ms: number): string {
+  const d = new Date(ms)
+  const two = (value: number) => String(value).padStart(2, '0')
+
+  return `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`
+}
+
 // The local day of a time: `Oct 12`, `10/12`.
 export function dayLabel(lang: Lang, ms: number): string {
   const d = new Date(ms)
@@ -180,6 +188,8 @@ export function tokens(t: Tally): number {
 export type SessionRow = { repo: string; started: number; prompt: string; main: number; mainByModel: [string, number][]; cacheRead: number; spawns: Spawn[] }
 
 export type Report = {
+  // When the ledgers were read.
+  at: number
   days: number
   from: string
   to: string
@@ -227,7 +237,7 @@ export function isLedger(value: unknown): value is Ledger {
 export function buildReport(stored: unknown[], days: number, now: number): Report {
   const from = firstDay(now, days)
   const to = dayOf(now)
-  const report: Report = { days, from, to, main: 0, sub: 0, cacheRead: 0, spawned: { all: 0, explicit: 0, opus: 0, forks: 0, defaults: 0 }, sessions: [] }
+  const report: Report = { at: now, days, from, to, main: 0, sub: 0, cacheRead: 0, spawned: { all: 0, explicit: 0, opus: 0, forks: 0, defaults: 0 }, sessions: [] }
   for (const ledger of stored.filter(isLedger)) {
     if (dayOf(ledger.updated) < from) {
       continue

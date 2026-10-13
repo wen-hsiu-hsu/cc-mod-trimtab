@@ -462,6 +462,7 @@ describe('usage ledger', () => {
     expect(await pane.find({ type: 'Text', text: '160' })).toBeDefined()
     await clock.advance(1000)
     expect(await pane.find({ type: 'Text', text: '480' })).toBeDefined()
+    expect((await pane.find({ key: 'cache-read' }))?.text).toMatch(/Updated 12:00:01$/)
     await pane.unmount()
   })
 
@@ -506,7 +507,7 @@ describe('usage ledger', () => {
       expect(await text('spawned:named')).toMatch(/named a model \(Opus: 1\).*2$/)
       expect(await text('spawned:default')).toMatch(/default model.*1$/)
       expect(await text('spawned:fork')).toMatch(/fork \(main session's model\).*1$/)
-      expect(await text('cache-read')).toBe('Cache read 2,000, not counted')
+      expect(await text('cache-read')).toMatch(/^Cache read 2,000, not counted.*Updated 12:00:00$/)
       await pane.unmount()
     }
   })

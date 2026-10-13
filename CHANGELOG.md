@@ -3,6 +3,15 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [0.6.2] - 2026-10-13
+
+| Mod | Version |
+| --- | --- |
+| `subagent-dispatch` | 0.3.2 |
+- `subagent-dispatch` 0.3.2:
+  - Added: the cache read line under the cards ends with when the pane last
+    read the ledgers (`Updated 19:04:05`).
+
 ## [0.6.1] - 2026-10-13
 
 | Mod | Version |
