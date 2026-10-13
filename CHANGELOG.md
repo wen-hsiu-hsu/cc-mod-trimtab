@@ -3,6 +3,17 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [0.7.0] - 2026-10-13
+
+| Mod | Version |
+| --- | --- |
+| `subagent-dispatch` | 0.4.0 |
+- `subagent-dispatch` 0.4.0:
+  - Changed: the ledger keeps the main session's tokens per day, so a period
+    counts only the main session's tokens of its own days. Ledgers written
+    before 0.4.0 count their main session tokens on the day of their last write.
+  - Added: `Period` in the stats pane has 1 day (today) before 7, 30 and 90.
+
 ## [0.6.3] - 2026-10-13
 
 | Mod | Version |

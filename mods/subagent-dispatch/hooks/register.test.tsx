@@ -338,6 +338,35 @@ describe('usage ledger', () => {
     expect(await stats($, 'stats --text abc')).toMatch(/1.*90/)
   })
 
+  test('the main session counts per day, and a ledger of the old format counts on its last day', async ($, on) => {
+    const world = newWorld()
+    const tally = { input: 1000, cacheWrite: 0, cacheRead: 0, output: 0, steps: 1 }
+    const yesterday = new Date(2026, 9, 11, 23).getTime()
+    const before = new Date(2026, 9, 10, 9).getTime()
+    world.store = {
+      // This session also stepped yesterday, before midnight.
+      'ledger:s1': { updated: yesterday, repo: '', started: yesterday, prompt: 'late night', daily: { '2026-10-11': { 'claude-opus-4': tally } }, spawns: [] },
+      'ledger:old': { updated: before, repo: '/old', started: before, prompt: 'old format', main: { 'claude-haiku-4-5': tally }, spawns: [] },
+    }
+    engine(on, { value: 'running' }, '', world)
+    await start($)
+    await step($, 'claude-opus-4')
+
+    const ledger = world.store['ledger:s1'] as { daily: Record<string, Record<string, { steps: number }>> }
+    expect(ledger.daily['2026-10-11']?.['claude-opus-4']?.steps).toBe(1)
+    expect(ledger.daily['2026-10-12']?.['claude-opus-4']?.steps).toBe(1)
+
+    const one = await stats($, 'stats --text 1')
+    expect(one).toContain('usage, 1 day: Oct 12 – Oct 12')
+    expect(one).toContain('main session  160')
+    const two = await stats($, 'stats --text 2')
+    expect(two).toContain('main session  1,160')
+    expect(two).not.toContain('old format')
+    const three = await stats($, 'stats --text 3')
+    expect(three).toContain('main session  2,160')
+    expect(three).toContain('old format')
+  })
+
   test('stats --text writes dates the zh-TW way', async ($, on) => {
     const world = newWorld()
     engine(on, { value: 'running' }, undefined, world)
@@ -723,6 +752,8 @@ describe('usage ledger', () => {
     expect(value?.props.color).toBeUndefined()
     await term.press({ key: 'days' })
     expect((await term.find({ key: 'days' }))?.text).toContain('‹ 90 days ›')
+    await term.press({ key: 'days' })
+    expect((await term.find({ key: 'days' }))?.text).toContain('‹ 1 day ›')
     await term.press({ key: 'days' })
     expect((await term.find({ key: 'days' }))?.text).toContain('‹ 7 days ›')
     expect(await term.find({ key: 'row:/old' })).toBeUndefined()

@@ -27,7 +27,8 @@ import {
   emptyText,
   fit,
   emptyLedger,
-  isLedger,
+  daysLabel,
+  readLedger,
   LEDGER_PREFIX,
   LEDGER_SPEC,
   MAX_DAYS,
@@ -63,7 +64,7 @@ const MOD = 'subagent-dispatch'
 const REDISPATCH = 'redispatch'
 const STATS = 'stats'
 const PANE = 'subagent-dispatch-stats'
-const PERIODS = [7, 30, 90]
+const PERIODS = [1, 7, 30, 90]
 // From this many body columns a row is one line; below, its bar goes on a second line.
 const WIDE_COLUMNS = 80
 // From this many body columns the two cards sit side by side; below, one above the other.
@@ -181,7 +182,7 @@ function record($: EngineInterface, state: LedgerState, where: string, change: (
       const own = await sessionKey($, state)
       const key = (agentId === undefined ? undefined : state.agents.get(agentId)) ?? own
       const stored = await $.store.get(key)
-      const ledger = isLedger(stored) ? { ...emptyLedger(), ...stored } : emptyLedger()
+      const ledger = readLedger(stored) ?? emptyLedger()
       change(ledger, await $.clock.now())
       if (key === own) {
         applyMeta(ledger, state.meta)
@@ -568,7 +569,7 @@ export const register: Register = (on, options) => {
       'days',
       pick(lang, { en: 'Period ', 'zh-TW': '期間 ' }),
       'p',
-      PERIODS.map(days => ({ value: String(days), label: pick(lang, { en: `${days} days`, 'zh-TW': `${days} 天` }) })),
+      PERIODS.map(days => ({ value: String(days), label: daysLabel(lang, days) })),
       String(shown.days),
       value => void update($, view, current => ({ ...current, days: Number(value), item: '' })),
     )
@@ -709,7 +710,7 @@ export const register: Register = (on, options) => {
               </Text>
             </Box>
           </Box>
-          <Text dimColor>{pick(lang, { en: `${shown.days} days`, 'zh-TW': `${shown.days} 天` })}</Text>
+          <Text dimColor>{daysLabel(lang, shown.days)}</Text>
           <Box key="cards" flexDirection={paired ? 'row' : 'column'} marginTop={1} gap={paired ? 2 : 0}>
             {compact(
               'tokens',

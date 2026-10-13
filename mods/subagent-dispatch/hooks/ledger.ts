@@ -29,8 +29,8 @@ export type Ledger = {
   started: number
   // The first 40 characters of the session's first prompt.
   prompt: string
-  // model -> the main session's own tokens.
-  main: Record<string, Tally>
+  // Local day (`2026-10-12`) -> model -> the main session's own tokens that day.
+  daily: Record<string, Record<string, Tally>>
   // Oldest first, at most SPAWN_CAP.
   spawns: Spawn[]
 }
@@ -57,7 +57,7 @@ export const LEDGER_SPEC: KeySpec = {
 }
 
 export function emptyLedger(): Ledger {
-  return { updated: 0, repo: '', started: 0, prompt: '', main: {}, spawns: [] }
+  return { updated: 0, repo: '', started: 0, prompt: '', daily: {}, spawns: [] }
 }
 
 export function promptSummary(text: string): string {
@@ -107,7 +107,7 @@ export function recordStep(
 ): void {
   let tally: Tally
   if (step.agentId === undefined) {
-    tally = ledger.main[step.model] ??= zero()
+    tally = (ledger.daily[dayOf(at)] ??= {})[step.model] ??= zero()
   } else {
     let spawn = ledger.spawns.findLast(item => item.agentId === step.agentId)
     if (spawn === undefined) {
@@ -173,6 +173,11 @@ export function range(lang: Lang, report: Report): string {
   return pick(lang, { en: `${label(report.from)} – ${label(report.to)}`, 'zh-TW': `${label(report.from)} 至 ${label(report.to)}` })
 }
 
+// A period: `1 day`, `30 days`, `30 天`.
+export function daysLabel(lang: Lang, days: number): string {
+  return pick(lang, { en: days === 1 ? '1 day' : `${days} days`, 'zh-TW': `${days} 天` })
+}
+
 // The first day a report covers: `days` local days ending today, today included.
 function firstDay(now: number, days: number): string {
   const d = new Date(now)
@@ -227,30 +232,54 @@ export function countKinds(spawns: Spawn[]): Report['spawned'] {
   return counts
 }
 
-// False for anything else, such as a ledger of the unreleased first format (spawns per day).
-export function isLedger(value: unknown): value is Ledger {
-  return typeof value === 'object' && value !== null && Array.isArray((value as Ledger).spawns) && typeof (value as Ledger).main === 'object'
+// A stored ledger in the current format, or undefined for anything else, such as a ledger of the
+// unreleased first format (spawns per day). A ledger written before 0.4.0 kept the main
+// session's tokens per model only, as `main`: they count on the day of its last write.
+export function readLedger(value: unknown): Ledger | undefined {
+  if (typeof value !== 'object' || value === null || !Array.isArray((value as Ledger).spawns)) {
+    return undefined
+  }
+  const { main, ...rest } = value as Ledger & { main?: Record<string, Tally> }
+  if (typeof rest.daily === 'object' && rest.daily !== null) {
+    return { ...emptyLedger(), ...rest }
+  }
+  if (typeof main !== 'object' || main === null) {
+    return undefined
+  }
+
+  return { ...emptyLedger(), ...rest, daily: Object.keys(main).length === 0 ? {} : { [dayOf(rest.updated)]: main } }
 }
 
-// Every session written to in the window, with its spawns in the window. A session's main
-// tokens count whole once it is in the window: they are not kept per day.
+// Every session written to in the window, with its main tokens of the days in the window and
+// its spawns whose last step falls in it.
 export function buildReport(stored: unknown[], days: number, now: number): Report {
   const from = firstDay(now, days)
   const to = dayOf(now)
   const report: Report = { at: now, days, from, to, main: 0, sub: 0, cacheRead: 0, spawned: { all: 0, explicit: 0, opus: 0, forks: 0, defaults: 0 }, sessions: [] }
-  for (const ledger of stored.filter(isLedger)) {
-    if (dayOf(ledger.updated) < from) {
+  for (const ledger of stored.map(readLedger)) {
+    if (ledger === undefined || dayOf(ledger.updated) < from) {
       continue
     }
     const spawns = ledger.spawns.filter(spawn => dayOf(spawn.last) >= from)
-    const mainByModel = Object.entries(ledger.main).map(([model, tally]) => [model, tokens(tally)] as [string, number])
+    const main = new Map<string, number>()
+    let cacheRead = 0
+    for (const [day, models] of Object.entries(ledger.daily)) {
+      if (day < from || day > to) {
+        continue
+      }
+      for (const [model, tally] of Object.entries(models)) {
+        main.set(model, (main.get(model) ?? 0) + tokens(tally))
+        cacheRead += tally.cacheRead
+      }
+    }
+    const mainByModel = [...main]
     const row: SessionRow = {
       repo: ledger.repo,
       started: ledger.started || ledger.updated,
       prompt: ledger.prompt,
       main: mainByModel.reduce((sum, [, count]) => sum + count, 0),
       mainByModel,
-      cacheRead: Object.values(ledger.main).reduce((sum, tally) => sum + tally.cacheRead, 0),
+      cacheRead,
       spawns,
     }
     if (row.main === 0 && spawns.length === 0) {
@@ -466,8 +495,8 @@ export function renderStats(lang: Lang, report: Report): string {
   const all = report.main + report.sub
   const lines: string[] = [
     pick(lang, {
-      en: `subagent-dispatch usage, ${report.days} days: ${range(lang, report)}`,
-      'zh-TW': `subagent-dispatch 用量，${report.days} 天：${range(lang, report)}`,
+      en: `subagent-dispatch usage, ${daysLabel(lang, report.days)}: ${range(lang, report)}`,
+      'zh-TW': `subagent-dispatch 用量，${daysLabel(lang, report.days)}：${range(lang, report)}`,
     }),
     '',
     ...summaryLines(lang, report),

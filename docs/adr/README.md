@@ -26,3 +26,4 @@ A decision gets an ADR when it is hard to reverse, surprising without its contex
 | [0020](0020-memory-file-anchors.md) | Related files in project-memory carry an anchor string, checked by plain text search | 2026-10-12 |
 | [0021](0021-focused-row-actions.md) | The open-items pane acts on the focused row; only the row's id is a button | 2026-10-13 |
 | [0022](0022-resolved-items-in-tombstones.md) | open-items keeps a resolved item inside its tombstone for 7 days | 2026-10-13 |
+| [0023](0023-daily-main-ledger.md) | The usage ledger keeps the main session's tokens per local day | 2026-10-13 |
