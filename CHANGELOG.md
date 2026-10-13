@@ -3,8 +3,11 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
-## [Unreleased]
+## [0.6.0] - 2026-10-13
 
+| Mod | Version |
+| --- | --- |
+| `subagent-dispatch` | 0.3.0 |
 - `subagent-dispatch` 0.3.0:
   - Added: the stats pane's top line names it, `subagent-dispatch stats`,
     over a rule, as in open-items.
