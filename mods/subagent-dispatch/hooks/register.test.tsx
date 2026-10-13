@@ -508,8 +508,13 @@ describe('usage ledger', () => {
       expect(await text('spawned:default')).toMatch(/default model.*1$/)
       expect(await text('spawned:fork')).toMatch(/fork \(main session's model\).*1$/)
       expect(await text('cache-read')).toMatch(/^Cache read 2,000, not counted.*Updated 12:00:00$/)
+      expect((await pane.find({ key: 'cache-read' }))?.props.flexDirection).toBe('row')
       await pane.unmount()
     }
+    // Too narrow for both: the time goes on the next line, at the left.
+    const narrow = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 }, surface: 'terminal' } as never)
+    expect((await narrow.find({ key: 'cache-read' }))?.props.flexDirection).toBe('column')
+    await narrow.unmount()
   })
 
   // One session today with twelve haiku spawns: task i used (i + 1) thousand tokens, started i

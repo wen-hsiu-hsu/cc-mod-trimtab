@@ -3,6 +3,15 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [0.6.3] - 2026-10-13
+
+| Mod | Version |
+| --- | --- |
+| `subagent-dispatch` | 0.3.3 |
+- `subagent-dispatch` 0.3.3:
+  - Changed: where the cache read line and its time do not fit on one line,
+    the time goes on the next line, at the left.
+
 ## [0.6.2] - 2026-10-13
 
 | Mod | Version |

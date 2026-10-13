@@ -530,6 +530,10 @@ export const register: Register = (on, options) => {
     }
     const switcher = (key: string, label: string, hotkey: string, options: { value: string; label: string }[], value: string, onPick: (value: string) => void) =>
       switchIn(parts, e.surface, key, label, hotkey, options, value, onPick)
+    // The cache read line ends with when the ledgers were read; where both do not fit, the time goes
+    // on the next line, at the left.
+    const cacheText = pick(lang, { en: `Cache read ${n(report.cacheRead)}, not counted`, 'zh-TW': `快取讀取 ${n(report.cacheRead)}，不計入` })
+    const updatedText = pick(lang, { en: `Updated ${clockTime(report.at)}`, 'zh-TW': `更新於 ${clockTime(report.at)}` })
     const spawnCount = (count: number) => pick(lang, { en: `${count} spawns`, 'zh-TW': `${count} 次` })
     const cellBar = (part: number, whole: number, width: number) => {
       const cells = barCells(part, whole, width)
@@ -900,15 +904,12 @@ export const register: Register = (on, options) => {
                 'spawned',
               )}
             </Box>
-            <Box key="cache-read" flexDirection="row" justifyContent="space-between" gap={1}>
+            <Box key="cache-read" flexDirection={cells(cacheText) + 1 + cells(updatedText) <= body ? 'row' : 'column'} justifyContent="space-between" columnGap={1}>
               <Text dimColor wrap="wrap">
-                {pick(lang, {
-                  en: `Cache read ${n(report.cacheRead)}, not counted`,
-                  'zh-TW': `快取讀取 ${n(report.cacheRead)}，不計入`,
-                })}
+                {cacheText}
               </Text>
               <Box flexShrink={0}>
-                <Text dimColor>{pick(lang, { en: `Updated ${clockTime(report.at)}`, 'zh-TW': `更新於 ${clockTime(report.at)}` })}</Text>
+                <Text dimColor>{updatedText}</Text>
               </Box>
             </Box>
             <Box key="list" flexDirection="column" marginTop={1}>
