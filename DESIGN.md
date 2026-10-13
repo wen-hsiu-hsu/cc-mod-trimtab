@@ -45,6 +45,8 @@
 
 關掉的列（`strikethrough`）和超過 7 天的列，種類一律 `dimColor`。
 
+計數長條和圖例也用這幾個顏色，順序同上表（待決定、bug、問題、延後）。延後在長條上是 `gray` 底色（`dimColor` 畫不出底色），desktop 依序是 `#c98a12`、`#c0504d`、`#2f8fb0`、`#8b8b93`。「最近 7 天完成」清單只用灰色系：完成 `white`（`#8b8b93`），不做 `gray`（`#4a4a4a`）。
+
 ### 資料色票
 
 畫長條和圖例時，一個來源一個顏色，所有 mod 共用。終端機用 `ink`，desktop 的 `Svg` 用 `fill`。
@@ -78,12 +80,21 @@
   - 終端機：有底色的空格（`backgroundColor`），不用 `█`。
   - desktop：`Svg`。判斷用 `e.surface !== 'terminal'`，不看 `'Svg' in parts`（runtime 一律提供所有元件）。
   - 有值的部分至少一格。
-- **單行清單**（焦點列動作的清單）：不分斷點，一筆一行，列與列之間空一行（`marginTop={1}`），要能塞進 55 欄（dock 時的 body 寬）。
-  - 一行是固定欄寬的三欄：id（按鈕，見「焦點列動作」）、種類（`dimColor`）、內文（`wrap="truncate-end"`）。
-  - 焦點所在的那一列展開全文，在自己那一欄裡折行，不另外重複；下面再一行 `dimColor` 的時間與 branch，用 ` · ` 隔開。其他列不展開。
-  - 展開的列從第二行起，種類欄在種類字的下方畫一條 `│`（單邊線），顏色跟種類一樣，關掉的列用 `dimColor`，把右邊的內文框成一塊。因為要在每一行前放 `│`，全文依 `e.props.bodyColumns` 自己折行（中文算兩格），一行一個 `Box`，不用 `wrap="wrap"`。
-  - 不按種類分組，種類寫在每一列上，用短字樣：`待決定`／`問　題`／`延　後`／`bug`，英文 `Decide`／`Question`／`Deferred`／`Bug`。兩個字的中文中間放一個全形空格，跟三個字的對齊。
-  - 清單上方一行：左邊是切換清單的 `switcher`，右邊是作用在整份清單的按鈕（open-items 的 `Copy whole list`／`複製整份清單`）。兩顆都是有 hotkey 的 `plain` 按鈕，終端機畫成 `v: ‹ 未完成 ›`、`c: 複製整份清單`（見「提示列」）。
+- **計數列**：清單最上面，取代卡片（比卡片省高度）。
+  - 第一行：`bold` 的總數，空一格，後面是填滿其餘寬度的比例長條，每個種類一段，顏色見「種類色」。
+  - 第二行是圖例，縮排對齊長條的起點：`● 待決定 2`，`●` 上種類色，種類字 `dimColor`，數字 `bold`，項目之間空兩格，`wrap="wrap"`。數量是 0 的種類不畫。
+  - 沒有項目時：總數 `0` 加 `dimColor`，長條是一整條 `gray` 底色，圖例換成一行 `dimColor` 的 `Resolved in the last 7 days: N`／`最近 7 天完成 N 項`（N `bold`）。
+- **全文清單**（焦點列動作的清單，open-items）：不分斷點，要能塞進 55 欄（dock 時的 body 寬）。
+  - 每一項都展開全文，下面一行 `dimColor` 的時間與 branch，用 ` · ` 隔開；項目之間空一行。全文依 `e.props.bodyColumns` 自己折行（中文算兩格），一行一個 `Box`，因為分組時每一行前要放 `│`。
+  - id 是固定欄寬的一欄（按鈕，見「焦點列動作」），內文在它右邊折行，不回到 id 底下。
+  - 種類用短字樣：`待決定`／`問　題`／`延　後`／`bug`，英文 `Decide`／`Question`／`Deferred`／`Bug`。兩個字的中文中間放一個全形空格，跟三個字的對齊。
+  - **依種類分組**（預設）：組的順序是待決定、bug、問題、延後。最左一欄寫種類（種類色），右邊一條同色的 `│`（單邊線）從組的第一行畫到最後一行，連項目之間的空行也畫，把整組框成一塊；列上不再寫種類。組與組之間空一行。
+  - 延後的組預設收起，只畫一行 `m: Show N ▸`／`m: 展開 N 項 ▸`（`plain` 按鈕，hotkey `m`）；展開後最後一行是 `m: Hide`／`m: 收起`。
+  - **不分組**：一行三欄：id、種類（種類色）、內文。
+  - **依 branch 分組**：組名一行，`bold` 的 branch 名，後面 `dimColor` 的數量；目前的 branch 排第一，寫成 `current · N`／`目前 · N`，其他組依排序後第一次出現的順序。組底下每一行前放 `dimColor` 的 `│`，接 id、種類、內文；灰字只寫時間。沒有 branch 的項目組名是 `no branch`／`沒有 branch`。
+  - 清單上方一行：左邊是切換鈕（清單 `v`、分組 `g`、排序 `s`），右邊是作用在整份清單的按鈕（`c: Copy all`／`c: 複製全部`）。都是有 hotkey 的 `plain` 按鈕（見「提示列」）；放不下時整排折行（`flexWrap="wrap"`，`columnGap={2}`）。
+  - 空清單只留 `v`，不畫 `g`、`s`、`c`。
+  - **最近 7 天完成**：同一份 repo 裡 7 天內完成或不做的項目（7 天和「超過 7 天變淡」同一個門檻），不分組，只有 `v` 和 `s`。種類欄換成結果（`完　成`／`不　做`，英文 `Done`／`Won't do`，`dimColor`），內文 `dimColor`，有決定或理由時接在內文後面（`內文 → 理由`）；灰字是「完成多久以前 · 種類 · branch」。計數列分完成、不做兩段。
 
 ## 控制項
 
@@ -95,7 +106,8 @@
   - 用 `ui.focus` 記下焦點在哪一列；焦點不在任何一列時，按動作不做事。
   - 動作按鈕 `plain`，每顆都有 hotkey，終端機畫成 `d: 完成  x: 不做  q: 引用`，放在清單下方 `marginTop={1}`，`gap={2}`。提示列不再列這些動作。
   - 關掉的列留在原位：`dimColor` 加 `strikethrough`，文字前加狀態（`Done`／`完成`、`Won't do`／`不做`），焦點不動；再按一次同一個動作就復原。切換清單或重開 pane 時才移走。
-  - 「最近完成」清單的動作是重新打開（`d`）和引用（`q`）：重新打開的列一樣留在原位，文字前加 `Reopened`／`重新打開`。
+  - 「最近 7 天完成」清單的動作是重新打開（`d`）和引用（`q`）：重新打開的列一樣留在原位，結果欄空白，文字前加 `Reopened`／`重新打開`。
+  - 焦點所在的那一列，id 由終端機畫成反白；列不另外展開（每一列本來就是全文）。
   - 不用 `$.ui.focus` 把焦點搬到下一列：實測焦點會落在剛按的動作按鈕上，或跳過一列。
 - **切換**：不用下拉的 `Select`，它展開時會把下方畫面往下推。用 `ui.tsx` 的 `switcher`：
   - 終端機：一顆 `plain` 按鈕「‹ 值 ›」，按一次換下一個值，最後一個之後回到第一個，hotkey 也做同樣的事。
@@ -109,15 +121,15 @@ Pane 和 Band 上所有導覽按鈕和焦點列動作都要有 hotkey，並列�
 | 鍵 | 動作 | 用在 |
 | --- | --- | --- |
 | `b` | 返回上一層 | subagent-dispatch |
-| `m` | 顯示更多 | subagent-dispatch |
+| `m` | 顯示更多（open-items：展開、收起延後的組） | subagent-dispatch、open-items |
 | `p` | 切換期間 | subagent-dispatch |
-| `g` | 切換分組 | subagent-dispatch |
-| `s` | 切換排序 | subagent-dispatch |
-| `c` | 複製 | open-items |
-| `d` | 完成焦點那一列（最近完成清單：重新打開） | open-items |
+| `g` | 切換分組 | subagent-dispatch、open-items（依種類／不分組／依 branch） |
+| `s` | 切換排序 | subagent-dispatch、open-items（舊到新／新到舊） |
+| `c` | 複製全部 | open-items |
+| `d` | 完成焦點那一列（最近 7 天完成清單：重新打開） | open-items |
 | `x` | 不做焦點那一列 | open-items |
 | `q` | 引用焦點那一列到輸入框 | open-items |
-| `v` | 切換清單（未完成／最近完成） | open-items |
+| `v` | 切換清單（未完成／最近 7 天完成） | open-items |
 | `o` | 打開 pane | open-items band |
 | `u` | 復原 | open-items band |
 | `r` | 重派 | subagent-dispatch band |
@@ -142,7 +154,7 @@ Pane 和 Band 上所有導覽按鈕和焦點列動作都要有 hotkey，並列�
   - `plain` 按鈕上已經畫出 `鍵: ` 的（例如 `v: ‹ 未完成 ›`），提示列不再列。
   - 有焦點列動作的清單，動作和切換都在按鈕前寫了鍵，提示列只剩 `Tab/↑↓ moves · Esc closes`／`Tab/↑↓ 移動 · Esc 關閉`；空清單只剩 `Esc 關閉`。
   - 按鈕上已經寫了動作的，寫成「‹ Back (b) returns」。
-- **空狀態**：`<Text dimColor wrap="wrap">`，一句話說沒有什麼，需要時在括號裡說明什麼時候會出現。例如 `No open items.`、`No usage recorded yet (…).`。
+- **空狀態**：`<Text dimColor wrap="wrap">`，一句話說沒有什麼，需要時在括號裡說明什麼時候會出現。例如 `No open items (…).`、`No usage recorded yet (…).`。有計數列的 pane 照樣畫計數列（見「版面」的計數列）。
 
 ## Band
 
