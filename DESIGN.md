@@ -80,7 +80,9 @@
   - 終端機：有底色的空格（`backgroundColor`），不用 `█`。
   - desktop：`Svg`。判斷用 `e.surface !== 'terminal'`，不看 `'Svg' in parts`（runtime 一律提供所有元件）。
   - 有值的部分至少一格。
-- **標題列**（open-items pane）：最上面一行，`bold` 的 mod 名稱，空一格，後面一條 `dimColor` 的 `─` 填滿其餘寬度（依 `e.props.bodyColumns`），下面空一行。
+- **標題列**（open-items pane、subagent-dispatch stats pane）：最上面一行，`bold` 的 mod 名稱，空一格，後面一條 `dimColor` 的 `─` 填滿其餘寬度（依 `e.props.bodyColumns`），下面空一行。
+- **清單表頭**（subagent-dispatch stats）：欄名那一行（窄版是代替欄名的切換鈕）上方一條 `dimColor` 的 `─` 填滿 `e.props.bodyColumns`，下方空一行。列名很長時（依 session 分組）列與列之間空一行。
+- **提示列置底**：清單後面放一個 `flexGrow={1}` 的空 `Box`；pane 在 dock 時（`e.props.placement === 'dock'`），最外層 `Box` 設 `minHeight={e.props.scroll.bodyRows}` 撐滿高度，提示列（有焦點列動作時連同動作列）落在最下面。inline 的 pane 外框跟著內容高度，不撐。
 - **計數列**：標題列下面，取代卡片（比卡片省高度）。
   - 第一行：`bold` 的總數，空一格，後面是填滿其餘寬度的比例長條，每個種類一段，顏色見「種類色」。
   - 第二行是圖例，縮排對齊長條的起點：`● 待決定 2`，`●` 上種類色，種類字 `dimColor`，數字 `bold`，項目之間空兩格，`wrap="wrap"`。數量是 0 的種類不畫。
@@ -106,7 +108,7 @@
   - 每一列只有 id 是一顆 `plain` 按鈕（label 就是 id），`key` 寫成 `row:<id>`，Tab／↑↓ 在列之間移動。不把整行做成按鈕：按鈕裡不能放 `Box`，焦點列折行時對不齊內文那一欄。
   - 用 `ui.focus` 記下焦點在哪一列；焦點不在任何一列時，按動作不做事。
   - 動作按鈕 `plain`，每顆都有 hotkey，終端機畫成 `d: 完成  x: 不做  q: 引用`，放在清單下方 `marginTop={2}`（空兩行，跟清單分開），`gap={2}`。提示列不再列這些動作。
-  - 動作列和提示列置底：清單後面放一個 `flexGrow={1}` 的空 `Box`；pane 在 dock 時（`e.props.placement === 'dock'`），最外層 `Box` 設 `minHeight={e.props.scroll.bodyRows}` 撐滿高度。inline 的 pane 外框跟著內容高度，不撐。
+  - 動作列和提示列置底（見「版面」的提示列置底）。
   - 關掉的列留在原位：`dimColor` 加 `strikethrough`，文字前加狀態（`Done`／`完成`、`Won't do`／`不做`），焦點不動；再按一次同一個動作就復原。切換清單或重開 pane 時才移走。
   - 「最近 7 天完成」清單的動作是重新打開（`d`）和引用（`q`）：重新打開的列一樣留在原位，結果欄空白，文字前加 `Reopened`／`重新打開`。
   - 焦點所在的那一列，id 由終端機畫成反白；列不另外展開（每一列本來就是全文）。
@@ -154,6 +156,7 @@ Pane 和 Band 上所有導覽按鈕和焦點列動作都要有 hotkey，並列�
   - 每項寫成「鍵 動作」，項目之間用 ` · ` 分隔。
   - 最後一項是 `Esc closes`／`Esc 關閉`（確認框不列）。
   - `plain` 按鈕上已經畫出 `鍵: ` 的（例如 `v: ‹ 未完成 ›`），提示列不再列。
+  - subagent-dispatch stats 的期間、分組、排序、更多都是畫出鍵的 `plain` 按鈕，提示列只剩 `Tab moves · Enter opens a row · Esc closes`／`Tab 移動 · Enter 打開一列 · Esc 關閉`（打開一列後是 `Enter 展開一筆` 與 `‹ 返回（b）回總覽`）。
   - 有焦點列動作的清單，動作和切換都在按鈕前寫了鍵，提示列只剩 `Tab/↑↓ moves · Esc closes`／`Tab/↑↓ 移動 · Esc 關閉`；空清單只剩 `Esc 關閉`。
   - 按鈕上已經寫了動作的，寫成「‹ Back (b) returns」。
 - **空狀態**：`<Text dimColor wrap="wrap">`，一句話說沒有什麼，需要時在括號裡說明什麼時候會出現。例如 `No open items (…).`、`No usage recorded yet (…).`。有計數列的 pane 照樣畫計數列（見「版面」的計數列）。

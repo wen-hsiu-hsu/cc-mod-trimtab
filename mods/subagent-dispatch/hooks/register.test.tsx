@@ -424,6 +424,22 @@ describe('usage ledger', () => {
     await pane.unmount()
   })
 
+  test('stats heads the pane with its name, keeps only unshown keys in the hint, and lists the sessions of a main-only model', async ($, on) => {
+    await twoWeeks($, on)
+    await step($, 'claude-sonnet-4')
+    const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
+    expect(await pane.find({ type: 'Text', text: 'subagent-dispatch stats' })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /p period/ })).toBeUndefined()
+    expect(await pane.find({ type: 'Text', text: 'Enter opens a row' })).toBeDefined()
+
+    await choose(pane, 'group', 'model')
+    await pane.press({ key: 'row:claude-sonnet-4' })
+    expect(await pane.find({ type: 'Text', text: 'session' })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /^Oct 12 / })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: /s sorts/ })).toBeUndefined()
+    await pane.unmount()
+  })
+
   test('stats prints the text report where the pane cannot be placed, and closes it', async ($, on) => {
     const world = newWorld()
     world.placed = false

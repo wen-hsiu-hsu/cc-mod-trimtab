@@ -3,6 +3,18 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [Unreleased]
+
+- `subagent-dispatch` 0.3.0:
+  - Added: the stats pane's top line names it, `subagent-dispatch stats`,
+    over a rule, as in open-items.
+  - Changed: the hint line sits at the bottom of a docked pane and no longer
+    lists `p`, `g`, `s` or `m`, which the buttons already show.
+  - Changed: a list's column names sit under a rule and above a blank line;
+    grouped by session, a blank line parts the rows.
+  - Changed: a row with no spawns (a model only the main session used, or the
+    main session row) lists its sessions with a bar each, most tokens first.
+
 ## [0.5.0] - 2026-10-13
 
 | Mod | Version |

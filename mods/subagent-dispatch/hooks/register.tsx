@@ -516,6 +516,24 @@ export const register: Register = (on, options) => {
       return cells === 0 ? <Text> </Text> : <Text backgroundColor="cyan">{' '.repeat(cells)}</Text>
     }
     const bar = (part: number) => cellBar(part, most, barWidth)
+    // As in open-items: the command's name over a dim rule at the top, the hint line at the foot.
+    // A dock is as tall as its room, so the frame fills it; an inline pane keeps its own height.
+    const heading = `${MOD} ${STATS}`
+    const room = e.props.placement === 'dock' ? (e.props.scroll as { bodyRows?: number } | undefined)?.bodyRows : undefined
+    const frame = room === undefined ? {} : { minHeight: room }
+    const title = (
+      <Box key="title" flexDirection="row" gap={1} marginBottom={1}>
+        <Text bold>{heading}</Text>
+        <Text dimColor>{'─'.repeat(Math.max(0, body - heading.length - 1))}</Text>
+      </Box>
+    )
+    // A list's column names sit under a dim rule and above a blank line.
+    const listHead = (key: string, columns: RenderNode) => (
+      <Box key={key} flexDirection="column" marginTop={1} marginBottom={1}>
+        <Text dimColor>{'─'.repeat(body)}</Text>
+        {columns}
+      </Box>
+    )
 
     const periodSwitch = switcher(
       'days',
@@ -639,7 +657,8 @@ export const register: Register = (on, options) => {
       const rowBar = wide ? 16 : 8
 
       return (
-        <Box flexDirection="column">
+        <Box flexDirection="column" {...frame}>
+          {title}
           <Box flexDirection="row" gap={1}>
             <Button
               key="back"
@@ -679,15 +698,37 @@ export const register: Register = (on, options) => {
                 )}
           </Box>
           {listed.length === 0 ? (
-            // The main session row: no spawns, each session's own tokens instead.
-            open.detail.map(part => (
-              <Box key={`main:${part.session.repo}-${part.session.started}`} flexDirection="row" gap={1}>
-                <Box flexGrow={1} flexShrink={1}>
-                  <Text wrap="truncate-end">{sessionName(lang, part.session)}</Text>
-                </Box>
-                <Text>{n(part.main)}</Text>
-              </Box>
-            ))
+            // A row of the main session's own tokens (a main model, or the main session by type) has no
+            // spawns: it lists the sessions those tokens came from, most first, each with its bar.
+            <Box flexDirection="column">
+              {listHead(
+                'sessions-head',
+                <Box flexDirection="row" gap={1}>
+                  <Box flexGrow={1} flexShrink={1}>
+                    <Text dimColor>session</Text>
+                  </Box>
+                  <Box width={rowBar} flexShrink={0} />
+                  <Box width={9} flexShrink={0} justifyContent="flex-end">
+                    <Text dimColor>token</Text>
+                  </Box>
+                </Box>,
+              )}
+              {[...open.detail]
+                .sort((a, b) => b.main - a.main)
+                .map(part => (
+                  <Box key={`main:${part.session.repo}-${part.session.started}`} flexDirection="row" gap={1}>
+                    <Box flexGrow={1} flexShrink={1}>
+                      <Text wrap="truncate-end">{sessionName(lang, part.session)}</Text>
+                    </Box>
+                    <Box width={rowBar} flexShrink={0}>
+                      {cellBar(part.main, Math.max(1, ...open.detail.map(other => other.main)), rowBar)}
+                    </Box>
+                    <Box width={9} flexShrink={0} justifyContent="flex-end">
+                      <Text>{n(part.main)}</Text>
+                    </Box>
+                  </Box>
+                ))}
+            </Box>
           ) : (
           <Box flexDirection="column">
           <Box marginTop={1}>
@@ -704,19 +745,22 @@ export const register: Register = (on, options) => {
               value => void update($, view, current => ({ ...current, sort: value, limit: PAGE })),
             )}
           </Box>
-          <Box flexDirection="row" gap={1}>
-            <Box width={1} flexShrink={0} />
-            <Box flexGrow={1} flexShrink={1}>
-              <Text dimColor>{pick(lang, { en: 'Spawns', 'zh-TW': '派出' })}</Text>
-            </Box>
-            <Box width={rowBar} flexShrink={0} />
-            <Box width={9} flexShrink={0} justifyContent="flex-end">
-              <Text dimColor>token</Text>
-            </Box>
-            <Box width={6} flexShrink={0} justifyContent="flex-end">
-              <Text dimColor>{pick(lang, { en: 'date', 'zh-TW': '日期' })}</Text>
-            </Box>
-          </Box>
+          {listHead(
+            'spawns-head',
+            <Box flexDirection="row" gap={1}>
+              <Box width={1} flexShrink={0} />
+              <Box flexGrow={1} flexShrink={1}>
+                <Text dimColor>{pick(lang, { en: 'Spawns', 'zh-TW': '派出' })}</Text>
+              </Box>
+              <Box width={rowBar} flexShrink={0} />
+              <Box width={9} flexShrink={0} justifyContent="flex-end">
+                <Text dimColor>token</Text>
+              </Box>
+              <Box width={6} flexShrink={0} justifyContent="flex-end">
+                <Text dimColor>{pick(lang, { en: 'date', 'zh-TW': '日期' })}</Text>
+              </Box>
+            </Box>,
+          )}
           {listed.slice(0, limit).map(({ spawn, session }) => {
             const id = spawnId(spawn)
             const color = kindColor(spawn)
@@ -791,10 +835,15 @@ export const register: Register = (on, options) => {
           ) : null}
           </Box>
           )}
+          <Box key="spacer" flexGrow={1} />
           {hintLine(parts, lang, [
-            { en: 'Enter opens a spawn', 'zh-TW': 'Enter 展開一筆' },
-            { en: 's sorts', 'zh-TW': 's 排序' },
-            { en: 'm more', 'zh-TW': 'm 更多' },
+            // The sort and more buttons already show their keys.
+            ...(listed.length === 0
+              ? []
+              : [
+                  { en: 'Tab moves', 'zh-TW': 'Tab 移動' },
+                  { en: 'Enter opens a spawn', 'zh-TW': 'Enter 展開一筆' },
+                ]),
             { en: '‹ Back (b) returns', 'zh-TW': '‹ 返回（b）回總覽' },
           ])}
         </Box>
@@ -802,7 +851,8 @@ export const register: Register = (on, options) => {
     }
 
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" {...frame}>
+        {title}
         {wide ? (
           // A wide pane: the period and its days on the left, the grouping on the right.
           <Box key="header" flexDirection="row" justifyContent="space-between" gap={2}>
@@ -849,27 +899,30 @@ export const register: Register = (on, options) => {
               </Text>
             </Box>
             {wide ? (
-              <Box key="columns" flexDirection="row" gap={1} marginTop={1}>
-                <Box flexGrow={1} flexShrink={1}>
-                  <Text dimColor>{byLabel[by]}</Text>
-                </Box>
-                <Box width={barWidth} flexShrink={0} />
-                <Box width={10} flexShrink={0} justifyContent="flex-end">
-                  <Text dimColor>token</Text>
-                </Box>
-                <Box width={5} flexShrink={0} justifyContent="flex-end">
-                  <Text dimColor>{pick(lang, { en: 'share', 'zh-TW': '佔比' })}</Text>
-                </Box>
-                <Box width={10} flexShrink={0} justifyContent="flex-end">
-                  <Text dimColor>{pick(lang, { en: 'spawns', 'zh-TW': '派出' })}</Text>
-                </Box>
-              </Box>
+              listHead(
+                'columns',
+                <Box flexDirection="row" gap={1}>
+                  <Box flexGrow={1} flexShrink={1}>
+                    <Text dimColor>{byLabel[by]}</Text>
+                  </Box>
+                  <Box width={barWidth} flexShrink={0} />
+                  <Box width={10} flexShrink={0} justifyContent="flex-end">
+                    <Text dimColor>token</Text>
+                  </Box>
+                  <Box width={5} flexShrink={0} justifyContent="flex-end">
+                    <Text dimColor>{pick(lang, { en: 'share', 'zh-TW': '佔比' })}</Text>
+                  </Box>
+                  <Box width={10} flexShrink={0} justifyContent="flex-end">
+                    <Text dimColor>{pick(lang, { en: 'spawns', 'zh-TW': '派出' })}</Text>
+                  </Box>
+                </Box>,
+              )
             ) : (
-              <Box key="group-line" marginTop={1} marginBottom={1}>
-                {groupSwitch}
-              </Box>
+              listHead('group-line', groupSwitch)
             )}
-            {rows.map(row => {
+            {rows.map((row, i) => {
+              // A session's name runs long, so sessions get a blank line between them.
+              const gap = by === 'session' && i > 0 ? { marginTop: 1 } : {}
               // A Button holds only text, so the name is the button and the bar sits beside it.
               const name = (
                 <Box flexGrow={1} flexShrink={1}>
@@ -880,7 +933,7 @@ export const register: Register = (on, options) => {
               )
 
               return wide ? (
-                <Box key={`line-${row.key}`} flexDirection="row" gap={1}>
+                <Box key={`line-${row.key}`} flexDirection="row" gap={1} {...gap}>
                   {name}
                   <Box width={barWidth} flexShrink={0}>
                     {bar(row.tokens)}
@@ -896,7 +949,7 @@ export const register: Register = (on, options) => {
                   </Box>
                 </Box>
               ) : (
-                <Box key={`line-${row.key}`} flexDirection="column">
+                <Box key={`line-${row.key}`} flexDirection="column" {...gap}>
                   <Box flexDirection="row" gap={1}>
                     {name}
                     <Text dimColor>{spawnCount(row.spawns)}</Text>
@@ -911,13 +964,20 @@ export const register: Register = (on, options) => {
                 </Box>
               )
             })}
-            {hintLine(parts, lang, [
-              { en: 'Tab moves', 'zh-TW': 'Tab 移動' },
-              { en: 'Enter opens a row', 'zh-TW': 'Enter 打開一列' },
-              { en: 'p period', 'zh-TW': 'p 期間' },
-              { en: 'g group', 'zh-TW': 'g 分組' },
-            ])}
           </Box>
+        )}
+        {/* Takes up what the list leaves, so the hint line sits at the foot of a docked pane. The period
+            and group buttons already show their keys. */}
+        <Box key="spacer" flexGrow={1} />
+        {hintLine(
+          parts,
+          lang,
+          report.sessions.length === 0
+            ? []
+            : [
+                { en: 'Tab moves', 'zh-TW': 'Tab 移動' },
+                { en: 'Enter opens a row', 'zh-TW': 'Enter 打開一列' },
+              ],
         )}
       </Box>
     )
