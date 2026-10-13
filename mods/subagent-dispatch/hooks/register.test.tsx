@@ -448,6 +448,23 @@ describe('usage ledger', () => {
     await pane.unmount()
   })
 
+  test('an open pane redraws a second after a step lands, once for steps in that second', async ($, on) => {
+    const world = newWorld()
+    const clock = engine(on, { value: 'running' }, '', world)
+    await start($)
+    await step($, 'claude-opus-4')
+    await stats($, 'stats')
+    const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
+    expect(await pane.find({ type: 'Text', text: '160' })).toBeDefined()
+
+    await step($, 'claude-opus-4')
+    await step($, 'claude-opus-4')
+    expect(await pane.find({ type: 'Text', text: '160' })).toBeDefined()
+    await clock.advance(1000)
+    expect(await pane.find({ type: 'Text', text: '480' })).toBeDefined()
+    await pane.unmount()
+  })
+
   test('stats prints the text report where the pane cannot be placed, and closes it', async ($, on) => {
     const world = newWorld()
     world.placed = false

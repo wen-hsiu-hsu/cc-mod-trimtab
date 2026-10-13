@@ -3,6 +3,12 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [Unreleased]
+
+- `subagent-dispatch` 0.3.1:
+  - Changed: an open stats pane is drawn again a second after a step or a
+    spawn is recorded, instead of only when one of its buttons is pressed.
+
 ## [0.6.0] - 2026-10-13
 
 | Mod | Version |

@@ -146,10 +146,12 @@ async function fillRedispatch($: EngineInterface, lang: Lang): Promise<string> {
 }
 
 // `meta` belongs to session `sid`; `agents` maps an agent id to the ledger key it was spawned
-// under, at most AGENT_KEYS of them.
-type LedgerState = { recording: boolean; writing: Promise<void>; sid: string; meta: SessionMeta; agents: Map<string, string> }
+// under, at most AGENT_KEYS of them; `redraw` says a redraw of the stats pane is waiting.
+type LedgerState = { recording: boolean; writing: Promise<void>; sid: string; meta: SessionMeta; agents: Map<string, string>; redraw: boolean }
 
 const AGENT_KEYS = 500
+// A write redraws the stats pane this long after it, once for every write meanwhile.
+const REDRAW_MS = 1000
 
 // `/clear` starts a new session id in the same process without a session.start: the new
 // session starts now and is named after its own first prompt.
@@ -184,12 +186,27 @@ function record($: EngineInterface, state: LedgerState, where: string, change: (
         applyMeta(ledger, state.meta)
       }
       await $.store.set(key, ledger)
+      redrawStats($, state)
     } catch (error) {
       $.ui.log(`${where}: ledger not written: ${String(error)}`, { to: 'debug' })
     }
   })
 
   return state.writing
+}
+
+// The pane reads the ledgers from `$.store`, whose writes redraw nothing by themselves. Parallel
+// subagents write at every step, so the writes of a second share one redraw. It also redraws
+// this mod's band above the prompt, which reads one value.
+function redrawStats($: EngineInterface, state: LedgerState): void {
+  if (state.redraw) {
+    return
+  }
+  state.redraw = true
+  $.clock.after(REDRAW_MS, () => {
+    state.redraw = false
+    $.ui.invalidate('ui.render')
+  })
 }
 
 // Deletes the ledgers no session has written to for RETENTION_MS.
@@ -319,7 +336,7 @@ export const register: Register = (on, options) => {
   let lang: Lang = 'en'
   // A `-p` run has no pane: `stats` prints its report there.
   let interactive = true
-  const ledger: LedgerState = { recording: true, writing: Promise.resolve(), sid: '', meta: { repo: '', started: 0, prompt: '' }, agents: new Map() }
+  const ledger: LedgerState = { recording: true, writing: Promise.resolve(), sid: '', meta: { repo: '', started: 0, prompt: '' }, agents: new Map(), redraw: false }
 
   on('session.start', async ($, e, next) => {
     interactive = e.isInteractive
