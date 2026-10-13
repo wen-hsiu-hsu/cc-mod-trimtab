@@ -3,8 +3,14 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
-## [Unreleased]
+## [0.4.0] - 2026-10-13
 
+| Mod | Version |
+| --- | --- |
+| `open-items` | 0.5.0 |
+| `session-keeper` | 0.3.3 |
+| `subagent-dispatch` | 0.2.1 |
+| `tool-guard` | 0.2.3 |
 - `open-items` 0.5.0:
   - Changed: the pane shows one line per item (id, kind, text) instead of
     each item's buttons. Tab or ↑↓ moves between items and opens the one you
