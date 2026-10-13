@@ -1,10 +1,16 @@
 import type { AgentStatus, On } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { elapsed } from './ledger'
+import { cells, elapsed, fit } from './ledger'
 import { redispatchPrompt } from './register'
 
 describe('helpers', () => {
+  test('fits text to a width in terminal cells, CJK counting two', () => {
+    expect(cells('ok 中文')).toBe(7)
+    expect(fit('ok 中文', 7)).toBe('ok 中文')
+    expect(fit('ok 中文字', 7)).toBe('ok 中…')
+    expect(cells(fit('調整 stats 介面', 8))).toBeLessThanOrEqual(8)
+  })
   test('formats elapsed time', () => {
     expect(elapsed(5_000)).toBe('5s')
     expect(elapsed(192_000)).toBe('3m12s')
@@ -655,6 +661,29 @@ describe('usage ledger', () => {
       expect((await pane.find({ key: 'bar:claude-haiku-4-5' }))?.text).toMatch(/78,000.*%/)
       await pane.unmount()
     }
+  })
+
+  test('a row name is cut to one line by its cells, and a rule fills what a short name leaves', async ($, on) => {
+    const world = await twoWeeks($, on)
+    world.store[`ledger:long`] = {
+      updated: world.now,
+      repo: '/repo',
+      started: world.now - 1000,
+      prompt: '調整 subagent-dispatch stats 介面，讓中英混合的 session 名稱也只佔一行',
+      main: { 'claude-opus-4': { input: 10, cacheWrite: 0, cacheRead: 0, output: 0, steps: 1 } },
+      spawns: [],
+    }
+    await stats($, 'stats')
+    const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 52 }, surface: 'terminal' } as never)
+    await choose(pane, 'group', 'session')
+    const long = (await pane.find({ key: `row:/repo|${world.now - 1000}` }))?.text ?? ''
+    expect(long.endsWith('…')).toBe(true)
+    // A wide character that would overflow leaves its cell empty.
+    expect(cells(long)).toBeLessThanOrEqual(52 - cells('0 spawns') - 1)
+    expect(cells(long)).toBeGreaterThanOrEqual(52 - cells('0 spawns') - 2)
+    expect((await pane.find({ key: `name:/repo|${world.now - 1000}` }))?.text).not.toMatch(/─/)
+    expect((await pane.find({ key: 'name:/old|' + new Date(2026, 9, 5, 9).getTime() }))?.text).toMatch(/^last week─+1 spawns$/)
+    await pane.unmount()
   })
 
   test('period, grouping and sort switch in place: one cycling button in the terminal, segments on desktop', async ($, on) => {

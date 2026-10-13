@@ -338,6 +338,38 @@ export function groups(lang: Lang, report: Report, by: GroupBy): Group[] {
 
 export const n = (value: number): string => value.toLocaleString('en-US')
 
+// Characters a terminal draws two cells wide (CJK, full-width forms, emoji).
+const WIDE = /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]|[\u{1f300}-\u{1faff}\u{20000}-\u{3fffd}]/u
+
+export function cells(text: string): number {
+  let count = 0
+  for (const ch of text) {
+    count += WIDE.test(ch) ? 2 : 1
+  }
+
+  return count
+}
+
+// Cut to `width` cells, ending in "…" when cut: a Button's text does not truncate on its own and
+// wraps instead once CJK and Latin mix.
+export function fit(text: string, width: number): string {
+  if (cells(text) <= width) {
+    return text
+  }
+  let out = ''
+  let used = 0
+  for (const ch of text) {
+    const w = WIDE.test(ch) ? 2 : 1
+    if (used + w > width - 1) {
+      break
+    }
+    out += ch
+    used += w
+  }
+
+  return `${out}…`
+}
+
 export function share(part: number, whole: number): string {
   return whole === 0 ? '0%' : `${Math.round((part / whole) * 100)}%`
 }

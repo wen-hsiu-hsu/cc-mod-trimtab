@@ -7,6 +7,7 @@ import { CARD, COLORS, emptyState, hintLine, MAIN_SHADES, switcher as switchIn, 
 import {
   applyMeta,
   buildReport,
+  cells,
   countKinds,
   dayLabel,
   elapsed,
@@ -23,6 +24,7 @@ import {
   tokens,
   type Spawn,
   emptyText,
+  fit,
   emptyLedger,
   isLedger,
   LEDGER_PREFIX,
@@ -498,8 +500,8 @@ export const register: Register = (on, options) => {
     const wide = body >= WIDE_COLUMNS
     const all = report.main + report.sub
     const most = Math.max(1, ...rows.map(row => row.tokens))
-    // A row's bar takes what its line leaves after the left line, the tokens and the share.
-    const barWidth = clamp(body - 20, 8, 60)
+    // A row's bar takes what its line leaves after the tokens and the share.
+    const barWidth = clamp(body - 18, 8, 60)
     const byLabel: Record<GroupBy, string> = {
       repo: 'repo',
       session: 'session',
@@ -891,53 +893,47 @@ export const register: Register = (on, options) => {
               <Box key="group-line">{groupSwitch}</Box>
             </Box>
             {rows.map(row => {
-              // Each row is a block under a dim line down its left, a blank line from the next: its name and
-              // spawns, a session's time and repo, then its bar with the tokens and share at the right.
+              // Each row is a block, a blank line from the next: its name, then a dim rule out to its spawns at
+              // the right (no rule when the name fills the room, which is cut to fit); a session's time and
+              // repo; then its bar with the tokens and share at the right.
               const session = by === 'session' ? row.detail[0]?.session : undefined
-              const line = (key: string, content: RenderNode) => (
-                <Box key={`${key}:${row.key}`} flexDirection="row" gap={1}>
-                  <Box width={1} flexShrink={0}>
-                    <Text dimColor>│</Text>
-                  </Box>
-                  {content}
-                </Box>
-              )
+              const count = spawnCount(row.spawns)
+              const room = Math.max(1, body - cells(count) - 1)
+              const label = fit(session === undefined ? row.label : promptOf(session), room)
+              const fill = room - cells(label) - 1
 
               return (
                 <Box key={`line-${row.key}`} flexDirection="column" marginTop={1}>
-                  {line(
-                    'name',
-                    [
-                      // A Button holds only text, so the name is the button and the count sits beside it.
-                      <Box key="name" flexGrow={1} flexShrink={1} minWidth={0}>
-                        <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key, sort: 'tokens', limit: PAGE, spawn: '' }))}>
-                          <Text wrap="truncate-end">{session === undefined ? row.label : promptOf(session)}</Text>
-                        </Button>
-                      </Box>,
-                      <Box key="count" width={10} flexShrink={0} justifyContent="flex-end">
-                        <Text dimColor>{spawnCount(row.spawns)}</Text>
-                      </Box>,
-                    ],
+                  <Box key={`name:${row.key}`} flexDirection="row" gap={1}>
+                    {/* A Button holds only text, so the name is the button and the rule and count sit beside it. */}
+                    <Box flexShrink={0}>
+                      <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key, sort: 'tokens', limit: PAGE, spawn: '' }))}>
+                        <Text wrap="truncate-end">{label}</Text>
+                      </Button>
+                    </Box>
+                    <Box flexGrow={1} flexShrink={1}>{fill > 0 ? <Text dimColor>{'─'.repeat(fill)}</Text> : null}</Box>
+                    <Box flexShrink={0}>
+                      <Text dimColor>{count}</Text>
+                    </Box>
+                  </Box>
+                  {session === undefined ? null : (
+                    <Box key={`meta:${row.key}`}>
+                      <Text dimColor wrap="truncate-end">
+                        {fit(`${stamp(lang, session.started)} · ${repoName(lang, session.repo)}`, body)}
+                      </Text>
+                    </Box>
                   )}
-                  {session === undefined
-                    ? null
-                    : line(
-                        'meta',
-                        <Box flexShrink={1} minWidth={0}>
-                          <Text dimColor wrap="truncate-end">{`${stamp(lang, session.started)} · ${repoName(lang, session.repo)}`}</Text>
-                        </Box>,
-                      )}
-                  {line('bar', [
-                    <Box key="bar" flexGrow={1} flexShrink={1}>
+                  <Box key={`bar:${row.key}`} flexDirection="row" gap={1}>
+                    <Box flexGrow={1} flexShrink={1}>
                       {bar(row.tokens)}
-                    </Box>,
-                    <Box key="tokens" width={11} flexShrink={0} justifyContent="flex-end">
+                    </Box>
+                    <Box width={11} flexShrink={0} justifyContent="flex-end">
                       <Text>{n(row.tokens)}</Text>
-                    </Box>,
-                    <Box key="share" width={5} flexShrink={0} justifyContent="flex-end">
+                    </Box>
+                    <Box width={5} flexShrink={0} justifyContent="flex-end">
                       <Text dimColor>{share(row.tokens, all)}</Text>
-                    </Box>,
-                  ])}
+                    </Box>
+                  </Box>
                 </Box>
               )
             })}

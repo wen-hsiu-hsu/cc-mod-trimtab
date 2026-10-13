@@ -82,8 +82,8 @@
   - 有值的部分至少一格。
 - **標題列**（open-items pane、subagent-dispatch stats pane）：最上面一行，`bold` 的 mod 名稱，空一格，後面一條 `dimColor` 的 `─` 填滿其餘寬度（依 `e.props.bodyColumns`），下面空一行。
 - **清單上方的橫線**（subagent-dispatch stats）：清單和上面的卡片之間一條 `dimColor` 的 `─` 填滿 `e.props.bodyColumns`，橫線下第一行是作用在清單的切換鈕（總覽是分組，打開一列後是排序）。
-- **區塊列**（subagent-dispatch stats 總覽）：不分斷點，每一列是一塊，每一行前放 `dimColor` 的 `│`（單邊線），列與列之間空一行。
-  - 第一行：名稱 `truncate-end` 只佔一行，右邊固定寬度、靠右的派出次數，名稱再長也不擠掉它。
+- **區塊列**（subagent-dispatch stats 總覽）：不分斷點，每一列是一塊，列與列之間空一行，左邊不畫線。
+  - 第一行：名稱，一條 `dimColor` 的 `─` 填到最右邊的派出次數。名稱依顯示寬度自己截斷（中文算兩格，結尾 `…`）：`Button` 裡的 `truncate-end` 在中英混合時會折行，不能靠它。名稱塞滿時不畫線，派出次數永遠留著。
   - 依 session 分組時名稱是第一則 prompt，下面多一行 `dimColor` 的「時間 · repo」。
   - 最後一行：長條佔剩下的寬度，token（固定寬度、靠右對齊）與佔比放在最右邊，每一列的數字上下對齊。
 - **麵包屑**：`b: ‹ 返回`、`分組 ›` 都 `flexShrink={0}`，只有後面的名稱 `truncate-end`，名稱再長也不讓前面折行。
