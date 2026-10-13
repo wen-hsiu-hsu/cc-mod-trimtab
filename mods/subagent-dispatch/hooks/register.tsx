@@ -398,7 +398,17 @@ async function backfill($: EngineInterface, lang: Lang, force: boolean): Promise
     skipped += 1
     $.ui.log(`backfill: skipped ${path}: ${why}`, { to: 'debug' })
   }
-  const projects = await $.fs.list(root).catch(() => [])
+  const projects = await $.fs.list(root).catch((error: unknown) => {
+    $.ui.log(`backfill: ${root} not read: ${String(error)}`, { to: 'debug' })
+
+    return undefined
+  })
+  // Nothing to read is not done: a later session tries again.
+  if (projects === undefined) {
+    await $.store.delete(BACKFILL_KEY)
+
+    return undefined
+  }
   for (const project of projects.filter(item => item.kind === 'dir')) {
     const dir = `${root}/${project.name}`
     const files = await $.fs.list(dir).catch(() => [])
@@ -438,8 +448,10 @@ async function backfill($: EngineInterface, lang: Lang, force: boolean): Promise
       }
     }
   }
-  await $.store.set(BACKFILL_KEY, { state: 'done', at: await $.clock.now(), sessions, skipped } satisfies BackfillMark)
+  // The day rows before the mark: should they fail, the mark stays `running` and a later session
+  // redoes it all once it is stale.
   await writeDayRows($, redo)
+  await $.store.set(BACKFILL_KEY, { state: 'done', at: await $.clock.now(), sessions, skipped } satisfies BackfillMark)
   $.ui.log(`backfill: ${sessions} session(s) added, ${skipped} file(s) skipped`, { to: 'debug' })
   if (sessions > 0) {
     const from = dayLabel(lang, since)

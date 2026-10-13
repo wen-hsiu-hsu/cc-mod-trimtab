@@ -1,7 +1,7 @@
 import type { AgentStatus, On } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { addDays, buildHeatmap, cells, elapsed, fit, heatLevels, heatWeeks, liveFrom, monthMarks, parseSubagent, parseTranscript, type Tally } from './ledger'
+import { addDays, buildHeatmap, cells, readDayRow, recordedDays, shortCount, elapsed, fit, heatLevels, heatWeeks, liveFrom, monthMarks, parseSubagent, parseTranscript, type Tally } from './ledger'
 import { redispatchPrompt } from './register'
 
 describe('helpers', () => {
@@ -894,6 +894,15 @@ describe('heatmap', () => {
     expect(monthMarks('zh-TW', days)[1]).toEqual({ week: 5, label: '10月' })
   })
 
+  test('short counts, a broken day row, and a ledger longer than the rows are kept', () => {
+    expect([950, 12_345, 999_499, 999_500, 1_234_567, 9_949_999, 9_950_000, 15_400_000].map(shortCount)).toEqual(['950', '12k', '999k', '1.0M', '1.2M', '9.9M', '10M', '15M'])
+    expect(readDayRow({ main: null, sub: {}, spawned: ZEROS, at: 0 })).toBeUndefined()
+    expect(byDay([], { '2026-10-01': { main: null, sub: null, spawned: null, at: 0 } }, 53)['2026-10-01']).toBeNull()
+    const long = recordedDays({ ...ledgerOf(at(10, 12) - 500 * 86_400_000, NOW, {}), spawns: [] } as never)
+    expect(long.has('2026-10-12')).toBe(true)
+    expect(long.size).toBe(366)
+  })
+
   test('levels the used days by quartile, 0 for none', () => {
     const level = heatLevels([10, 20, 30, 40, 0, null].map((tokens, i) => ({ day: `d${i}`, tokens })))
     expect([10, 20, 30, 40, 0, null].map(level)).toEqual([1, 2, 3, 4, 0, 0])
@@ -1203,6 +1212,15 @@ describe('backfill', () => {
     expect(text).toMatch(/^Reading the transcripts/)
     await waitFor(() => world.toasts.length > 0)
     expect(world.store['ledger:old1']).toBeDefined()
+  })
+
+  test('an unreadable projects folder leaves no mark, so a later session tries again', async ($, on) => {
+    const world = newWorld()
+    engine(on, { value: 'running' }, '', world)
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+    await waitFor(() => world.logs.some(text => text.includes('not read')))
+    await waitFor(() => false, 10)
+    expect(world.store.backfill).toBeUndefined()
   })
 
   test('the backfill command does not run with the ledger off', async ($, on) => {

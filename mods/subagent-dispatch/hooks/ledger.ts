@@ -367,7 +367,8 @@ export type DayRow = {
 
 export function readDayRow(value: unknown): DayRow | undefined {
   const row = value as DayRow | undefined
-  if (typeof row !== 'object' || row === null || typeof row.main !== 'object' || typeof row.sub !== 'object' || typeof row.spawned !== 'object') {
+  const isObject = (part: unknown) => typeof part === 'object' && part !== null
+  if (!isObject(row) || !isObject(row!.main) || !isObject(row!.sub) || !isObject(row!.spawned)) {
     return undefined
   }
 
@@ -382,15 +383,14 @@ function add(into: Tally, from: Tally): void {
   into.steps += from.steps
 }
 
-// The days a ledger has a record of: from its start to its last write, and any day it counted
-// tokens on (a ledger of the old format has no start).
+// The days a ledger has a record of: from its start to its last write, at most DAY_KEEP of them
+// back from the last, and any day it counted tokens on (a ledger of the old format has no start).
 export function recordedDays(ledger: Ledger): Set<string> {
   const days = new Set(Object.keys(ledger.daily))
   const last = dayOf(ledger.updated)
-  let day = dayOf(ledger.started || ledger.updated)
-  for (let i = 0; day <= last && i <= DAY_KEEP; i += 1) {
+  const first = dayOf(ledger.started || ledger.updated)
+  for (let day = last, i = 0; day >= first && i < DAY_KEEP; day = addDays(day, -1), i += 1) {
     days.add(day)
-    day = addDays(day, 1)
   }
 
   return days
@@ -524,13 +524,17 @@ export function monthMarks(lang: Lang, days: HeatDay[]): { week: number; label: 
   return marks
 }
 
-// A count in a few characters: `950`, `12k`, `1.2M`, `15M`.
+// A count in a few characters: `950`, `12k`, `1.2M`, `15M`; rounding never reads `1000k` or `10.0M`.
 export function shortCount(value: number): string {
-  if (value >= 1e6) {
-    return `${(value / 1e6).toFixed(value >= 1e7 ? 0 : 1)}M`
+  const millions = value / 1e6
+  if (millions >= 9.95) {
+    return `${Math.round(millions)}M`
+  }
+  if (value >= 999_500) {
+    return `${millions.toFixed(1)}M`
   }
 
-  return value >= 1e3 ? `${Math.round(value / 1e3)}k` : String(value)
+  return value >= 999.5 ? `${Math.round(value / 1e3)}k` : String(Math.round(value))
 }
 
 // --- Rebuilding ledgers from transcripts: `<projects>/<project>/<sid>.jsonl` is a session, and
