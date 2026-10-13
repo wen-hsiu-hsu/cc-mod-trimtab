@@ -13,7 +13,7 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 3. 第一次寫 `.claude/cc-mod-trimtab.local.json` 時加進 `.git/info/exclude`：只有自動測試。
 4. `subagent-dispatch` 帳本跨 `/clear` 的 session 命名與 agent 步數歸屬：只有自動測試。
 5. GitHub 的 private vulnerability reporting 是否已開啟（`SECURITY.md` 依賴它）。
-6. open-items 面板改版（焦點列動作、分組與單邊線 `│`、比例長條計數、每項全文、按鍵一般亮度說明 dimColor）：只有自動測試，還沒在 Claude Code 裡看過，特別是 55 欄 dock 寬度下長條、圖例與切換列會不會折行；同時要確認 `d` 在 subagent-dispatch band 與 open-items 面板同時出現時誰收到。
+6. open-items 面板改版（焦點列動作、分組與單邊線 `│`、比例長條計數、每項全文、按鍵一般亮度說明 dimColor）：只有自動測試，還沒在 Claude Code 裡看過，特別是 55 欄 dock 寬度下長條、圖例與切換列會不會折行。
 
 ## 待辦
 
@@ -81,3 +81,4 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 12. `$.session.usage()` 回傳 `rateLimits: { kind, percentUsed, resetsAt? }[]`，`kind` 有 `five_hour`、`seven_day` 與 gateway 的 `spend_limit`；不是訂閱制或還沒讀到數值時是空陣列，呼叫不花 token（依本機型別檔，2026-10-12）。`project-memory` 的 `max_rate_used` 依此判斷；實際訂閱帳號上的數值還沒在執行中的 session 確認。
 13. 依路徑載入的規則：`.claude/rules/`（含子資料夾）的 `.md` 加 frontmatter `paths`（YAML 清單或逗號分隔，glob），只在 Read／Write／Edit 或 `cat` 碰到符合的檔案時載入；沒有 `paths` 的規則啟動就載入，和 `.claude/CLAUDE.md` 同優先（[memory 文件](https://code.claude.com/docs/en/memory)）。2026-10-12 在 2.1.296 用 `claude -p` 實測：規則限 `src/**/*.ts`，不讀檔或讀 `docs/b.md` 時答不出規則內容，讀 `src/a.ts` 後答得出。→ 見「暫緩」的「規則改寫進 `.claude/rules`」。
 14. 2026-10-13 用 prototype 在 2.1.296 實測 pane 的焦點：只有 Tab 與 ↑↓ 會移動焦點；←→ pane 不攔，會切到別的 session；用 `$.ui.focus` 在關掉一列後把焦點搬到下一列，焦點會落在剛按的動作按鈕上或跳過一列；整行做成按鈕時截斷的開頭會重複出現。→ ADR 0021。
+15. Button 的 `hotkey` 只在它所在的區塊（band 或自己的 pane）有焦點時生效，輸入框打字不觸發；同一區塊兩顆同鍵時後畫的贏（依 2.1.296 型別檔 `ButtonProps.hotkey`，2026-10-13）。所以 subagent-dispatch band 的 `d`（略過）與 open-items pane 的 `d`（完成）不衝突。

@@ -144,7 +144,7 @@ Pane 和 Band 上所有導覽按鈕和焦點列動作都要有 hotkey，並列�
 - 確認框用數字，其他一律用小寫字母。
 - 不用 `Esc`、`Tab`、`Enter`、方向鍵：它們留給 pane 的焦點移動和關閉。
 - 只有 Tab 和 ↑↓ 會移動焦點；←→ pane 不會攔下，按了會切到別的 session，不要指望它。
-- `d` 在 subagent-dispatch band 是「略過這次提醒」，在 open-items pane 是「完成」。兩者同時出現時哪一個收到 `d` 還沒實測。
+- `d` 在 subagent-dispatch band 是「略過這次提醒」，在 open-items pane 是「完成」。兩者不衝突：hotkey 只在有焦點的區塊生效，band 和 pane 是不同區塊，同一時間只有一個有焦點。只有同一個區塊裡兩顆按鈕用同一個鍵時才會後畫的贏，所以 band 的鍵在所有 mod 間不可重複。
 
 ## Pane
 
