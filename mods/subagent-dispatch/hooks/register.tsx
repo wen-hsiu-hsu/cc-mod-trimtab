@@ -5,12 +5,36 @@ import type { WatchedAgent } from '../types'
 import { configCommand, LANGUAGE, loadConfig, pick, type ConfigIO, type Lang, type Specs } from './config'
 import { CARD, COLORS, emptyState, hintLine, MAIN_SHADES, switcher as switchIn, TONE } from './ui'
 import {
+  addDays,
   applyMeta,
+  buildHeatmap,
   buildReport,
   cells,
   clockTime,
+  shortCount,
   countKinds,
+  DAY_KEEP,
+  DAY_PREFIX,
+  dayHead,
   dayLabel,
+  dayName,
+  dayOf,
+  dayReport,
+  dayRow,
+  heatLevels,
+  heatStart,
+  heatWeeks,
+  liveFrom,
+  MAX_WEEKS,
+  monthMarks,
+  parseSubagent,
+  parseTranscript,
+  readDayRow,
+  recordedDays,
+  settledDays,
+  transcriptLedger,
+  weekdayLabels,
+  type HeatDay,
   elapsed,
   DEFAULT_DAYS,
   GROUP_BYS,
@@ -49,8 +73,9 @@ const PAGE = 10
 const running = atom({ plugin: 'subagent-dispatch', key: 'running' } as const, [])
 const stopped = atom({ plugin: 'subagent-dispatch', key: 'stopped' } as const, [])
 // What the stats pane shows: the period, the grouping, the row opened to its spawns, their
-// order, how many of them are listed and the one opened in place.
-const view = atom({ plugin: 'subagent-dispatch', key: 'view' } as const, { days: 30, by: 'repo', item: '', sort: 'tokens', limit: PAGE, spawn: '' })
+// order, how many of them are listed, the one opened in place, and the day chosen on the
+// heatmap (`YYYY-MM-DD`, in place of the period).
+const view = atom({ plugin: 'subagent-dispatch', key: 'view' } as const, { days: 30, by: 'repo', item: '', sort: 'tokens', limit: PAGE, spawn: '', day: '' })
 
 // How an opened row orders its spawns: most tokens, newest, or longest run first.
 type SortBy = 'tokens' | 'time' | 'duration'
@@ -63,8 +88,19 @@ const SORTS: Record<SortBy, (spawn: Spawn) => number> = {
 const MOD = 'subagent-dispatch'
 const REDISPATCH = 'redispatch'
 const STATS = 'stats'
+const BACKFILL = 'backfill'
 const PANE = 'subagent-dispatch-stats'
 const PERIODS = [1, 7, 30, 90]
+// Below this many body columns the heatmap is not drawn: four weeks and the labels.
+const HEAT_COLUMNS = 12
+// The heatmap's colors (DESIGN.md「熱圖色階」): no use, levels 1–4, the chosen day.
+const HEAT = { none: '#4a4a52', levels: ['#1f5a6d', '#2a7f9c', '#3aa6cc', '#86d6f0'], chosen: '#ff8c42' } as const
+// Under `backfill`: whether the transcripts were read into ledgers, so it runs once per store.
+const BACKFILL_KEY = 'backfill'
+// A run marked `running` this long ago is taken as dead (its session closed partway).
+const BACKFILL_STALE_MS = 10 * 60_000
+// `$.fs.read` rejects a file over this; a larger transcript is read through `cat`.
+const READ_LIMIT = 4 * 1024 * 1024
 // From this many body columns a row is one line; below, its bar goes on a second line.
 const WIDE_COLUMNS = 80
 // From this many body columns the two cards sit side by side; below, one above the other.
@@ -148,8 +184,17 @@ async function fillRedispatch($: EngineInterface, lang: Lang): Promise<string> {
 }
 
 // `meta` belongs to session `sid`; `agents` maps an agent id to the ledger key it was spawned
-// under, at most AGENT_KEYS of them; `redraw` says a redraw of the stats pane is waiting.
-type LedgerState = { recording: boolean; writing: Promise<void>; sid: string; meta: SessionMeta; agents: Map<string, string>; redraw: boolean }
+// under, at most AGENT_KEYS of them; `redraw` says a redraw of the stats pane is waiting;
+// `backfilling` is the backfill running in this process.
+type LedgerState = {
+  recording: boolean
+  writing: Promise<void>
+  sid: string
+  meta: SessionMeta
+  agents: Map<string, string>
+  redraw: boolean
+  backfilling?: Promise<void>
+}
 
 const AGENT_KEYS = 500
 // A write redraws the stats pane this long after it, once for every write meanwhile.
@@ -222,11 +267,191 @@ async function pruneLedgers($: EngineInterface): Promise<void> {
   }
 }
 
-async function loadReport($: EngineInterface, days: number): Promise<Report> {
-  const keys = (await $.store.keys()).filter(name => name.startsWith(LEDGER_PREFIX))
-  const stored = await Promise.all(keys.map(key => $.store.get(key)))
+// Every ledger as stored, and every day row by its day.
+async function loadStore($: EngineInterface): Promise<{ ledgers: unknown[]; dayRows: Record<string, unknown> }> {
+  const keys = await $.store.keys()
+  const ledgers = await Promise.all(keys.filter(name => name.startsWith(LEDGER_PREFIX)).map(key => $.store.get(key)))
+  const dayKeys = keys.filter(name => name.startsWith(DAY_PREFIX))
+  const rows = await Promise.all(dayKeys.map(key => $.store.get(key)))
 
-  return buildReport(stored, days, await $.clock.now())
+  return { ledgers, dayRows: Object.fromEntries(dayKeys.map((key, i) => [key.slice(DAY_PREFIX.length), rows[i]])) }
+}
+
+async function loadReport($: EngineInterface, days: number): Promise<Report> {
+  return buildReport((await loadStore($)).ledgers, days, await $.clock.now())
+}
+
+// Writes the day rows that are due: each day a ledger recorded up to the day before yesterday that
+// has no row yet, and each of `redo` the ledgers still hold whole (a backfill adds to them).
+// Deletes the rows older than DAY_KEEP days. Runs before the ledgers are pruned.
+async function writeDayRows($: EngineInterface, redo: Set<string> = new Set()): Promise<void> {
+  const now = await $.clock.now()
+  const { ledgers, dayRows } = await loadStore($)
+  const read = ledgers.map(readLedger).filter((ledger): ledger is Ledger => ledger !== undefined)
+  const live = liveFrom(now)
+  for (const day of settledDays(read, now)) {
+    if (!(day in dayRows) || (redo.has(day) && day >= live)) {
+      await $.store.set(`${DAY_PREFIX}${day}`, dayRow(read, day, now))
+    }
+  }
+  const oldest = addDays(dayOf(now), -(DAY_KEEP - 1))
+  for (const day of Object.keys(dayRows).filter(day => day < oldest)) {
+    await $.store.delete(`${DAY_PREFIX}${day}`)
+  }
+}
+
+type BackfillMark = { state: 'running' | 'done'; at: number; sessions: number; skipped: number }
+
+// A file's text: through `$.fs.read` up to its limit, through `cat` above it, or undefined where
+// no process can be run (desktop).
+async function readLarge($: EngineInterface, path: string, size: number): Promise<string | undefined> {
+  if (size <= READ_LIMIT) {
+    return (await $.fs.read(path)) as string
+  }
+  try {
+    let text = ''
+    for await (const piece of $.process.spawn({ argv: ['cat', path] })) {
+      if (piece.stream === 'stdout') {
+        text += piece.text
+      }
+    }
+
+    return text
+  } catch {
+    return undefined
+  }
+}
+
+// The main working tree of a directory, as a live session names its repo: git's common directory
+// without its `.git`. A directory gone since is taken as is, or for a worktree under
+// `.claude/worktrees/` the folder that held it.
+async function repoOf($: EngineInterface, cwd: string, known: Map<string, string>): Promise<string> {
+  if (cwd === '') {
+    return ''
+  }
+  const found = known.get(cwd)
+  if (found !== undefined) {
+    return found
+  }
+  let repo = cwd.split('/.claude/worktrees/')[0] ?? cwd
+  try {
+    const run = await $.process.run(['git', '-C', cwd, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { timeoutMs: 5000 })
+    const common = run.stdout.trim()
+    if (run.exitCode === 0 && common.endsWith('/.git')) {
+      repo = common.slice(0, -'/.git'.length)
+    }
+  } catch {
+    // No process here (desktop): keep the guess.
+  }
+  known.set(cwd, repo)
+
+  return repo
+}
+
+// The spawns of a session from `<dir>/subagents/agent-<id>.jsonl` and their `.meta.json`.
+async function readSpawns($: EngineInterface, dir: string, skip: (path: string, why: string) => void): Promise<Spawn[]> {
+  const entries = await $.fs.list(`${dir}/subagents`).catch(() => [])
+  const spawns: Spawn[] = []
+  for (const entry of entries.filter(item => item.kind === 'file' && /^agent-.+\.jsonl$/.test(item.name))) {
+    const path = `${dir}/subagents/${entry.name}`
+    try {
+      const text = await readLarge($, path, entry.size)
+      if (text === undefined) {
+        skip(path, 'too large to read here')
+        continue
+      }
+      const meta = await $.fs
+        .read(path.replace(/\.jsonl$/, '.meta.json'))
+        .then(raw => JSON.parse(raw as string) as unknown)
+        .catch(() => undefined)
+      const spawn = parseSubagent(meta, text, entry.name.slice('agent-'.length, -'.jsonl'.length))
+      if (spawn !== undefined) {
+        spawns.push(spawn)
+      }
+    } catch (error) {
+      skip(path, String(error))
+    }
+  }
+
+  return spawns
+}
+
+// Rebuilds a ledger from the transcript of each session on this machine that has none (ADR 0025),
+// one file at a time, then writes the day rows. Unless `force`, only once per store: a run another
+// session marked `running` within BACKFILL_STALE_MS is left to it. Answers how many sessions it
+// added, or undefined when it did not run.
+async function backfill($: EngineInterface, lang: Lang, force: boolean): Promise<number | undefined> {
+  const started = await $.clock.now()
+  const mark = (await $.store.get(BACKFILL_KEY)) as BackfillMark | undefined
+  if (!force && (mark?.state === 'done' || (mark?.state === 'running' && started - mark.at < BACKFILL_STALE_MS))) {
+    return undefined
+  }
+  await $.store.set(BACKFILL_KEY, { state: 'running', at: started, sessions: 0, skipped: 0 } satisfies BackfillMark)
+  const root = `${await configIO($).configDir()}/projects`
+  const own = await $.session.id()
+  const repos = new Map<string, string>()
+  const redo = new Set<string>()
+  let sessions = 0
+  let skipped = 0
+  let since = Infinity
+  const skip = (path: string, why: string) => {
+    skipped += 1
+    $.ui.log(`backfill: skipped ${path}: ${why}`, { to: 'debug' })
+  }
+  const projects = await $.fs.list(root).catch(() => [])
+  for (const project of projects.filter(item => item.kind === 'dir')) {
+    const dir = `${root}/${project.name}`
+    const files = await $.fs.list(dir).catch(() => [])
+    for (const file of files.filter(item => item.kind === 'file' && item.name.endsWith('.jsonl'))) {
+      const sid = file.name.slice(0, -'.jsonl'.length)
+      const key = `${LEDGER_PREFIX}${sid}`
+      if (sid === own) {
+        continue
+      }
+      try {
+        if ((await $.store.get(key)) !== undefined) {
+          continue
+        }
+        const text = await readLarge($, `${dir}/${file.name}`, file.size)
+        if (text === undefined) {
+          skip(`${dir}/${file.name}`, 'too large to read here')
+          continue
+        }
+        const parsed = parseTranscript(text)
+        const spawns = await readSpawns($, `${dir}/${sid}`, skip)
+        if (parsed.steps.length === 0 && spawns.length === 0) {
+          continue
+        }
+        const ledger = transcriptLedger(parsed, spawns, await repoOf($, parsed.cwd, repos))
+        // A live session may have written its own since: its record wins.
+        if ((await $.store.get(key)) !== undefined) {
+          continue
+        }
+        await $.store.set(key, ledger)
+        sessions += 1
+        since = Math.min(since, ledger.started || ledger.updated)
+        for (const day of recordedDays(ledger)) {
+          redo.add(day)
+        }
+      } catch (error) {
+        skip(`${dir}/${file.name}`, String(error))
+      }
+    }
+  }
+  await $.store.set(BACKFILL_KEY, { state: 'done', at: await $.clock.now(), sessions, skipped } satisfies BackfillMark)
+  await writeDayRows($, redo)
+  $.ui.log(`backfill: ${sessions} session(s) added, ${skipped} file(s) skipped`, { to: 'debug' })
+  if (sessions > 0) {
+    const from = dayLabel(lang, since)
+    $.ui.toast(
+      pick(lang, {
+        en: `${MOD}: added ${sessions} session(s) from the transcripts (since ${from})`,
+        'zh-TW': `${MOD}：已從 transcript 補上 ${sessions} 個 session（${from} 起）`,
+      }),
+    )
+  }
+
+  return sessions
 }
 
 // `stats [--text] [days]`: opens the pane, or prints the report with `--text`, in a `-p` run
@@ -252,6 +477,26 @@ async function stats($: EngineInterface, lang: Lang, args: string[], interactive
   }
 
   return renderStats(lang, await loadReport($, days))
+}
+
+// Starts a backfill in the background unless one is running in this process; a pane open meanwhile
+// redraws with what it added. Answers whether it started one.
+function startBackfill($: EngineInterface, lang: Lang, state: LedgerState, force: boolean): boolean {
+  if (state.backfilling !== undefined) {
+    return false
+  }
+  state.backfilling = backfill($, lang, force)
+    .then(added => {
+      if (added !== undefined && added > 0) {
+        redrawStats($, state)
+      }
+    })
+    .catch(error => $.ui.log(`backfill: stopped: ${String(error)}`, { to: 'debug' }))
+    .finally(() => {
+      state.backfilling = undefined
+    })
+
+  return true
 }
 
 // How many cells of `width` a bar for `part` of `most` fills: at least one when there is any.
@@ -294,6 +539,33 @@ function svgStack(parts: { cells: number; fill: string }[]): string {
   })
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${x * unit}" height="8">${rects.join('')}</svg>`
+}
+
+// The heatmap on desktop: a 10px cell every 12px, a week a column, the month row above and the
+// weekday names at the left. Colors as DESIGN.md「熱圖色階」sets them.
+function svgHeatmap(lang: Lang, days: HeatDay[], chosen: string, level: (value: number | null) => number): string {
+  const [left, top, pitch, size] = [28, 14, 12, 10]
+  const weeks = Math.ceil(days.length / 7)
+  const rects = days.map((item, i) => {
+    const x = left + Math.floor(i / 7) * pitch
+    const y = top + (i % 7) * pitch
+    if (item.day === chosen) {
+      return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2" fill="${HEAT.chosen}"/>`
+    }
+    if (item.tokens === null) {
+      return `<rect x="${x + 0.5}" y="${y + 0.5}" width="${size - 1}" height="${size - 1}" rx="2" fill="none" stroke="${COLORS.default.fill}" stroke-dasharray="2 2"/>`
+    }
+    if (item.tokens === 0) {
+      return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2" fill="${COLORS.default.fill}" fill-opacity="0.25"/>`
+    }
+
+    return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2" fill="${COLORS.sub.fill}" fill-opacity="${[0.35, 0.55, 0.75, 1][level(item.tokens) - 1]}"/>`
+  })
+  const text = (x: number, y: number, words: string) => `<text x="${x}" y="${y}" font-size="9" fill="${COLORS.default.fill}" font-family="sans-serif">${words}</text>`
+  const months = monthMarks(lang, days).map(mark => text(left + mark.week * pitch, 9, mark.label))
+  const names = weekdayLabels(lang).flatMap((name, row) => (name === '' ? [] : [text(0, top + row * pitch + 8, name)]))
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${left + weeks * pitch}" height="${top + 7 * pitch}">${[...months, ...names, ...rects].join('')}</svg>`
 }
 
 // A spawn's key in the pane: its agent id, or for one recorded without, when it started.
@@ -354,6 +626,12 @@ export const register: Register = (on, options) => {
     } catch (error) {
       $.ui.log(`session.start: repo not read: ${String(error)}`, { to: 'debug' })
     }
+    // The day rows first: a ledger pruned now has its days in rows already.
+    try {
+      await writeDayRows($)
+    } catch (error) {
+      $.ui.log(`session.start: day rows not written: ${String(error)}`, { to: 'debug' })
+    }
     try {
       await pruneLedgers($)
     } catch (error) {
@@ -366,13 +644,18 @@ export const register: Register = (on, options) => {
           en: 'Put the redispatch instructions for interrupted background agents in the prompt box (redispatch), or show token use by subagents and models (stats)',
           'zh-TW': '把被中斷的背景 agent 重派指示放進輸入框（redispatch），或看 subagent 與各模型的 token 用量（stats）',
         }),
-        argumentHint: pick(lang, { en: 'redispatch | stats [--text] [days] | status', 'zh-TW': 'redispatch | stats [--text] [天數] | status' }),
+        argumentHint: pick(lang, { en: 'redispatch | stats [--text] [days] | backfill | status', 'zh-TW': 'redispatch | stats [--text] [天數] | backfill | status' }),
       })
     } catch (error) {
       $.ui.log(`session.start: /${MOD} not registered: ${String(error)}`, { to: 'debug' })
       $.ui.toast(pick(lang, { en: `${MOD}: /${MOD} was not registered (${String(error)})`, 'zh-TW': `${MOD}：/${MOD} 指令沒有註冊成功（${String(error)}）` }))
     }
     $.clock.every(POLL_MS, () => void refresh($, lang))
+    // No hook runs at install: the first session to find no mark reads the transcripts, in the
+    // background. A `-p` run may end before it does, so it leaves them to the next session.
+    if (ledger.recording && interactive) {
+      startBackfill($, lang, ledger, false)
+    }
 
     return next(e)
   })
@@ -385,6 +668,20 @@ export const register: Register = (on, options) => {
     if (command === STATS) {
       return { text: await stats($, lang, rest, interactive) }
     }
+    if (command === BACKFILL) {
+      if (!ledger.recording) {
+        return { text: pick(lang, { en: 'The ledger setting is off; nothing to backfill into.', 'zh-TW': 'ledger 設定已關閉，不回填。' }) }
+      }
+
+      return {
+        text: startBackfill($, lang, ledger, true)
+          ? pick(lang, {
+              en: 'Reading the transcripts of sessions with no ledger, in the background; a toast says how many were added.',
+              'zh-TW': '在背景讀取還沒有帳本的 session 的 transcript，補上後會跳 toast 說補了幾個。',
+            })
+          : pick(lang, { en: 'A backfill is already running.', 'zh-TW': '回填已經在跑。' }),
+      }
+    }
     const text = await configCommand(configIO($), MOD, SPECS, options, e.args, resolved => {
       lang = resolved.lang
       ledger.recording = resolved.values.ledger !== false
@@ -394,8 +691,8 @@ export const register: Register = (on, options) => {
       text:
         text ??
         pick(lang, {
-          en: `Usage: /${MOD} ${REDISPATCH}, /${MOD} ${STATS} [--text] [days], /${MOD} status`,
-          'zh-TW': `用法：/${MOD} ${REDISPATCH}、/${MOD} ${STATS} [--text] [天數]、/${MOD} status`,
+          en: `Usage: /${MOD} ${REDISPATCH}, /${MOD} ${STATS} [--text] [days], /${MOD} ${BACKFILL}, /${MOD} status`,
+          'zh-TW': `用法：/${MOD} ${REDISPATCH}、/${MOD} ${STATS} [--text] [天數]、/${MOD} ${BACKFILL}、/${MOD} status`,
         }),
     }
   })
@@ -512,10 +809,28 @@ export const register: Register = (on, options) => {
     const Svg = e.surface !== 'terminal' && 'Svg' in parts ? parts.Svg : undefined
     const shown = await read($, view)
     const by = (GROUP_BYS as readonly string[]).includes(shown.by) ? (shown.by as GroupBy) : 'repo'
-    const report = await loadReport($, shown.days)
+    const now = await $.clock.now()
+    const store = await loadStore($)
+    const body = e.props.bodyColumns
+    const today = dayOf(now)
+    // The heatmap's weeks and days; a chosen day it no longer reaches (the pane narrowed) is let go.
+    const weeks = heatWeeks(body)
+    const first = heatStart(weeks, now)
+    const heat = buildHeatmap(store.ledgers, store.dayRows, MAX_WEEKS, now).days
+    const drawn = heat.filter(item => item.day >= first)
+    const chosen = typeof shown.day === 'string' && shown.day >= first && shown.day <= today ? shown.day : ''
+    const chosenTokens = heat.find(item => item.day === chosen)?.tokens ?? null
+    // A chosen day before the ledgers reach has only its day row: the cards, no sessions.
+    const summaryOnly = chosen !== '' && chosen < liveFrom(now)
+    const chosenRow = summaryOnly ? readDayRow(store.dayRows[chosen]) : undefined
+    const report =
+      chosen === ''
+        ? buildReport(store.ledgers, shown.days, now)
+        : chosenRow !== undefined
+          ? dayReport(chosenRow, chosen, now)
+          : buildReport(summaryOnly ? [] : store.ledgers, 1, now, chosen)
     const rows = groups(lang, report, by)
     const open = rows.find(row => row.key === shown.item)
-    const body = e.props.bodyColumns
     const wide = body >= WIDE_COLUMNS
     const all = report.main + report.sub
     const most = Math.max(1, ...rows.map(row => row.tokens))
@@ -565,14 +880,194 @@ export const register: Register = (on, options) => {
       </Text>
     )
 
-    const periodSwitch = switcher(
-      'days',
-      pick(lang, { en: 'Period ', 'zh-TW': '期間 ' }),
-      'p',
-      PERIODS.map(days => ({ value: String(days), label: daysLabel(lang, days) })),
-      String(shown.days),
-      value => void update($, view, current => ({ ...current, days: Number(value), item: '' })),
+    const periodLabel = pick(lang, { en: 'Period ', 'zh-TW': '期間 ' })
+    // With a day chosen the period shows the day, and its first press lets the day go.
+    const periodSwitch =
+      chosen === '' ? (
+        switcher(
+          'days',
+          periodLabel,
+          'p',
+          PERIODS.map(days => ({ value: String(days), label: daysLabel(lang, days) })),
+          String(shown.days),
+          value => void update($, view, current => ({ ...current, days: Number(value), item: '' })),
+        )
+      ) : (
+        <Box key="switch:days" flexDirection="row" flexShrink={0}>
+          <Text dimColor>{periodLabel}</Text>
+          <Button key="days" plain hotkey="p" onPress={() => void update($, view, current => ({ ...current, day: '', item: '' }))}>
+            <Text bold>‹ {dayName(lang, chosen)} ›</Text>
+          </Button>
+        </Box>
+      )
+    const choose = (day: string) => void update($, view, current => ({ ...current, day, item: '', limit: PAGE, spawn: '' }))
+    // j steps back a day (from today when none is chosen) to the heatmap's first; k forward to today.
+    const dayButtons = (
+      <Box key="day-steps" flexDirection="row" gap={2} flexShrink={0}>
+        <Button
+          key="prev-day"
+          plain
+          hotkey="j"
+          onPress={() => {
+            const day = chosen === '' ? today : addDays(chosen, -1)
+            if (day >= first) {
+              choose(day)
+            }
+          }}
+        >
+          <Text>{pick(lang, { en: '‹ Prev day', 'zh-TW': '‹ 前一天' })}</Text>
+        </Button>
+        <Button
+          key="next-day"
+          plain
+          hotkey="k"
+          onPress={() => {
+            if (chosen !== '' && chosen < today) {
+              choose(addDays(chosen, 1))
+            }
+          }}
+        >
+          <Text>{pick(lang, { en: 'Next day ›', 'zh-TW': '後一天 ›' })}</Text>
+        </Button>
+      </Box>
     )
+    const heatmap = () => {
+      if (body < HEAT_COLUMNS) {
+        return null
+      }
+      const level = heatLevels(drawn)
+      const peak = drawn.reduce<HeatDay | undefined>((top, item) => ((item.tokens ?? 0) > (top?.tokens ?? 0) ? item : top), undefined)
+      const ink = (item: HeatDay) => (item.day === chosen ? HEAT.chosen : item.tokens === 0 ? HEAT.none : HEAT.levels[level(item.tokens) - 1])
+      // The columns of the grid: a week every two, its last cell one before the next week.
+      const gridWidth = weeks * 2 - 1
+      const column = (day: string) => Math.floor(drawn.findIndex(item => item.day === day) / 7) * 2
+      const legend = (
+        <Box key="heat-legend" flexDirection="row" flexWrap="wrap" justifyContent="space-between" columnGap={2} paddingLeft={4}>
+          <Text>
+            <Text dimColor>{pick(lang, { en: 'No data ', 'zh-TW': '無資料 ' })}</Text>
+            <Text dimColor>·</Text>
+            <Text dimColor>{pick(lang, { en: '  None ', 'zh-TW': '  無用量 ' })}</Text>
+            <Text color={HEAT.none}>■</Text>
+            <Text dimColor>{pick(lang, { en: '  Less ', 'zh-TW': '  少 ' })}</Text>
+            {HEAT.levels.map(color => (
+              <Text color={color}>■</Text>
+            ))}
+            <Text dimColor>{pick(lang, { en: ' More  Selected ', 'zh-TW': ' 多  選到 ' })}</Text>
+            <Text bold color={HEAT.chosen}>
+              ■
+            </Text>
+          </Text>
+          {peak === undefined ? null : (
+            <Text>
+              <Text dimColor>{pick(lang, { en: 'Most ', 'zh-TW': '最多 ' })}</Text>
+              {`${dayLabel(lang, Date.parse(`${peak.day}T12:00:00`))} ${shortCount(peak.tokens ?? 0)}`}
+            </Text>
+          )}
+        </Box>
+      )
+      if (Svg !== undefined) {
+        return (
+          <Box key="heatmap" flexDirection="column" marginBottom={1}>
+            <Svg source={svgHeatmap(lang, drawn, chosen, level)} alt={pick(lang, { en: `Tokens per day, ${weeks} weeks`, 'zh-TW': `每天的 token，${weeks} 週` })} width={28 + weeks * 12} height={14 + 7 * 12} />
+            {legend}
+          </Box>
+        )
+      }
+      // The month row as one line of text: a label at its week's column where it fits.
+      let months = ''
+      for (const mark of monthMarks(lang, drawn)) {
+        const at = mark.week * 2
+        if (at >= cells(months) + (months === '' ? 0 : 1) && at + cells(mark.label) <= gridWidth + 1) {
+          months += ' '.repeat(at - cells(months)) + mark.label
+        }
+      }
+      // Under the grid: the chosen day's column, or the weeks the period covers.
+      let note: RenderNode
+      if (chosen !== '') {
+        const name = dayName(lang, chosen)
+        const at = column(chosen)
+        const fits = at + cells(name) + 2 <= gridWidth
+        note = (
+          <Text>
+            {' '.repeat(fits ? at : Math.max(0, at + 1 - cells(name) - 2))}
+            <Text bold color={HEAT.chosen}>
+              {fits ? `▲ ${name}` : `${name} ▲`}
+            </Text>
+          </Text>
+        )
+      } else if (shown.days === 1) {
+        note = (
+          <Text>
+            {' '.repeat(column(today))}
+            <Text bold>{pick(lang, { en: '▲ today', 'zh-TW': '▲ 今天' })}</Text>
+          </Text>
+        )
+      } else {
+        const from = addDays(today, -(Number(shown.days) - 1))
+        const at = from < first ? 0 : column(from)
+        const span = gridWidth - at
+        const label = daysLabel(lang, Number(shown.days))
+        // Inside the bracket with a rule each side, or where the weeks are too few, before it.
+        const dashes = span - 4 - cells(label)
+        note =
+          dashes >= 2 ? (
+            <Text>
+              {' '.repeat(at)}
+              <Text dimColor>{`└${'─'.repeat(Math.floor(dashes / 2))} `}</Text>
+              <Text bold>{label}</Text>
+              <Text dimColor>{` ${'─'.repeat(Math.ceil(dashes / 2))}┘`}</Text>
+            </Text>
+          ) : (
+            <Text>
+              {' '.repeat(Math.max(0, at - cells(label) - 1))}
+              <Text bold>{label}</Text>
+              <Text dimColor>{` └${'─'.repeat(Math.max(0, span - 2))}┘`}</Text>
+            </Text>
+          )
+      }
+      const labels = weekdayLabels(lang)
+
+      return (
+        <Box key="heatmap" flexDirection="column" marginBottom={1}>
+          <Box key="heat-months" paddingLeft={4}>
+            <Text dimColor wrap="truncate-end">
+              {months === '' ? ' ' : months}
+            </Text>
+          </Box>
+          {labels.map((name, row) => (
+            <Box key={`heat-row:${row}`} flexDirection="row">
+              <Box width={4} flexShrink={0}>
+                <Text dimColor>{name}</Text>
+              </Box>
+              <Box flexDirection="row" gap={1}>
+                {Array.from({ length: weeks }, (_, week) => {
+                  const item = drawn[week * 7 + row]
+                  if (item === undefined) {
+                    return <Text key={`day-after:${week}`}> </Text>
+                  }
+
+                  return (
+                    <Button key={`day:${item.day}`} plain onPress={() => choose(item.day)}>
+                      {item.tokens === null && item.day !== chosen ? (
+                        <Text dimColor>·</Text>
+                      ) : (
+                        <Text color={ink(item)} bold={item.day === chosen}>
+                          ■
+                        </Text>
+                      )}
+                    </Button>
+                  )
+                })}
+              </Box>
+            </Box>
+          ))}
+          <Box key="heat-note" paddingLeft={4}>
+            {note}
+          </Box>
+          {legend}
+        </Box>
+      )
+    }
     const groupSwitch = switcher(
       'group',
       pick(lang, { en: 'Group by ', 'zh-TW': '分組 ' }),
@@ -710,7 +1205,7 @@ export const register: Register = (on, options) => {
               </Text>
             </Box>
           </Box>
-          <Text dimColor>{daysLabel(lang, shown.days)}</Text>
+          <Text dimColor>{chosen === '' ? daysLabel(lang, shown.days) : dayName(lang, chosen)}</Text>
           <Box key="cards" flexDirection={paired ? 'row' : 'column'} marginTop={1} gap={paired ? 2 : 0}>
             {compact(
               'tokens',
@@ -871,19 +1366,50 @@ export const register: Register = (on, options) => {
       )
     }
 
+    // A chosen day with nothing to count says why in place of the cards: no use, or no record.
+    const chosenNote =
+      chosen === ''
+        ? undefined
+        : chosenTokens === null
+          ? pick(lang, {
+              en: `${dayHead(lang, chosen)}: no data (neither a ledger nor a day row has this day: before the backfill, or its transcript was deleted).`,
+              'zh-TW': `${dayHead(lang, chosen)}沒有資料（帳本與每日摘要都沒有這天：回填以前，或 transcript 已被刪掉）。`,
+            })
+          : chosenTokens === 0
+            ? pick(lang, {
+                en: `${dayHead(lang, chosen)}: no usage (the day was recorded; the main session and subagents used 0 tokens).`,
+                'zh-TW': `${dayHead(lang, chosen)}沒有用量（這天有紀錄，主 session 和 subagent 都是 0 token）。`,
+              })
+            : undefined
+
+    // The days the period covers, or for a chosen day how to go back. The day steps share the line
+    // where it all fits, and go to the next line where it does not (a docked pane): the terminal
+    // draws `p: ` before a plain button with a hotkey.
+    const periodAside =
+      chosen === '' ? range(lang, report) : pick(lang, { en: `1 day · p back to ${daysLabel(lang, shown.days)}`, 'zh-TW': `1 天 · p 回到 ${daysLabel(lang, shown.days)}` })
+    const periodWidth = cells(periodLabel) + 3 + cells(`‹ ${chosen === '' ? daysLabel(lang, shown.days) : dayName(lang, chosen)} ›`) + 2 + cells(periodAside)
+    const stepsWidth = 3 + cells(pick(lang, { en: '‹ Prev day', 'zh-TW': '‹ 前一天' })) + 2 + 3 + cells(pick(lang, { en: 'Next day ›', 'zh-TW': '後一天 ›' }))
+    const headerFits = periodWidth + 2 + stepsWidth <= body
+
     return (
       <Box flexDirection="column" {...frame}>
         {title}
-        {/* The period, then the days it covers; the grouping heads the list below. */}
-        <Box key="header" flexDirection="row" gap={2}>
-          <Box flexShrink={0}>{periodSwitch}</Box>
-          <Box flexShrink={1}>
-            <Text dimColor wrap="truncate-end">
-              {range(lang, report)}
-            </Text>
+        {heatmap()}
+        {/* The period, then the days it covers, and the day steps at the right; the grouping heads the list below. */}
+        <Box key="header" flexDirection={headerFits ? 'row' : 'column'} justifyContent="space-between" columnGap={2}>
+          <Box flexDirection="row" gap={2} flexShrink={1} minWidth={0}>
+            <Box flexShrink={0}>{periodSwitch}</Box>
+            <Box flexShrink={1}>
+              <Text dimColor wrap="truncate-end">
+                {periodAside}
+              </Text>
+            </Box>
           </Box>
+          {dayButtons}
         </Box>
-        {report.sessions.length === 0 ? (
+        {chosenNote !== undefined ? (
+          <Box marginTop={1}>{emptyState(parts, chosenNote)}</Box>
+        ) : report.sessions.length === 0 && chosenRow === undefined ? (
           <Box marginTop={1}>{emptyState(parts, emptyText(lang))}</Box>
         ) : (
           <Box flexDirection="column">
@@ -915,7 +1441,17 @@ export const register: Register = (on, options) => {
             </Box>
             <Box key="list" flexDirection="column" marginTop={1}>
               {rule('list-rule')}
-              <Box key="group-line">{groupSwitch}</Box>
+              {chosenRow === undefined ? (
+                <Box key="group-line">{groupSwitch}</Box>
+              ) : (
+                emptyState(
+                  parts,
+                  pick(lang, {
+                    en: `Only the day's summary is kept for ${dayHead(lang, chosen)}: its sessions and spawns were pruned with the ledgers after ${MAX_DAYS} days.`,
+                    'zh-TW': `${dayHead(lang, chosen)}只剩每日摘要：各 session 與派出已隨帳本在 ${MAX_DAYS} 天後刪除。`,
+                  }),
+                )
+              )}
             </Box>
             {rows.map(row => {
               // Each row is a card: its name with its spawns at the right, a session's time and repo, then its

@@ -27,3 +27,5 @@ A decision gets an ADR when it is hard to reverse, surprising without its contex
 | [0021](0021-focused-row-actions.md) | The open-items pane acts on the focused row; only the row's id is a button | 2026-10-13 |
 | [0022](0022-resolved-items-in-tombstones.md) | open-items keeps a resolved item inside its tombstone for 7 days | 2026-10-13 |
 | [0023](0023-daily-main-ledger.md) | The usage ledger keeps the main session's tokens per local day | 2026-10-13 |
+| [0024](0024-day-rows-recomputed-whole.md) | Day rows are computed whole from the ledgers and written once | 2026-10-14 |
+| [0025](0025-backfill-at-session-start.md) | The ledger is backfilled from transcripts at session start, behind a mark in the store | 2026-10-14 |

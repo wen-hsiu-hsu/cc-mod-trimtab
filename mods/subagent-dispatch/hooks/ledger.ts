@@ -33,6 +33,8 @@ export type Ledger = {
   daily: Record<string, Record<string, Tally>>
   // Oldest first, at most SPAWN_CAP.
   spawns: Spawn[]
+  // Set on a ledger rebuilt from the session's transcript rather than recorded live.
+  source?: 'transcript'
 }
 
 // What the session knows before anything is written; merged into the ledger on each write.
@@ -44,6 +46,14 @@ export const SPAWN_CAP = 500
 export const PROMPT_CHARS = 40
 export const DEFAULT_DAYS = 30
 export const MAX_DAYS = 90
+export const DAY_PREFIX = 'day:'
+// Day rows are kept this many days, the heatmap's 53 weeks.
+export const DAY_KEEP = 366
+// The heatmap reads the ledgers for this many days ending today and the day rows before. One day
+// short of the retention: a ledger last written on the 90th day back is pruned partway through it.
+export const LIVE_DAYS = MAX_DAYS - 1
+export const MAX_WEEKS = 53
+export const MIN_WEEKS = 4
 
 export const LEDGER_SPEC: KeySpec = {
   category: 'plain',
@@ -186,6 +196,49 @@ function firstDay(now: number, days: number): string {
   return dayOf(d.getTime())
 }
 
+// A local day `count` days after `day` (before, when negative).
+export function addDays(day: string, count: number): string {
+  const [year, month, date] = day.split('-').map(Number) as [number, number, number]
+
+  return dayOf(new Date(year, month - 1, date + count).getTime())
+}
+
+const WEEKDAYS = {
+  en: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+  'zh-TW': ['一', '二', '三', '四', '五', '六', '日'],
+} as const
+
+// Monday 0 to Sunday 6.
+export function weekday(day: string): number {
+  const [year, month, date] = day.split('-').map(Number) as [number, number, number]
+
+  return (new Date(year, month - 1, date).getDay() + 6) % 7
+}
+
+// A chosen day: `Fri Oct 2`, `10/02 週五`.
+export function dayName(lang: Lang, day: string): string {
+  const [, month, date] = day.split('-').map(Number) as [number, number, number]
+  const two = (value: number) => String(value).padStart(2, '0')
+
+  return pick(lang, {
+    en: `${WEEKDAYS.en[weekday(day)]} ${monthDay(lang, month, date)}`,
+    'zh-TW': `${two(month)}/${two(date)} 週${WEEKDAYS['zh-TW'][weekday(day)]}`,
+  })
+}
+
+// A chosen day at the head of a sentence: `Sat Oct 4`, `10/04（六）`.
+export function dayHead(lang: Lang, day: string): string {
+  const [, month, date] = day.split('-').map(Number) as [number, number, number]
+  const two = (value: number) => String(value).padStart(2, '0')
+
+  return pick(lang, { en: dayName(lang, day), 'zh-TW': `${two(month)}/${two(date)}（${WEEKDAYS['zh-TW'][weekday(day)]}）` })
+}
+
+// The heatmap's row labels, Monday first: only Monday, Wednesday and Friday are named.
+export function weekdayLabels(lang: Lang): string[] {
+  return WEEKDAYS[lang].map((name, i) => (i % 2 === 0 && i < 5 ? name : ''))
+}
+
 export function tokens(t: Tally): number {
   return t.input + t.cacheWrite + t.output
 }
@@ -251,16 +304,16 @@ export function readLedger(value: unknown): Ledger | undefined {
 }
 
 // Every session written to in the window, with its main tokens of the days in the window and
-// its spawns whose last step falls in it.
-export function buildReport(stored: unknown[], days: number, now: number): Report {
-  const from = firstDay(now, days)
-  const to = dayOf(now)
-  const report: Report = { at: now, days, from, to, main: 0, sub: 0, cacheRead: 0, spawned: { all: 0, explicit: 0, opus: 0, forks: 0, defaults: 0 }, sessions: [] }
+// its spawns whose last step falls in it. The window is `days` days ending today, or `day` alone.
+export function buildReport(stored: unknown[], days: number, now: number, day?: string): Report {
+  const from = day ?? firstDay(now, days)
+  const to = day ?? dayOf(now)
+  const report: Report = { at: now, days: day === undefined ? days : 1, from, to, main: 0, sub: 0, cacheRead: 0, spawned: { all: 0, explicit: 0, opus: 0, forks: 0, defaults: 0 }, sessions: [] }
   for (const ledger of stored.map(readLedger)) {
     if (ledger === undefined || dayOf(ledger.updated) < from) {
       continue
     }
-    const spawns = ledger.spawns.filter(spawn => dayOf(spawn.last) >= from)
+    const spawns = ledger.spawns.filter(spawn => dayOf(spawn.last) >= from && dayOf(spawn.last) <= to)
     const main = new Map<string, number>()
     let cacheRead = 0
     for (const [day, models] of Object.entries(ledger.daily)) {
@@ -297,6 +350,310 @@ export function buildReport(stored: unknown[], days: number, now: number): Repor
   report.sessions.sort((a, b) => b.started - a.started)
 
   return report
+}
+
+// --- Day rows: one per local day under `day:YYYY-MM-DD`, kept DAY_KEEP days, so the heatmap
+// outlives the ledgers. Each is computed whole from the ledgers, never added to (ADR 0024).
+
+export type DayRow = {
+  // The main session's tokens that day, by model.
+  main: Record<string, Tally>
+  // The tokens of the spawns whose last step fell that day, by the model each resolved to.
+  sub: Record<string, Tally>
+  spawned: Report['spawned']
+  // When the row was computed.
+  at: number
+}
+
+export function readDayRow(value: unknown): DayRow | undefined {
+  const row = value as DayRow | undefined
+  if (typeof row !== 'object' || row === null || typeof row.main !== 'object' || typeof row.sub !== 'object' || typeof row.spawned !== 'object') {
+    return undefined
+  }
+
+  return row
+}
+
+function add(into: Tally, from: Tally): void {
+  into.input += from.input
+  into.cacheWrite += from.cacheWrite
+  into.cacheRead += from.cacheRead
+  into.output += from.output
+  into.steps += from.steps
+}
+
+// The days a ledger has a record of: from its start to its last write, and any day it counted
+// tokens on (a ledger of the old format has no start).
+export function recordedDays(ledger: Ledger): Set<string> {
+  const days = new Set(Object.keys(ledger.daily))
+  const last = dayOf(ledger.updated)
+  let day = dayOf(ledger.started || ledger.updated)
+  for (let i = 0; day <= last && i <= DAY_KEEP; i += 1) {
+    days.add(day)
+    day = addDays(day, 1)
+  }
+
+  return days
+}
+
+export function dayRow(ledgers: Ledger[], day: string, at: number): DayRow {
+  const row: DayRow = { main: {}, sub: {}, spawned: { all: 0, explicit: 0, opus: 0, forks: 0, defaults: 0 }, at }
+  for (const ledger of ledgers) {
+    for (const [model, tally] of Object.entries(ledger.daily[day] ?? {})) {
+      add((row.main[model] ??= zero()), tally)
+    }
+    const spawns = ledger.spawns.filter(spawn => dayOf(spawn.last) === day)
+    for (const spawn of spawns) {
+      add((row.sub[spawn.model] ??= zero()), spawn)
+    }
+    addKinds(row.spawned, spawns)
+  }
+
+  return row
+}
+
+// The days a ledger recorded up to the day before yesterday (yesterday a session may still write
+// to), oldest first: the days a day row may be computed for.
+export function settledDays(ledgers: Ledger[], now: number): string[] {
+  const last = addDays(dayOf(now), -2)
+  const days = new Set<string>()
+  for (const ledger of ledgers) {
+    for (const day of recordedDays(ledger)) {
+      if (day <= last) {
+        days.add(day)
+      }
+    }
+  }
+
+  return [...days].sort()
+}
+
+function sumTokens(tallies: Record<string, Tally>): number {
+  return Object.values(tallies).reduce((total, tally) => total + tokens(tally), 0)
+}
+
+// A one-day report from a day row alone: the cards' figures, no sessions.
+export function dayReport(row: DayRow, day: string, now: number): Report {
+  const cacheRead = [...Object.values(row.main), ...Object.values(row.sub)].reduce((total, tally) => total + tally.cacheRead, 0)
+
+  return { at: now, days: 1, from: day, to: day, main: sumTokens(row.main), sub: sumTokens(row.sub), cacheRead, spawned: { ...row.spawned }, sessions: [] }
+}
+
+// The first day the heatmap and a chosen day read from the ledgers; before it, from day rows.
+export function liveFrom(now: number): string {
+  return firstDay(now, LIVE_DAYS)
+}
+
+// --- The calendar heatmap.
+
+// One day: its tokens (main session and spawns, without cache read), 0 for a day recorded with no
+// use, null for a day nothing recorded.
+export type HeatDay = { day: string; tokens: number | null }
+
+// How many weeks a pane of `bodyColumns` fits: a week takes two columns after four for the labels.
+export function heatWeeks(bodyColumns: number): number {
+  return Math.min(MAX_WEEKS, Math.max(MIN_WEEKS, Math.floor((bodyColumns - 4) / 2)))
+}
+
+// The heatmap's first day: the Monday `weeks - 1` weeks before this week's.
+export function heatStart(weeks: number, now: number): string {
+  const today = dayOf(now)
+
+  return addDays(today, -weekday(today) - (weeks - 1) * 7)
+}
+
+// `weeks` weeks of days, Monday first, ending today: the last LIVE_DAYS days from the ledgers, as
+// the rest of the pane counts them, and the days before from their day rows.
+export function buildHeatmap(stored: unknown[], dayRows: Record<string, unknown>, weeks: number, now: number): { days: HeatDay[] } {
+  const today = dayOf(now)
+  const live = liveFrom(now)
+  const recorded = new Set<string>()
+  const used = new Map<string, number>()
+  const count = (day: string, value: number) => used.set(day, (used.get(day) ?? 0) + value)
+  for (const ledger of stored.map(readLedger)) {
+    if (ledger === undefined) {
+      continue
+    }
+    for (const day of recordedDays(ledger)) {
+      recorded.add(day)
+    }
+    for (const [day, models] of Object.entries(ledger.daily)) {
+      count(day, sumTokens(models))
+    }
+    for (const spawn of ledger.spawns) {
+      count(dayOf(spawn.last), tokens(spawn))
+    }
+  }
+  const days: HeatDay[] = []
+  for (let day = heatStart(weeks, now); day <= today; day = addDays(day, 1)) {
+    if (day >= live) {
+      days.push({ day, tokens: recorded.has(day) ? (used.get(day) ?? 0) : null })
+    } else {
+      const row = readDayRow(dayRows[day])
+      days.push({ day, tokens: row === undefined ? null : sumTokens(row.main) + sumTokens(row.sub) })
+    }
+  }
+
+  return { days }
+}
+
+// The level 1–4 of a day's tokens among the used days drawn, by quartile; 0 for no use.
+export function heatLevels(days: HeatDay[]): (value: number | null) => number {
+  const values = days.flatMap(item => (item.tokens !== null && item.tokens > 0 ? [item.tokens] : [])).sort((a, b) => a - b)
+  const at = (p: number) => values[Math.max(0, Math.ceil(values.length * p) - 1)] ?? 0
+  const [q1, q2, q3] = [at(0.25), at(0.5), at(0.75)]
+
+  return value => (value === null || value <= 0 ? 0 : value <= q1 ? 1 : value <= q2 ? 2 : value <= q3 ? 3 : 4)
+}
+
+// The month row over the heatmap's weeks: a label where a month first shows (the week whose
+// Sunday falls in it); on the first week only when its Monday is the 1st.
+export function monthMarks(lang: Lang, days: HeatDay[]): { week: number; label: string }[] {
+  const marks: { week: number; label: string }[] = []
+  let last = ''
+  for (let week = 0; week * 7 < days.length; week += 1) {
+    const monday = days[week * 7]!.day
+    const sunday = addDays(monday, 6)
+    if (sunday.slice(0, 7) !== last && (week > 0 || monday.endsWith('-01'))) {
+      const month = Number(sunday.slice(5, 7))
+      marks.push({ week, label: pick(lang, { en: MONTHS[month - 1]!, 'zh-TW': `${month}月` }) })
+    }
+    last = sunday.slice(0, 7)
+  }
+
+  return marks
+}
+
+// A count in a few characters: `950`, `12k`, `1.2M`, `15M`.
+export function shortCount(value: number): string {
+  if (value >= 1e6) {
+    return `${(value / 1e6).toFixed(value >= 1e7 ? 0 : 1)}M`
+  }
+
+  return value >= 1e3 ? `${Math.round(value / 1e3)}k` : String(value)
+}
+
+// --- Rebuilding ledgers from transcripts: `<projects>/<project>/<sid>.jsonl` is a session, and
+// `<project>/<sid>/subagents/agent-<id>.jsonl` with its `.meta.json` one of its spawns.
+
+export type ParsedStep = { at: number; model: string; tally: Tally }
+export type Parsed = { started: number; updated: number; prompt: string; cwd: string; steps: ParsedStep[] }
+
+type Line = {
+  type?: string
+  timestamp?: string
+  cwd?: string
+  isSidechain?: boolean
+  isMeta?: boolean
+  message?: { id?: string; model?: string; content?: unknown; usage?: Record<string, number | undefined> }
+}
+
+function promptText(content: unknown): string {
+  if (typeof content === 'string') {
+    return content
+  }
+  if (!Array.isArray(content)) {
+    return ''
+  }
+
+  return content.flatMap(block => ((block as { type?: string }).type === 'text' ? [String((block as { text?: unknown }).text ?? '')] : [])).join(' ')
+}
+
+// A transcript's first and last time, first prompt, first directory and steps. A reply is written
+// as a line per content block: one step, with the usage of its last line. The lines of a subagent
+// (`isSidechain`) count only with `sidechain`, for a subagent's own transcript.
+export function parseTranscript(text: string, sidechain = false): Parsed {
+  const parsed: Parsed = { started: 0, updated: 0, prompt: '', cwd: '', steps: [] }
+  const steps = new Map<string, ParsedStep>()
+  for (const raw of text.split('\n')) {
+    let line: Line
+    try {
+      line = JSON.parse(raw) as Line
+    } catch {
+      continue
+    }
+    if (typeof line !== 'object' || line === null) {
+      continue
+    }
+    const at = typeof line.timestamp === 'string' ? Date.parse(line.timestamp) : Number.NaN
+    if (!Number.isNaN(at)) {
+      parsed.started ||= at
+      parsed.updated = Math.max(parsed.updated, at)
+    }
+    parsed.cwd ||= typeof line.cwd === 'string' ? line.cwd : ''
+    if (line.isSidechain === true && !sidechain) {
+      continue
+    }
+    if (line.type === 'user' && parsed.prompt === '' && line.isMeta !== true) {
+      const words = promptText(line.message?.content).trim()
+      if (words !== '' && !words.startsWith('<')) {
+        parsed.prompt = promptSummary(words)
+      }
+    }
+    const usage = line.message?.usage
+    const model = line.message?.model ?? ''
+    if (line.type !== 'assistant' || typeof usage !== 'object' || model === '' || model === '<synthetic>' || Number.isNaN(at)) {
+      continue
+    }
+    steps.set(line.message?.id ?? `${at}:${steps.size}`, {
+      at,
+      model,
+      tally: {
+        input: usage.input_tokens ?? 0,
+        cacheWrite: usage.cache_creation_input_tokens ?? 0,
+        cacheRead: usage.cache_read_input_tokens ?? 0,
+        output: usage.output_tokens ?? 0,
+        steps: 1,
+      },
+    })
+  }
+  parsed.steps = [...steps.values()]
+
+  return parsed
+}
+
+// What a subagent's `.meta.json` holds: `model` is the Agent tool's as given, `inherit` on a fork.
+type SubagentMeta = { agentType?: string; description?: string; model?: string; requestShape?: string; isFork?: boolean }
+
+// A spawn from a subagent's transcript and its meta; undefined for a transcript with no time in it.
+export function parseSubagent(meta: unknown, text: string, agentId: string): Spawn | undefined {
+  const info = (typeof meta === 'object' && meta !== null ? meta : {}) as SubagentMeta
+  const parsed = parseTranscript(text, true)
+  const first = parsed.steps[0]
+  const at = first?.at ?? parsed.started
+  if (at === 0) {
+    return undefined
+  }
+  const fork = info.isFork === true || info.agentType === 'fork'
+  const spawn: Spawn = {
+    ...zero(),
+    agentId,
+    at,
+    last: parsed.steps.at(-1)?.at ?? at,
+    description: info.description ?? '',
+    type: fork ? 'fork' : (info.agentType ?? 'general-purpose'),
+    ...(fork || typeof info.model !== 'string' ? {} : { requested: info.model }),
+    model: first?.model ?? 'unknown',
+    fork,
+    background: info.requestShape !== 'foreground',
+  }
+  for (const step of parsed.steps) {
+    add(spawn, step.tally)
+  }
+
+  return spawn
+}
+
+// A session's ledger rebuilt from its transcript and its spawns'.
+export function transcriptLedger(parsed: Parsed, spawns: Spawn[], repo: string): Ledger {
+  const ledger: Ledger = { ...emptyLedger(), repo, started: parsed.started, prompt: parsed.prompt, source: 'transcript' }
+  for (const step of parsed.steps) {
+    add(((ledger.daily[dayOf(step.at)] ??= {})[step.model] ??= zero()), step.tally)
+  }
+  ledger.spawns = [...spawns].sort((a, b) => a.at - b.at).slice(-SPAWN_CAP)
+  ledger.updated = Math.max(parsed.updated, ...ledger.spawns.map(spawn => spawn.last))
+
+  return ledger
 }
 
 // Tokens per model over the report: the main session's by the model each step named, a
@@ -483,8 +840,8 @@ export function summaryLines(lang: Lang, report: Report): string[] {
 }
 
 export const NOT_INCLUDED: Record<Lang, string> = {
-  en: "Not included: mods' own model calls ($.model.fork/complete), cloud sessions, and anything before the ledger was installed.",
-  'zh-TW': '不含：各 mod 自己呼叫模型（$.model.fork/complete）的用量、雲端 session，以及安裝帳本之前的紀錄。',
+  en: "Not included: mods' own model calls ($.model.fork/complete), cloud sessions, and sessions whose transcripts this machine no longer had when the ledger was installed.",
+  'zh-TW': '不含：各 mod 自己呼叫模型（$.model.fork/complete）的用量、雲端 session，以及安裝帳本時這台電腦已經沒有 transcript 的 session。',
 }
 
 // `/subagent-dispatch stats --text [days]`, and what `stats` prints where no pane can be placed.

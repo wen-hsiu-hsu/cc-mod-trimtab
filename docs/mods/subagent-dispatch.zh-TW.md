@@ -18,6 +18,7 @@
 | --- | --- |
 | `/subagent-dispatch redispatch` | 把被中斷 agent 的重派指示放進輸入框 |
 | `/subagent-dispatch stats [--text] [天數]` | 開用量 pane（見下方） |
+| `/subagent-dispatch backfill` | 重新把還沒有帳本的 session 的 transcript 補成帳本（見[回填](#回填)） |
 | `/subagent-dispatch status`、`set`、`unset` | 查看與修改設定 |
 
 ## 用量帳本
@@ -29,9 +30,13 @@
 
 90 天沒有寫入的帳本在 session 開始時刪除。0.4.0 之前的帳本沒有分日，它的主 session token 全部算在最後寫入的那天。
 
+刪除之前，同一次 session 開始時會把已經結束的日子（前天以前）各算成一行每日摘要：所有 session 合計的主 session 各模型 token、派出各模型 token 與派出次數。每一行都從帳本整個重算、只寫一次，保留 366 天，所以帳本刪除後，熱圖仍看得到一年內的每一天。
+
 `/subagent-dispatch stats [天數]`（1–90，預設 30，照日曆天算、含今天）開 pane，涵蓋所有 session：主 session 只算期間內那幾天的 token，派出依最後一步的日期算，跨午夜的派出整筆算在最後一步那天。
 
-- 最上面一行是 `subagent-dispatch stats`，後面一條橫線填滿這一行。提示列在 dock 的 pane 置底，只列按鈕上沒畫出的鍵（`Tab`、`Enter`、`Esc`）。下一行是 `期間`，後面接它涵蓋的日期。
+- 最上面一行是 `subagent-dispatch stats`，後面一條橫線填滿這一行。提示列在 dock 的 pane 置底，只列按鈕上沒畫出的鍵（`Tab`、`Enter`、`Esc`）。熱圖下面是 `期間`，後面接它涵蓋的日期，最右邊是 `j: ‹ 前一天`、`k: 後一天 ›`（放不下時移到下一行）。
+- 總覽最上面是日曆熱圖，一格一天、一欄一週，週一在最上面，今天落在最後一欄：寬度放得下幾週就畫幾週，最多 53 週（80 欄 38 週、110 欄起 53 週，不到 12 欄不畫），不跟著期間改變。每格是當天的 token（主 session 加 subagent，不算快取讀取）：沒有紀錄的日子（回填以前、transcript 已刪、別台電腦）是灰色 `·`，有紀錄但沒有用量是灰色 `■`，有用量依畫出來的日子分四分位、青色越亮越多。上方標月份，左邊標 `一`／`三`／`五`；格子下面用括號標出期間涵蓋的週，再下面是圖例與用量最多的那天。最近 89 天讀帳本，跟 pane 其他地方的算法一樣；更早的讀每日摘要。desktop 畫成一張 Svg。
+- 點格子，或按 `j`／`k` 選一天：`j` 第一下選今天，之後一次往前一天，到最左一欄停；`k` 往後一天，到今天停。期間換成那一天（`‹ 10/02 週五 ›`、`1 天 · p 回到 30 天`），選到的格子變成橘色，那一欄下面寫 `▲ 10/02 週五`，卡片、快取讀取與各列都只算那一天。沒有用量或沒有紀錄的日子，卡片的位置改成一句說明；只剩每日摘要的日子照畫卡片，並說明各 session 已刪除。`p` 第一下取消選日，之後照舊切換期間。
 - 兩張卡，內容寬 60 欄以上時並排，較窄時上下排。**總 token**（input + cache write + output）附一條分成主 session（紫）與 subagent（青）的長條，以及 subagent 佔比。**派出**依模型怎麼來分成三類，相加等於總數：指定模型（黃，含指定 Opus 的次數）、沿用預設（灰）、fork（綠，用主 session 的模型）。快取讀取（不計入）在卡片下方另列一短行，最右邊是 pane 上次讀取 ledger 的時間（`更新於 19:04:05`）；放不下時改到下一行靠左。
 - 依 repo（顯示資料夾名稱）、session、模型或 agent 種類分組，清單在一條橫線下，最上面是 `分組` 切換鈕。不分寬窄，每一列是一張卡片：第一行是名稱（太長時截斷，中英混合也只佔一行），派出次數在最右邊；第二行是長條（desktop 用 Svg，終端機用有底色的格子），token 與佔比靠右。依 session 分組時名稱是第一則 prompt，中間多一行 session 的時間與 repo。
 - `期間`、`分組`、`排序` 都在原地切換，下方內容不會位移：終端機是一個顯示 `‹ 值 ›` 的按鈕，按下換到下一個值、到尾端繞回（快捷鍵 `p`、`g`、`s`）；desktop 是一個值一顆的分段按鈕，同一個快捷鍵放在目前值的下一顆上。
@@ -41,7 +46,13 @@
 
 終端機較窄時 pane 會改放在輸入框上方。`/subagent-dispatch stats --text [天數]` 印出同樣內容的文字版；`-p` 執行或無處放 pane 時，`stats` 也改印文字版。
 
-不含：各 mod 自己呼叫模型（`$.model.fork` / `$.model.complete`）的用量、雲端 session（不載入 mod）、安裝之前的紀錄。
+不含：各 mod 自己呼叫模型（`$.model.fork` / `$.model.complete`）的用量、雲端 session（不載入 mod），以及安裝時這台電腦已經沒有 transcript 的 session。
+
+## 回填
+
+Claude Code 沒有安裝事件，所以第一個開始時發現 store 裡沒有 `backfill` 標記的 session（`-p` 執行除外）會在背景讀本機的 transcript，session 不等它結束。設定資料夾 `projects/` 底下（`$CLAUDE_CONFIG_DIR`，沒設定時是 `~/.claude`）每個還沒有帳本的 session，都從它的 transcript 和 subagent 的 transcript（`<session>/subagents/agent-*.jsonl` 與 `.meta.json`）重建一本帳本：開始與最後寫入的時間、第一則 prompt、repo、主 session 每天各模型的 token（同一則回覆拆成好幾行只算一次），以及每次派出的種類、指定的模型、fork、背景、token 與步數。已經有帳本的 session 和目前的 session 以即時記錄為準。一次處理一個檔案；超過 4 MiB 的檔案改用 `cat` 讀（沒辦法執行程式的環境如 desktop 會略過），讀取失敗的檔案略過並記進 debug log。最後算出每日摘要，跳 toast 說補了幾個 session（`subagent-dispatch：已從 transcript 補上 221 個 session（9/15 起）`）；沒補到就不跳。
+
+某個 session 執行回填時，標記是 `running`，其他 session 在 10 分鐘內不會再跑。`/subagent-dispatch backfill` 不管標記都重跑一次，給中途停掉或換電腦時用。`ledger` 關閉時不執行。
 
 ## 設定
 
@@ -53,4 +64,7 @@
 
 ## 已知限制
 
+- 回填只讀這台電腦的 transcript，而 Claude Code 預設 30 天後刪除 transcript（`cleanupPeriodDays`）：更早的日子維持「無資料」。
+- `■` 是 East Asian Ambiguous 寬度的字元：終端機設成「ambiguous 當全形」時，熱圖的格子會錯位。
+- 熱圖每一格都是按鈕，而且排在 Tab 順序的最前面：按 Tab 會先走過所有格子，才到 `期間` 和各列。快捷鍵（`j`、`k`、`p`、`g`）和滑鼠點擊不受影響。
 - 「背景」是 Claude Code 對每次派出回報的值。所有 Agent 呼叫都在背景執行的環境（Agent 工具立刻返回）裡，每次派出都會列為背景。

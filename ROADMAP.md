@@ -11,6 +11,8 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 1. 2.1.296 自己產生的型別檔與 2.1.288 版是否一致（見「查證結果」2；目前只拿得到 2.1.288 版）。
 2. 第一次寫 `.claude/cc-mod-trimtab.local.json` 時加進 `.git/info/exclude`：只有自動測試。
 3. `subagent-dispatch` 帳本跨 `/clear` 的 session 命名與 agent 步數歸屬：只有自動測試。
+4. `subagent-dispatch` 熱圖用滑鼠點格子選日：只有自動測試；實際終端機只用 `j`／`k`／`p` 驗過（見「查證結果」21）。
+5. `subagent-dispatch` 回填後 `turn.step` 每次寫入的實際耗時：只在 engine 外量過（見「查證結果」21）。
 ## 待辦
 
 目前沒有。
@@ -70,3 +72,4 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 18. 2026-10-13 在 Claude Code 裡看過 open-items 面板改版（焦點列動作、分組與單邊線 `│`、比例長條計數、每項全文、按鍵說明）：顯示正常。
 19. 2026-10-13 實際看到用模型的功能在一個 session 第一次觸發時的 toast：顯示正常。
 20. 2026-10-13 在 2.1.296 用臨時 mod 加 `claude -p --plugin-dir` 實測 `$.session.usage().cost`（訂閱帳號，`rateLimits` 有 `five_hour`、`seven_day`）：`cost.usd` 有值；`turn.step` 的 `next` 回來時已加上這一步；subagent 的步數也算在內；session 結束時的總額等於各步差額的加總。mod 自己的 `$.model.complete` 不算進去（呼叫前後與 1.5 秒後都沒變）。兩個 agent 並行時，各步「呼叫前後」的差額會重疊、加總比總額多；改用「這次讀到的值減上次讀到的值」，總額對得上，同時結束的步數才可能記錯名下。
+21. 2026-10-14 在 2.1.296 用 `--plugin-dir` 載入 subagent-dispatch 0.5.0（自己的 `subagent-dispatch_inline-*` store），在 pty 裡實際看 stats pane：session 開始後不到 8 秒就在背景從本機 transcript 補上 221 個 session（最早 9/15，兩個超過 4 MiB 的檔案經 `cat` 讀到，略過 0 個），跳出 toast；store 變成 288 KB（221 本帳本、27 行每日摘要）。熱圖在 dock（約 45 欄，20 週）與 100 欄 inline（47 週）都對齊：每格一顆按鈕佔 1 欄、格間 1 欄，月份標在對的週，今天在最後一欄。`j`、`j`、`p` 依序選到今天、前一天、回到 30 天，卡片數字跟著換。發現兩件事並已修正：dock 時 `j`／`k` 把日期範圍擠掉，改成放不下時移到下一行；清單第一列加 `autoFocus` 會讓 inline 的 pane 捲到那一列、把熱圖捲出畫面，所以不加。另外在 engine 外量了 288 KB store 一次 parse 加寫回約 2.4 ms，當作 `turn.step` 寫入耗時的近似值。

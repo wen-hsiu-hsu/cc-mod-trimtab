@@ -3,6 +3,22 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [0.8.0] - 2026-10-14
+
+| Mod | Version |
+| --- | --- |
+| `subagent-dispatch` | 0.5.0 |
+- `subagent-dispatch` 0.5.0:
+  - Added: a calendar heatmap of tokens per day heads the stats pane, as many
+    weeks as the pane is wide (up to 53). Click a cell, or press `j` / `k`, to
+    make the period that day; `p` lets the day go.
+  - Added: each settled day is summed into a day row kept 366 days, so the
+    heatmap outlives the 90-day ledgers.
+  - Added: the first session after installing or updating rebuilds a ledger
+    from the local transcripts of each session that has none, in the
+    background, with a toast saying how many it added;
+    `/subagent-dispatch backfill` runs it again.
+
 ## [0.7.0] - 2026-10-13
 
 | Mod | Version |
