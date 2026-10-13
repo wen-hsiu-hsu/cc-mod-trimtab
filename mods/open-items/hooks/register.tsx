@@ -1014,6 +1014,11 @@ export const register: Register = (on, pluginOptions) => {
 
     return (
       <Box flexDirection="column" {...(room === undefined ? {} : { minHeight: room })}>
+        {/* The mod's name and a dim rule across the rest of the line. */}
+        <Box key="header" flexDirection="row" gap={1} marginBottom={1}>
+          <Text bold>{COMMAND}</Text>
+          <Text dimColor>{'─'.repeat(Math.max(0, e.props.bodyColumns - cells(COMMAND) - 1))}</Text>
+        </Box>
         <Box key="count" flexDirection="column" marginBottom={1}>
           <Box flexDirection="row" gap={1}>
             <Text bold dimColor={total === 0}>

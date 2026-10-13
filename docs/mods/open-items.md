@@ -13,7 +13,7 @@ Keeps undecided questions, unresolved bugs and deferred items outside the contex
 - **Claude registers items** with the `track` tool (kinds: decision, question, deferred, bug). A deferred item says when to come back to it. Text that is the same as, or contained in, an open item is not added again.
 - **Unpicked options are deferred**: when you pick only some options (for example "A + B, write C down as an observation"), the unpicked ones are deferred automatically, and a toast shows what was deferred. Before the next prompt, press `[Undo deferral]` (`u`) or run `/open-items undo` to cancel it. Only an option list at the end of the answer, or followed by a question, is parsed.
 - **Count above the input box**: press `[Open]` (`o`) or run `/open-items` to open the pane.
-- **The pane**: on top, the open count with a bar split by kind (Decide yellow, Bug red, Question cyan, Deferred gray) and a legend. Below, every item with its whole text, then when it was added and on which branch. Items older than 7 days are dimmed. Move between items with Tab or ↑↓; Esc closes the pane.
+- **The pane**: under its name and a rule, the open count with a bar split by kind (Decide yellow, Bug red, Question cyan, Deferred gray) and a legend. Below, every item with its whole text, then when it was added and on which branch. Items older than 7 days are dimmed. Move between items with Tab or ↑↓; Esc closes the pane.
   - `g` switches the grouping: by kind (the default: Decide, Bug, Question, Deferred, each framed by a line in its color), no groups (the kind on each item), or by branch (the current branch first).
   - The Deferred group starts folded when other groups are listed; `m` shows or hides it.
   - `s` sorts oldest first or newest first.

@@ -893,6 +893,11 @@ test('the pane follows DESIGN.md: named after the mod, focused, Esc closes it, k
   // The actions keep two lines from the list; a spacer pushes them to the foot of a docked pane.
   expect((await pane.find({ key: 'actions' }))?.props.marginTop).toBe(2)
   expect((await pane.find({ key: 'spacer' }))?.props.flexGrow).toBe(1)
+  // On top: the mod's name in bold and a dim rule to the edge of the body (120 columns).
+  expect((await pane.find({ key: 'header' }))?.props.gap).toBe(1)
+  expect((await pane.find({ type: 'Text', text: /^─+$/ }))?.props).toMatchObject({ dimColor: true })
+  expect((await pane.find({ type: 'Text', text: /^─+$/ }))?.text).toHaveLength(109)
+  expect((await pane.find({ type: 'Text', text: 'open-items' }))?.props.bold).toBe(true)
   // The keys keep the default color; what they do is dim.
   const hint = (await pane.findAll({ type: 'Text', text: /./ })).filter(t => ['Tab/↑↓', ' moves', 'Esc', ' closes'].includes(t.text))
   expect(hint.map(t => [t.text, t.props.dimColor === true])).toEqual([

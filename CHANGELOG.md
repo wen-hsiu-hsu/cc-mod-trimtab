@@ -20,6 +20,7 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
     session, instead of this session's last 5; decisions and drops show their
     reason. The empty pane says how many were resolved in that time.
   - Changed: the copy button reads `Copy all`.
+  - Added: the pane's name and a rule along its top line.
   - Changed: the action keys sit two lines below the list, and with the hint
     line at the bottom of a docked pane.
 
