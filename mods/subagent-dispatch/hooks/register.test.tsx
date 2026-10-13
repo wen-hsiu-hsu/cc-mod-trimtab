@@ -1,7 +1,7 @@
 import type { AgentStatus, On } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-import { addDays, buildHeatmap, cells, readDayRow, recordedDays, shortCount, elapsed, fit, heatLevels, heatWeeks, liveFrom, monthMarks, parseSubagent, parseTranscript, type Tally } from './ledger'
+import { addDays, buildHeatmap, cells, heatStart, readDayRow, recordedDays, shortCount, elapsed, fit, heatLevels, heatWeeks, liveFrom, monthMarks, parseSubagent, parseTranscript, type Tally } from './ledger'
 import { redispatchPrompt } from './register'
 
 describe('helpers', () => {
@@ -949,14 +949,14 @@ describe('heatmap', () => {
     type Mounted = Awaited<ReturnType<T['ui']['mount']>>
 
     // Use today and on Oct 2 (a spawn), a recorded day with none on Oct 10, nothing on Oct 5, and a
-    // day row from June, before the ledgers reach.
+    // day row from July 1, before the ledgers reach.
     async function heatWorld($: T, on: On, surface: 'terminal' | 'desktop' = 'terminal', userFile = '') {
       const world = newWorld()
       world.store = {
         'ledger:today': ledgerOf(at(10, 12, 9), at(10, 12, 10), { '2026-10-12': { 'claude-opus-4': tally(2000) } }),
         'ledger:oct2': ledgerOf(at(10, 2, 9), at(10, 2, 11), { '2026-10-02': { 'claude-opus-4': tally(300) } }, [spawnOn(at(10, 2, 10), at(10, 2, 11), 900)]),
         'ledger:quiet': ledgerOf(at(10, 10, 9), at(10, 10, 9), {}),
-        'day:2026-06-01': { main: { 'claude-opus-4': tally(4321) }, sub: {}, spawned: ZEROS, at: 0 },
+        'day:2026-07-01': { main: { 'claude-opus-4': tally(4321) }, sub: {}, spawned: ZEROS, at: 0 },
       }
       const clock = engine(on, { value: 'running' }, userFile, world)
       await $.session.start({ cwd: '/repo', surface, isInteractive: true })
@@ -965,8 +965,35 @@ describe('heatmap', () => {
       return Object.assign(world, { clock })
     }
     const mount = ($: T, bodyColumns = 110, surface: 'terminal' | 'desktop' = 'terminal') => $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface } as never)
-    const dayCells = async (pane: Mounted) => (await pane.findAll({ type: 'Button' })).filter(node => String(node.props.key).startsWith('day:'))
-    const glyph = async (pane: Mounted, day: string) => (await pane.find({ key: `day:${day}` }))?.children[0] as { props: { color?: string; bold?: boolean; dimColor?: boolean } } | undefined
+    type Cell = { type: string; props: { color?: string; bold?: boolean; dimColor?: boolean }; children: unknown[] }
+    // Each row's cells, a week each: the glyphs in its Text, the gaps between them left out.
+    const rowCells = async (pane: Mounted) => {
+      const rows: Cell[][] = []
+      for (let row = 0; row < 7; row++) {
+        const line = (await pane.find({ key: `heat-row:${row}` })) as unknown as { children: { children: unknown[] }[] } | undefined
+        rows.push((line?.children[1]?.children ?? []).filter((node): node is Cell => typeof node === 'object' && node !== null))
+      }
+
+      return rows
+    }
+    const dayCells = async (pane: Mounted) => (await rowCells(pane)).flat()
+    // Chooses `day` with j / k from the chosen day `from`, or from none, where j first chooses today.
+    const pickDay = async (pane: Mounted, day: string, from = '') => {
+      if (from === '') {
+        await pane.press({ key: 'prev-day' })
+      }
+      const steps = Math.round((Date.parse(from || '2026-10-12') - Date.parse(day)) / 86_400_000)
+      for (let i = 0; i < Math.abs(steps); i++) {
+        await pane.press({ key: steps > 0 ? 'prev-day' : 'next-day' })
+      }
+    }
+    // The cell of `day` in a pane of 53 weeks.
+    const glyph = async (pane: Mounted, day: string) => {
+      const index = Math.round((Date.parse(day) - Date.parse(heatStart(53, NOW))) / 86_400_000)
+
+      return (await rowCells(pane))[index % 7]?.[Math.floor(index / 7)]
+    }
+    const glyphText = async (pane: Mounted, day: string) => String((await glyph(pane, day))?.children[0] ?? '')
 
     test('draws as many weeks as the width holds, none below 12 columns or in an opened row', async ($, on) => {
       await heatWorld($, on)
@@ -987,7 +1014,7 @@ describe('heatmap', () => {
 
       const pane = await mount($)
       expect(await pane.find({ key: 'heat-months' })).toBeDefined()
-      expect((await pane.find({ key: 'heat-legend' }))?.text).toMatch(/^No data · {2}None ■ {2}Less ■■■■ More {2}Selected ■.*Most Jun 1 4k$/)
+      expect((await pane.find({ key: 'heat-legend' }))?.text).toMatch(/^No data · {2}None ■ {2}Less ■■■■ More {2}Selected ■.*Most Jul 1 4k$/)
       // 30 days span 11 columns at the right: too few for the label, which goes before the bracket.
       expect((await pane.find({ key: 'heat-note' }))?.text).toMatch(/30 days └─+┘$/)
       await pane.press({ key: 'days' })
@@ -1003,32 +1030,32 @@ describe('heatmap', () => {
       await heatWorld($, on)
       const pane = await mount($)
       expect((await glyph(pane, '2026-10-05'))?.props.dimColor).toBe(true)
-      expect((await pane.find({ key: 'day:2026-10-05' }))?.text).toBe('·')
+      expect(await glyphText(pane, '2026-10-05')).toBe('·')
       expect((await glyph(pane, '2026-10-10'))?.props.color).toBe('#4a4a52')
-      // Three used days: Oct 2 the least, then today, then the June day row.
+      // Three used days: Oct 2 the least, then today, then the July day row.
       expect((await glyph(pane, '2026-10-02'))?.props.color).toBe('#1f5a6d')
       expect((await glyph(pane, '2026-10-12'))?.props.color).toBe('#2a7f9c')
-      expect((await glyph(pane, '2026-06-01'))?.props.color).toBe('#3aa6cc')
-      expect((await pane.find({ key: 'day:2026-10-12' }))?.text).toBe('■')
+      expect((await glyph(pane, '2026-07-01'))?.props.color).toBe('#3aa6cc')
+      expect(await glyphText(pane, '2026-10-12')).toBe('■')
 
-      await pane.press({ key: 'day:2026-10-10' })
+      await pickDay(pane, '2026-10-10')
       expect((await glyph(pane, '2026-10-10'))?.props).toMatchObject({ color: '#ff8c42', bold: true })
       expect(await pane.find({ type: 'Text', text: /^Sat Oct 10: no usage \(the day was recorded/ })).toBeDefined()
       expect(await pane.find({ key: 'card:tokens' })).toBeUndefined()
 
-      await pane.press({ key: 'day:2026-10-05' })
-      expect((await pane.find({ key: 'day:2026-10-05' }))?.text).toBe('■')
+      await pickDay(pane, '2026-10-05', '2026-10-10')
+      expect(await glyphText(pane, '2026-10-05')).toBe('■')
       expect(await pane.find({ type: 'Text', text: /^Mon Oct 5: no data \(neither a ledger nor a day row/ })).toBeDefined()
       expect(await pane.find({ type: 'Text', text: /no usage/ })).toBeUndefined()
       await pane.unmount()
     })
 
-    test("a pressed day, j and k choose the period's day; p lets it go", async ($, on) => {
+    test("j and k choose the period's day; p lets it go", async ($, on) => {
       await heatWorld($, on)
       const pane = await mount($)
       expect((await pane.find({ key: 'card:tokens' }))?.text).toMatch(/3,200/)
 
-      await pane.press({ key: 'day:2026-10-02' })
+      await pickDay(pane, '2026-10-02')
       expect((await pane.find({ key: 'days' }))?.text).toContain('‹ Fri Oct 2 ›')
       expect((await pane.find({ key: 'header' }))?.text).toContain('1 day · p back to 30 days')
       expect((await pane.find({ key: 'card:tokens' }))?.text).toMatch(/1,200.*main session.*300.*subagent.*900/)
@@ -1061,23 +1088,24 @@ describe('heatmap', () => {
       expect((await pane.find({ key: 'days' }))?.text).toContain('‹ Mon Oct 12 ›')
       // Near the right edge the label goes before its mark.
       expect((await pane.find({ key: 'heat-note' }))?.text).toMatch(/Mon Oct 12 ▲$/)
-      await pane.press({ key: 'day:2026-06-01' })
-      expect((await pane.find({ key: 'heat-note' }))?.text).toMatch(/^ +▲ Mon Jun 1$/)
+      await pickDay(pane, '2026-07-01', '2026-10-12')
+      expect((await pane.find({ key: 'heat-note' }))?.text).toMatch(/^ +▲ Wed Jul 1$/)
       await pane.unmount()
     })
 
     test("j stops at the heatmap's first day; a day before the ledgers reach shows its day row", async ($, on) => {
       await heatWorld($, on)
       const pane = await mount($, 12)
-      await pane.press({ key: 'day:2026-09-21' })
+      await pickDay(pane, '2026-09-21')
       await pane.press({ key: 'prev-day' })
       expect((await pane.find({ key: 'days' }))?.text).toContain('‹ Mon Sep 21 ›')
       await pane.unmount()
 
       const wide = await mount($)
-      await wide.press({ key: 'day:2026-06-01' })
+      // The day chosen above stays chosen.
+      await pickDay(wide, '2026-07-01', '2026-09-21')
       expect((await wide.find({ key: 'card:tokens' }))?.text).toMatch(/4,321/)
-      expect(await wide.find({ type: 'Text', text: /^Only the day's summary is kept for Mon Jun 1/ })).toBeDefined()
+      expect(await wide.find({ type: 'Text', text: /^Only the day's summary is kept for Wed Jul 1/ })).toBeDefined()
       expect(await wide.find({ key: 'group-line' })).toBeUndefined()
       await wide.unmount()
     })
@@ -1085,11 +1113,11 @@ describe('heatmap', () => {
     test('the chosen day is written the zh-TW way', async ($, on) => {
       await heatWorld($, on, 'terminal', '{"*":{"language":"zh-TW"}}')
       const pane = await mount($)
-      expect((await pane.find({ key: 'heat-legend' }))?.text).toMatch(/^無資料 · {2}無用量 ■ {2}少 ■■■■ 多 {2}選到 ■.*最多 6\/1 4k$/)
-      await pane.press({ key: 'day:2026-10-02' })
+      expect((await pane.find({ key: 'heat-legend' }))?.text).toMatch(/^無資料 · {2}無用量 ■ {2}少 ■■■■ 多 {2}選到 ■.*最多 7\/1 4k$/)
+      await pickDay(pane, '2026-10-02')
       expect((await pane.find({ key: 'days' }))?.text).toContain('‹ 10/02 週五 ›')
       expect((await pane.find({ key: 'header' }))?.text).toContain('1 天 · p 回到 30 天')
-      await pane.press({ key: 'day:2026-10-04' })
+      await pickDay(pane, '2026-10-04', '2026-10-02')
       expect(await pane.find({ type: 'Text', text: /^10\/04（日）沒有資料（帳本與每日摘要都沒有這天/ })).toBeDefined()
       await pane.unmount()
     })

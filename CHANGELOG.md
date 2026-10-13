@@ -3,6 +3,16 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [0.8.2] - 2026-10-14
+
+| Mod | Version |
+| --- | --- |
+| `subagent-dispatch` | 0.5.2 |
+- `subagent-dispatch` 0.5.2:
+  - Changed: the heatmap's cells are no longer buttons; choose a day with
+    `j` / `k`. Resizing redraws faster, and Tab no longer steps through every
+    cell.
+
 ## [0.8.1] - 2026-10-14
 
 | Mod | Version |

@@ -1073,26 +1073,27 @@ export const register: Register = (on, options) => {
               <Box width={4} flexShrink={0}>
                 <Text dimColor>{name}</Text>
               </Box>
-              <Box flexDirection="row" gap={1}>
+              {/* One Text a row, a colored glyph a day: a button a cell made each redraw slow (ADR 0026). */}
+              <Text>
                 {Array.from({ length: weeks }, (_, week) => {
                   const item = drawn[week * 7 + row]
+                  const gap = week === 0 ? '' : ' '
                   if (item === undefined) {
-                    return <Text key={`day-after:${week}`}> </Text>
+                    return gap
                   }
 
-                  return (
-                    <Button key={`day:${item.day}`} plain onPress={() => choose(item.day)}>
-                      {item.tokens === null && item.day !== chosen ? (
-                        <Text dimColor>·</Text>
-                      ) : (
-                        <Text color={ink(item)} bold={item.day === chosen}>
-                          ■
-                        </Text>
-                      )}
-                    </Button>
-                  )
+                  return [
+                    gap,
+                    item.tokens === null && item.day !== chosen ? (
+                      <Text dimColor>·</Text>
+                    ) : (
+                      <Text color={ink(item)} bold={item.day === chosen}>
+                        ■
+                      </Text>
+                    ),
+                  ]
                 })}
-              </Box>
+              </Text>
             </Box>
           ))}
           <Box key="heat-note" paddingLeft={4}>
