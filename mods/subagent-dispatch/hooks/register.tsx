@@ -17,6 +17,7 @@ import {
   n,
   repoName,
   sessionName,
+  stamp,
   share,
   spawnParts,
   tokens,
@@ -497,7 +498,8 @@ export const register: Register = (on, options) => {
     const wide = body >= WIDE_COLUMNS
     const all = report.main + report.sub
     const most = Math.max(1, ...rows.map(row => row.tokens))
-    const barWidth = wide ? clamp(body - 60, 10, 40) : clamp(body - 22, 8, 30)
+    // A row's bar takes what its line leaves after the left line, the tokens and the share.
+    const barWidth = clamp(body - 20, 8, 60)
     const byLabel: Record<GroupBy, string> = {
       repo: 'repo',
       session: 'session',
@@ -527,12 +529,13 @@ export const register: Register = (on, options) => {
         <Text dimColor>{'─'.repeat(Math.max(0, body - heading.length - 1))}</Text>
       </Box>
     )
-    // A list's column names sit under a dim rule and above a blank line.
-    const listHead = (key: string, columns: RenderNode) => (
-      <Box key={key} flexDirection="column" marginTop={1} marginBottom={1}>
-        <Text dimColor>{'─'.repeat(body)}</Text>
-        {columns}
-      </Box>
+    // A session by its first prompt; its time and repo go on a line of their own.
+    const promptOf = (session: Report['sessions'][number]) => session.prompt || pick(lang, { en: '(no prompt)', 'zh-TW': '（沒有 prompt）' })
+    // A dim rule across the pane, over a list.
+    const rule = (key: string) => (
+      <Text key={key} dimColor>
+        {'─'.repeat(body)}
+      </Text>
     )
 
     const periodSwitch = switcher(
@@ -655,19 +658,26 @@ export const register: Register = (on, options) => {
       const counted = countKinds(listed.map(item => item.spawn))
       const top = Math.max(1, ...listed.map(item => tokens(item.spawn)))
       const rowBar = wide ? 16 : 8
+      // A row with no spawns lists its sessions instead, by tokens or by when they started.
+      const bySessions = listed.length === 0
+      const sessionRows = bySessions ? [...open.detail].sort((a, b) => (sort === 'time' ? b.session.started - a.session.started : b.main - a.main)) : []
+      const topMain = Math.max(1, ...sessionRows.map(part => part.main))
+      const count = bySessions ? sessionRows.length : listed.length
 
       return (
         <Box flexDirection="column" {...frame}>
           {title}
+          {/* The back button and the crumb keep their width; only the row's name gives way. */}
           <Box flexDirection="row" gap={1}>
-            <Button
-              key="back"
-              label={pick(lang, { en: '‹ Back', 'zh-TW': '‹ 返回' })}
-              hotkey="b"
-              onPress={() => void update($, view, current => ({ ...current, item: '' }))}
-            />
-            <Text dimColor>{byLabel[by]} ›</Text>
-            <Box flexShrink={1}>
+            <Box flexShrink={0}>
+              <Button key="back" plain hotkey="b" onPress={() => void update($, view, current => ({ ...current, item: '' }))}>
+                <Text>{pick(lang, { en: '‹ Back', 'zh-TW': '‹ 返回' })}</Text>
+              </Button>
+            </Box>
+            <Box flexShrink={0}>
+              <Text dimColor>{byLabel[by]} ›</Text>
+            </Box>
+            <Box flexShrink={1} minWidth={0}>
               <Text bold wrap="truncate-end">
                 {open.label}
               </Text>
@@ -697,60 +707,28 @@ export const register: Register = (on, options) => {
                   true,
                 )}
           </Box>
-          {listed.length === 0 ? (
-            // A row of the main session's own tokens (a main model, or the main session by type) has no
-            // spawns: it lists the sessions those tokens came from, most first, each with its bar.
-            <Box flexDirection="column">
-              {listHead(
-                'sessions-head',
-                <Box flexDirection="row" gap={1}>
-                  <Box flexGrow={1} flexShrink={1}>
-                    <Text dimColor>session</Text>
-                  </Box>
-                  <Box width={rowBar} flexShrink={0} />
-                  <Box width={9} flexShrink={0} justifyContent="flex-end">
-                    <Text dimColor>token</Text>
-                  </Box>
-                </Box>,
+          {/* Under a rule: the sort, the column names, then a row per spawn, or for a row with no spawns
+              (a model only the main session used, or the main session by type) a row per session. */}
+          <Box key="list" flexDirection="column" marginTop={1}>
+            {rule('list-rule')}
+            <Box>
+              {switcher(
+                'sort',
+                pick(lang, { en: 'Sort ', 'zh-TW': '排序 ' }),
+                's',
+                [
+                  { value: 'tokens', label: pick(lang, { en: 'most tokens', 'zh-TW': 'token 多到少' }) },
+                  { value: 'time', label: pick(lang, { en: 'time', 'zh-TW': '時間' }) },
+                  ...(bySessions ? [] : [{ value: 'duration', label: pick(lang, { en: 'duration', 'zh-TW': '耗時' }) }]),
+                ],
+                sort,
+                value => void update($, view, current => ({ ...current, sort: value, limit: PAGE })),
               )}
-              {[...open.detail]
-                .sort((a, b) => b.main - a.main)
-                .map(part => (
-                  <Box key={`main:${part.session.repo}-${part.session.started}`} flexDirection="row" gap={1}>
-                    <Box flexGrow={1} flexShrink={1}>
-                      <Text wrap="truncate-end">{sessionName(lang, part.session)}</Text>
-                    </Box>
-                    <Box width={rowBar} flexShrink={0}>
-                      {cellBar(part.main, Math.max(1, ...open.detail.map(other => other.main)), rowBar)}
-                    </Box>
-                    <Box width={9} flexShrink={0} justifyContent="flex-end">
-                      <Text>{n(part.main)}</Text>
-                    </Box>
-                  </Box>
-                ))}
             </Box>
-          ) : (
-          <Box flexDirection="column">
-          <Box marginTop={1}>
-            {switcher(
-              'sort',
-              pick(lang, { en: 'Sort ', 'zh-TW': '排序 ' }),
-              's',
-              [
-                { value: 'tokens', label: pick(lang, { en: 'most tokens', 'zh-TW': 'token 多到少' }) },
-                { value: 'time', label: pick(lang, { en: 'time', 'zh-TW': '時間' }) },
-                { value: 'duration', label: pick(lang, { en: 'duration', 'zh-TW': '耗時' }) },
-              ],
-              sort,
-              value => void update($, view, current => ({ ...current, sort: value, limit: PAGE })),
-            )}
-          </Box>
-          {listHead(
-            'spawns-head',
-            <Box flexDirection="row" gap={1}>
+            <Box key="list-columns" flexDirection="row" gap={1} marginTop={1}>
               <Box width={1} flexShrink={0} />
               <Box flexGrow={1} flexShrink={1}>
-                <Text dimColor>{pick(lang, { en: 'Spawns', 'zh-TW': '派出' })}</Text>
+                <Text dimColor>{bySessions ? 'session' : pick(lang, { en: 'Spawns', 'zh-TW': '派出' })}</Text>
               </Box>
               <Box width={rowBar} flexShrink={0} />
               <Box width={9} flexShrink={0} justifyContent="flex-end">
@@ -759,92 +737,108 @@ export const register: Register = (on, options) => {
               <Box width={6} flexShrink={0} justifyContent="flex-end">
                 <Text dimColor>{pick(lang, { en: 'date', 'zh-TW': '日期' })}</Text>
               </Box>
-            </Box>,
-          )}
-          {listed.slice(0, limit).map(({ spawn, session }) => {
-            const id = spawnId(spawn)
-            const color = kindColor(spawn)
-            const how = spawn.fork ? 'fork' : spawn.requested === undefined ? pick(lang, { en: 'default', 'zh-TW': '預設' }) : pick(lang, { en: 'named', 'zh-TW': '指定' })
-            const lines: [string, string, RenderNode][] = [
-              ['type', pick(lang, { en: 'Type', 'zh-TW': '種類' }), spawn.type],
-              [
-                'model',
-                pick(lang, { en: 'Model', 'zh-TW': '模型' }),
-                <Text wrap="truncate-end">
-                  <Text color={color.ink}>{how}</Text>
-                  {spawn.requested === undefined || spawn.fork ? '' : ` ${spawn.requested}`} → {spawn.model}
-                </Text>,
-              ],
-              [
-                'run',
-                pick(lang, { en: 'Run', 'zh-TW': '執行' }),
-                [
-                  ...(spawn.background ? [pick(lang, { en: 'background', 'zh-TW': '背景' })] : []),
-                  pick(lang, { en: `${spawn.steps} steps`, 'zh-TW': `${spawn.steps} 步` }),
-                  elapsed(spawn.last - spawn.at),
-                ].join(' · '),
-              ],
-              ['session', 'session', sessionName(lang, session)],
-            ]
-
-            return [
-              <Box key={`line:${id}`} flexDirection="row" gap={1}>
-                <Box key={`dot:${id}`} width={1} flexShrink={0}>
-                  <Text color={kindColor(spawn).ink}>●</Text>
-                </Box>
-                <Box flexGrow={1} flexShrink={1}>
-                  <Button key={`spawn:${id}`} plain onPress={() => void update($, view, current => ({ ...current, spawn: current.spawn === id ? '' : id }))}>
-                    <Text wrap="truncate-end">{spawnParts(lang, spawn)[0]}</Text>
-                  </Button>
-                </Box>
-                <Box width={rowBar} flexShrink={0}>
-                  {cellBar(tokens(spawn), top, rowBar)}
-                </Box>
-                <Box width={9} flexShrink={0} justifyContent="flex-end">
-                  <Text>{n(tokens(spawn))}</Text>
-                </Box>
-                <Box width={6} flexShrink={0} justifyContent="flex-end">
-                  <Text dimColor>{dayLabel(lang, spawn.at)}</Text>
-                </Box>
-              </Box>,
-              shown.spawn === id ? (
-                // Opened in place: a line in the color of where its model came from runs down the left
-                // (a Box border cannot be drawn on one side only).
-                <Box key={`detail:${id}`} flexDirection="column" marginLeft={1} marginTop={1} marginBottom={1}>
-                  {lines.map(([key, name, value]) => (
-                    <Box key={`detail:${id}:${key}`} flexDirection="row" gap={1}>
-                      <Box width={2} flexShrink={0}>
-                        <Text color={color.ink}>│</Text>
-                      </Box>
-                      <Box width={8} flexShrink={0}>
-                        <Text dimColor>{name}</Text>
-                      </Box>
-                      <Box flexShrink={1}>{typeof value === 'string' ? <Text wrap="truncate-end">{value}</Text> : value}</Box>
-                    </Box>
-                  ))}
-                </Box>
-              ) : null,
-            ]
-          })}
-          {listed.length > limit ? (
-            <Box paddingLeft={2}>
-              <Button key="more" plain hotkey="m" onPress={() => void update($, view, current => ({ ...current, limit: limit + PAGE }))}>
-                <Text>{pick(lang, { en: `${listed.length - limit} more ▸`, 'zh-TW': `還有 ${listed.length - limit} 筆 ▸` })}</Text>
-              </Button>
             </Box>
-          ) : null}
+            {sessionRows.slice(0, limit).map(part => {
+              const id = `${part.session.repo}|${part.session.started}`
+
+              return (
+                <Box key={`session:${id}`} flexDirection="row" gap={1}>
+                  <Box width={1} flexShrink={0}>
+                    <Text color={COLORS.main.ink}>●</Text>
+                  </Box>
+                  <Box flexGrow={1} flexShrink={1}>
+                    <Text wrap="truncate-end">{promptOf(part.session)}</Text>
+                  </Box>
+                  <Box width={rowBar} flexShrink={0}>
+                    {cellBar(part.main, topMain, rowBar)}
+                  </Box>
+                  <Box width={9} flexShrink={0} justifyContent="flex-end">
+                    <Text>{n(part.main)}</Text>
+                  </Box>
+                  <Box width={6} flexShrink={0} justifyContent="flex-end">
+                    <Text dimColor>{dayLabel(lang, part.session.started)}</Text>
+                  </Box>
+                </Box>
+              )
+            })}
+            {listed.slice(0, limit).map(({ spawn, session }) => {
+              const id = spawnId(spawn)
+              const color = kindColor(spawn)
+              const how = spawn.fork ? 'fork' : spawn.requested === undefined ? pick(lang, { en: 'default', 'zh-TW': '預設' }) : pick(lang, { en: 'named', 'zh-TW': '指定' })
+              const lines: [string, string, RenderNode][] = [
+                ['type', pick(lang, { en: 'Type', 'zh-TW': '種類' }), spawn.type],
+                [
+                  'model',
+                  pick(lang, { en: 'Model', 'zh-TW': '模型' }),
+                  <Text wrap="truncate-end">
+                    <Text color={color.ink}>{how}</Text>
+                    {spawn.requested === undefined || spawn.fork ? '' : ` ${spawn.requested}`} → {spawn.model}
+                  </Text>,
+                ],
+                [
+                  'run',
+                  pick(lang, { en: 'Run', 'zh-TW': '執行' }),
+                  [
+                    ...(spawn.background ? [pick(lang, { en: 'background', 'zh-TW': '背景' })] : []),
+                    pick(lang, { en: `${spawn.steps} steps`, 'zh-TW': `${spawn.steps} 步` }),
+                    elapsed(spawn.last - spawn.at),
+                  ].join(' · '),
+                ],
+                ['session', 'session', sessionName(lang, session)],
+              ]
+
+              return [
+                <Box key={`line:${id}`} flexDirection="row" gap={1}>
+                  <Box key={`dot:${id}`} width={1} flexShrink={0}>
+                    <Text color={kindColor(spawn).ink}>●</Text>
+                  </Box>
+                  <Box flexGrow={1} flexShrink={1}>
+                    <Button key={`spawn:${id}`} plain onPress={() => void update($, view, current => ({ ...current, spawn: current.spawn === id ? '' : id }))}>
+                      <Text wrap="truncate-end">{spawnParts(lang, spawn)[0]}</Text>
+                    </Button>
+                  </Box>
+                  <Box width={rowBar} flexShrink={0}>
+                    {cellBar(tokens(spawn), top, rowBar)}
+                  </Box>
+                  <Box width={9} flexShrink={0} justifyContent="flex-end">
+                    <Text>{n(tokens(spawn))}</Text>
+                  </Box>
+                  <Box width={6} flexShrink={0} justifyContent="flex-end">
+                    <Text dimColor>{dayLabel(lang, spawn.at)}</Text>
+                  </Box>
+                </Box>,
+                shown.spawn === id ? (
+                  // Opened in place: a line in the color of where its model came from runs down the left
+                  // (a Box border cannot be drawn on one side only).
+                  <Box key={`detail:${id}`} flexDirection="column" marginLeft={1} marginTop={1} marginBottom={1}>
+                    {lines.map(([key, name, value]) => (
+                      <Box key={`detail:${id}:${key}`} flexDirection="row" gap={1}>
+                        <Box width={2} flexShrink={0}>
+                          <Text color={color.ink}>│</Text>
+                        </Box>
+                        <Box width={8} flexShrink={0}>
+                          <Text dimColor>{name}</Text>
+                        </Box>
+                        <Box flexShrink={1}>{typeof value === 'string' ? <Text wrap="truncate-end">{value}</Text> : value}</Box>
+                      </Box>
+                    ))}
+                  </Box>
+                ) : null,
+              ]
+            })}
+            {count > limit ? (
+              <Box paddingLeft={2}>
+                <Button key="more" plain hotkey="m" onPress={() => void update($, view, current => ({ ...current, limit: limit + PAGE }))}>
+                  <Text>{pick(lang, { en: `${count - limit} more ▸`, 'zh-TW': `還有 ${count - limit} 筆 ▸` })}</Text>
+                </Button>
+              </Box>
+            ) : null}
           </Box>
-          )}
           <Box key="spacer" flexGrow={1} />
           {hintLine(parts, lang, [
-            // The sort and more buttons already show their keys.
-            ...(listed.length === 0
-              ? []
-              : [
-                  { en: 'Tab moves', 'zh-TW': 'Tab 移動' },
-                  { en: 'Enter opens a spawn', 'zh-TW': 'Enter 展開一筆' },
-                ]),
-            { en: '‹ Back (b) returns', 'zh-TW': '‹ 返回（b）回總覽' },
+            // The back, sort and more buttons already show their keys.
+            { en: 'Tab moves', 'zh-TW': 'Tab 移動' },
+            ...(bySessions ? [] : [{ en: 'Enter opens a spawn', 'zh-TW': 'Enter 展開一筆' }]),
           ])}
         </Box>
       )
@@ -853,21 +847,15 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column" {...frame}>
         {title}
-        {wide ? (
-          // A wide pane: the period and its days on the left, the grouping on the right.
-          <Box key="header" flexDirection="row" justifyContent="space-between" gap={2}>
-            <Box flexDirection="row" gap={2}>
-              {periodSwitch}
-              <Text dimColor>{range(lang, report)}</Text>
-            </Box>
-            {report.sessions.length === 0 ? <Box /> : groupSwitch}
+        {/* The period, then the days it covers; the grouping heads the list below. */}
+        <Box key="header" flexDirection="row" gap={2}>
+          <Box flexShrink={0}>{periodSwitch}</Box>
+          <Box flexShrink={1}>
+            <Text dimColor wrap="truncate-end">
+              {range(lang, report)}
+            </Text>
           </Box>
-        ) : (
-          <Box key="header" flexDirection="row" justifyContent="space-between" gap={2}>
-            <Text dimColor>{range(lang, report)}</Text>
-            {periodSwitch}
-          </Box>
-        )}
+        </Box>
         {report.sessions.length === 0 ? (
           <Box marginTop={1}>{emptyState(parts, emptyText(lang))}</Box>
         ) : (
@@ -898,69 +886,58 @@ export const register: Register = (on, options) => {
                 })}
               </Text>
             </Box>
-            {wide ? (
-              listHead(
-                'columns',
-                <Box flexDirection="row" gap={1}>
-                  <Box flexGrow={1} flexShrink={1}>
-                    <Text dimColor>{byLabel[by]}</Text>
+            <Box key="list" flexDirection="column" marginTop={1}>
+              {rule('list-rule')}
+              <Box key="group-line">{groupSwitch}</Box>
+            </Box>
+            {rows.map(row => {
+              // Each row is a block under a dim line down its left, a blank line from the next: its name and
+              // spawns, a session's time and repo, then its bar with the tokens and share at the right.
+              const session = by === 'session' ? row.detail[0]?.session : undefined
+              const line = (key: string, content: RenderNode) => (
+                <Box key={`${key}:${row.key}`} flexDirection="row" gap={1}>
+                  <Box width={1} flexShrink={0}>
+                    <Text dimColor>│</Text>
                   </Box>
-                  <Box width={barWidth} flexShrink={0} />
-                  <Box width={10} flexShrink={0} justifyContent="flex-end">
-                    <Text dimColor>token</Text>
-                  </Box>
-                  <Box width={5} flexShrink={0} justifyContent="flex-end">
-                    <Text dimColor>{pick(lang, { en: 'share', 'zh-TW': '佔比' })}</Text>
-                  </Box>
-                  <Box width={10} flexShrink={0} justifyContent="flex-end">
-                    <Text dimColor>{pick(lang, { en: 'spawns', 'zh-TW': '派出' })}</Text>
-                  </Box>
-                </Box>,
-              )
-            ) : (
-              listHead('group-line', groupSwitch)
-            )}
-            {rows.map((row, i) => {
-              // A session's name runs long, so sessions get a blank line between them.
-              const gap = by === 'session' && i > 0 ? { marginTop: 1 } : {}
-              // A Button holds only text, so the name is the button and the bar sits beside it.
-              const name = (
-                <Box flexGrow={1} flexShrink={1}>
-                  <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key, sort: 'tokens', limit: PAGE, spawn: '' }))}>
-                    <Text wrap="truncate-end">{row.label}</Text>
-                  </Button>
+                  {content}
                 </Box>
               )
 
-              return wide ? (
-                <Box key={`line-${row.key}`} flexDirection="row" gap={1} {...gap}>
-                  {name}
-                  <Box width={barWidth} flexShrink={0}>
-                    {bar(row.tokens)}
-                  </Box>
-                  <Box width={10} flexShrink={0} justifyContent="flex-end">
-                    <Text>{n(row.tokens)}</Text>
-                  </Box>
-                  <Box width={5} flexShrink={0} justifyContent="flex-end">
-                    <Text dimColor>{share(row.tokens, all)}</Text>
-                  </Box>
-                  <Box width={10} flexShrink={0} justifyContent="flex-end">
-                    <Text dimColor>{spawnCount(row.spawns)}</Text>
-                  </Box>
-                </Box>
-              ) : (
-                <Box key={`line-${row.key}`} flexDirection="column" {...gap}>
-                  <Box flexDirection="row" gap={1}>
-                    {name}
-                    <Text dimColor>{spawnCount(row.spawns)}</Text>
-                  </Box>
-                  <Box flexDirection="row" gap={1}>
-                    <Box width={barWidth} flexShrink={0}>
+              return (
+                <Box key={`line-${row.key}`} flexDirection="column" marginTop={1}>
+                  {line(
+                    'name',
+                    [
+                      // A Button holds only text, so the name is the button and the count sits beside it.
+                      <Box key="name" flexGrow={1} flexShrink={1} minWidth={0}>
+                        <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key, sort: 'tokens', limit: PAGE, spawn: '' }))}>
+                          <Text wrap="truncate-end">{session === undefined ? row.label : promptOf(session)}</Text>
+                        </Button>
+                      </Box>,
+                      <Box key="count" width={10} flexShrink={0} justifyContent="flex-end">
+                        <Text dimColor>{spawnCount(row.spawns)}</Text>
+                      </Box>,
+                    ],
+                  )}
+                  {session === undefined
+                    ? null
+                    : line(
+                        'meta',
+                        <Box flexShrink={1} minWidth={0}>
+                          <Text dimColor wrap="truncate-end">{`${stamp(lang, session.started)} · ${repoName(lang, session.repo)}`}</Text>
+                        </Box>,
+                      )}
+                  {line('bar', [
+                    <Box key="bar" flexGrow={1} flexShrink={1}>
                       {bar(row.tokens)}
-                    </Box>
-                    <Text>{n(row.tokens)}</Text>
-                    <Text dimColor>{share(row.tokens, all)}</Text>
-                  </Box>
+                    </Box>,
+                    <Box key="tokens" width={11} flexShrink={0} justifyContent="flex-end">
+                      <Text>{n(row.tokens)}</Text>
+                    </Box>,
+                    <Box key="share" width={5} flexShrink={0} justifyContent="flex-end">
+                      <Text dimColor>{share(row.tokens, all)}</Text>
+                    </Box>,
+                  ])}
                 </Box>
               )
             })}

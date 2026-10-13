@@ -81,7 +81,12 @@
   - desktop：`Svg`。判斷用 `e.surface !== 'terminal'`，不看 `'Svg' in parts`（runtime 一律提供所有元件）。
   - 有值的部分至少一格。
 - **標題列**（open-items pane、subagent-dispatch stats pane）：最上面一行，`bold` 的 mod 名稱，空一格，後面一條 `dimColor` 的 `─` 填滿其餘寬度（依 `e.props.bodyColumns`），下面空一行。
-- **清單表頭**（subagent-dispatch stats）：欄名那一行（窄版是代替欄名的切換鈕）上方一條 `dimColor` 的 `─` 填滿 `e.props.bodyColumns`，下方空一行。列名很長時（依 session 分組）列與列之間空一行。
+- **清單上方的橫線**（subagent-dispatch stats）：清單和上面的卡片之間一條 `dimColor` 的 `─` 填滿 `e.props.bodyColumns`，橫線下第一行是作用在清單的切換鈕（總覽是分組，打開一列後是排序）。
+- **區塊列**（subagent-dispatch stats 總覽）：不分斷點，每一列是一塊，每一行前放 `dimColor` 的 `│`（單邊線），列與列之間空一行。
+  - 第一行：名稱 `truncate-end` 只佔一行，右邊固定寬度、靠右的派出次數，名稱再長也不擠掉它。
+  - 依 session 分組時名稱是第一則 prompt，下面多一行 `dimColor` 的「時間 · repo」。
+  - 最後一行：長條佔剩下的寬度，token（固定寬度、靠右對齊）與佔比放在最右邊，每一列的數字上下對齊。
+- **麵包屑**：`b: ‹ 返回`、`分組 ›` 都 `flexShrink={0}`，只有後面的名稱 `truncate-end`，名稱再長也不讓前面折行。
 - **提示列置底**：清單後面放一個 `flexGrow={1}` 的空 `Box`；pane 在 dock 時（`e.props.placement === 'dock'`），最外層 `Box` 設 `minHeight={e.props.scroll.bodyRows}` 撐滿高度，提示列（有焦點列動作時連同動作列）落在最下面。inline 的 pane 外框跟著內容高度，不撐。
 - **計數列**：標題列下面，取代卡片（比卡片省高度）。
   - 第一行：`bold` 的總數，空一格，後面是填滿其餘寬度的比例長條，每個種類一段，顏色見「種類色」。
@@ -156,7 +161,7 @@ Pane 和 Band 上所有導覽按鈕和焦點列動作都要有 hotkey，並列�
   - 每項寫成「鍵 動作」，項目之間用 ` · ` 分隔。
   - 最後一項是 `Esc closes`／`Esc 關閉`（確認框不列）。
   - `plain` 按鈕上已經畫出 `鍵: ` 的（例如 `v: ‹ 未完成 ›`），提示列不再列。
-  - subagent-dispatch stats 的期間、分組、排序、更多都是畫出鍵的 `plain` 按鈕，提示列只剩 `Tab moves · Enter opens a row · Esc closes`／`Tab 移動 · Enter 打開一列 · Esc 關閉`（打開一列後是 `Enter 展開一筆` 與 `‹ 返回（b）回總覽`）。
+  - subagent-dispatch stats 的期間、分組、排序、更多、返回都是畫出鍵的 `plain` 按鈕，提示列只剩 `Tab moves · Enter opens a row · Esc closes`／`Tab 移動 · Enter 打開一列 · Esc 關閉`（打開一列後是 `Tab 移動 · Enter 展開一筆 · Esc 關閉`）。
   - 有焦點列動作的清單，動作和切換都在按鈕前寫了鍵，提示列只剩 `Tab/↑↓ moves · Esc closes`／`Tab/↑↓ 移動 · Esc 關閉`；空清單只剩 `Esc 關閉`。
   - 按鈕上已經寫了動作的，寫成「‹ Back (b) returns」。
 - **空狀態**：`<Text dimColor wrap="wrap">`，一句話說沒有什麼，需要時在括號裡說明什麼時候會出現。例如 `No open items (…).`、`No usage recorded yet (…).`。有計數列的 pane 照樣畫計數列（見「版面」的計數列）。

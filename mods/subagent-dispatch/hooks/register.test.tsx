@@ -420,7 +420,8 @@ describe('usage ledger', () => {
     expect(await pane.find({ key: 'row:Explore' })).toBeUndefined()
     await choose(pane, 'days', '30 days')
     await choose(pane, 'group', 'session')
-    expect(await pane.find({ type: 'Text', text: /Oct 5 09:00 last week/ })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: 'last week' })).toBeDefined()
+    expect(await pane.find({ type: 'Text', text: 'Oct 5 09:00 · old' })).toBeDefined()
     await pane.unmount()
   })
 
@@ -434,9 +435,10 @@ describe('usage ledger', () => {
 
     await choose(pane, 'group', 'model')
     await pane.press({ key: 'row:claude-sonnet-4' })
-    expect(await pane.find({ type: 'Text', text: 'session' })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /^Oct 12 / })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: /s sorts/ })).toBeUndefined()
+    expect((await pane.find({ key: 'list-columns' }))?.text).toMatch(/session/)
+    expect(await pane.find({ type: 'Text', text: /s sorts|Back \(b\)/ })).toBeUndefined()
+    // The back button shows its key, and the crumb keeps its width beside a long name.
+    expect((await pane.find({ key: 'back' }))?.props.hotkey).toBe('b')
     await pane.unmount()
   })
 
@@ -601,9 +603,15 @@ describe('usage ledger', () => {
     await choose(pane, 'group', 'type')
     await pane.press({ key: 'row:main' })
     expect(await pane.find({ key: 'card:spawns' })).toBeUndefined()
-    expect(await pane.find({ key: 'sort' })).toBeUndefined()
     expect((await pane.find({ key: 'card:tokens' }))?.text).toMatch(/160 token/)
-    expect((await pane.find({ type: 'Text', text: /Oct 12 12:00 \(no prompt\)/ }))).toBeDefined()
+    expect((await pane.find({ key: 'list-columns' }))?.text).toMatch(/session.*token.*date/)
+    expect((await pane.find({ key: `session:/repo|${Date.parse('2026-10-12T12:00:00')}` }))?.text).toMatch(/\(no prompt\).*160.*Oct 12/)
+    // Sessions sort by tokens or by time; duration is a spawn's.
+    expect((await pane.find({ key: 'sort' }))?.text).toBe('‹ most tokens ›')
+    await pane.press({ key: 'sort' })
+    expect((await pane.find({ key: 'sort' }))?.text).toBe('‹ time ›')
+    await pane.press({ key: 'sort' })
+    expect((await pane.find({ key: 'sort' }))?.text).toBe('‹ most tokens ›')
     await pane.unmount()
   })
   test('the two cards sit side by side from 60 body columns, stacked below', async ($, on) => {
@@ -636,19 +644,17 @@ describe('usage ledger', () => {
     await pane.unmount()
   })
 
-  test('a wide pane puts the grouping in the header and names the table columns', async ($, on) => {
+  test('at any width the period leads the top line and the grouping heads the list, each row in two lines', async ($, on) => {
     await busyDay($, on)
-    const wide = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 110 }, surface: 'terminal' } as never)
-    await choose(wide, 'group', 'model')
-    expect(((await wide.find({ key: 'header' }))?.children[1] as { props: { key?: string } } | undefined)?.props.key).toBe('switch:group')
-    expect(await wide.find({ key: 'group-line' })).toBeUndefined()
-    expect((await wide.find({ key: 'columns' }))?.text).toMatch(/model.*token.*share.*spawns/)
-    await wide.unmount()
-
-    const dock = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 52 }, surface: 'terminal' } as never)
-    expect(await dock.find({ key: 'group-line' })).toBeDefined()
-    expect(await dock.find({ key: 'columns' })).toBeUndefined()
-    await dock.unmount()
+    for (const bodyColumns of [52, 110]) {
+      const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' } as never)
+      await choose(pane, 'group', 'model')
+      expect(((await pane.find({ key: 'header' }))?.children[0] as { children: { props: { key?: string } }[] } | undefined)?.children[0]?.props.key).toBe('switch:days')
+      expect((await pane.find({ key: 'group-line' }))?.text).toMatch(/model/)
+      expect((await pane.find({ key: 'name:claude-haiku-4-5' }))?.text).toMatch(/claude-haiku-4-5.*spawns/)
+      expect((await pane.find({ key: 'bar:claude-haiku-4-5' }))?.text).toMatch(/78,000.*%/)
+      await pane.unmount()
+    }
   })
 
   test('period, grouping and sort switch in place: one cycling button in the terminal, segments on desktop', async ($, on) => {

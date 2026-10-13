@@ -10,10 +10,17 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
     over a rule, as in open-items.
   - Changed: the hint line sits at the bottom of a docked pane and no longer
     lists `p`, `g`, `s` or `m`, which the buttons already show.
-  - Changed: a list's column names sit under a rule and above a blank line;
-    grouped by session, a blank line parts the rows.
+  - Changed: the period leads its line, with the days it covers after it; the
+    grouping heads the list, under a rule.
+  - Changed: at any width each row is a block under a line down its left, a
+    blank line from the next: its name on one line with its spawns at the
+    right, then its bar with the tokens and share at the right. Grouped by
+    session, a row is named by its prompt, with its time and repo below.
+  - Changed: an opened row's back button shows its key (`b`), the crumb no
+    longer wraps under a long name, and a rule parts the cards from the list.
   - Changed: a row with no spawns (a model only the main session used, or the
-    main session row) lists its sessions with a bar each, most tokens first.
+    main session row) lists its sessions in the spawns' table, with their
+    start dates, sorted by tokens or by time.
 
 ## [0.5.0] - 2026-10-13
 
