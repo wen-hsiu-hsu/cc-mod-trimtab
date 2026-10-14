@@ -34,6 +34,8 @@ except ImportError:
     sys.exit('capture-pane: needs pyte (python3 -m venv .venv && .venv/bin/pip install pyte, then run it with .venv/bin/python)')
 
 ROOT = Path(__file__).resolve().parent.parent
+# Loading a shots file would leave __pycache__ beside it.
+sys.dont_write_bytecode = True
 ROWS = 80
 # The dark theme's palette, for the 16 named colors.
 BACKGROUND = '#1e1e1e'

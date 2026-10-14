@@ -8,3 +8,4 @@ node_modules/
 
 # Python venv for scripts/capture-pane.py
 .venv/
+__pycache__/
