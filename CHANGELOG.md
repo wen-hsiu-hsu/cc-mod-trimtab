@@ -3,6 +3,16 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [0.9.1] - 2026-10-14
+
+| Mod | Version |
+| --- | --- |
+| `subagent-dispatch` | 0.6.1 |
+- `subagent-dispatch` 0.6.1:
+  - Fixed: `/subagent-dispatch stats 14` (or any length other than 1, 7, 30 or
+    90 days) showed its period length as `1 day`. It now shows `14 days`, and
+    `p` goes on to 30.
+
 ## [0.9.0] - 2026-10-14
 
 | Mod | Version |

@@ -1335,7 +1335,8 @@ export const register: Register = (on, options) => {
             'days',
             variant.word ? periodWord : '',
             'p',
-            PERIODS.map(value => ({ value: String(value), label: daysLabel(lang, value) })),
+            // A length given to stats that `p` does not step through joins the lengths in its place.
+            [...new Set([...PERIODS, days])].sort((a, b) => a - b).map(value => ({ value: String(value), label: daysLabel(lang, value) })),
             String(days),
             value => void update($, view, current => ({ ...current, days: Number(value), end: end === today ? '' : end, item: '', limit: PAGE })),
           )}

@@ -1181,6 +1181,23 @@ describe('heatmap', () => {
       await pane.unmount()
     })
 
+    test('days given to stats that p does not step through show as they are, and p goes on to the next length', async ($, on) => {
+      await heatWorld($, on)
+      await $.command.run({ command: 'subagent-dispatch', args: 'stats 14' } as never)
+      const pane = await mount($)
+      expect((await pane.find({ key: 'days' }))?.text).toBe('‹ 14 days ›')
+      expect(await text(pane, 'period')).toContain('Sep 29 – Oct 12')
+      await press(pane, 'days')
+      expect((await pane.find({ key: 'days' }))?.text).toBe('‹ 30 days ›')
+      await pane.unmount()
+
+      await $.command.run({ command: 'subagent-dispatch', args: 'stats 14' } as never)
+      const desktop = await mount($, 110, 'desktop')
+      expect((await desktop.find({ key: 'days:14' }))?.props.variant).toBe('primary')
+      expect((await desktop.find({ key: 'days:1' }))?.props.variant).toBeUndefined()
+      await desktop.unmount()
+    })
+
     test('a narrow period drops its word, then the spaces in its days; t wraps last', async ($, on) => {
       await heatWorld($, on)
       const at = async (columns: number) => {
