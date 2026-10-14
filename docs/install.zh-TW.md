@@ -7,6 +7,18 @@
 
 ## CLI 與 desktop
 
+### 一次裝全部
+
+```bash
+claude plugin install all --marketplace wen-hsiu-hsu/cc-mod-trimtab
+```
+
+這行會加好 marketplace，再安裝 `all`。`all` 本身沒有 hook，只把每個 mod 列成依賴，`secret-scrub` 排第一，所以全部 mod 會照正確的順序裝好（見[安裝順序](#安裝順序)）。在 Claude Code 裡則是先 `/plugin marketplace add wen-hsiu-hsu/cc-mod-trimtab`，再 `/plugin install all@cc-mod-trimtab`。
+
+之後想拿掉某個 mod，先移除 `all`（`/plugin uninstall all@cc-mod-trimtab`，它帶進來的 mod 會留著），再移除那個 mod。`all` 還在時直接移除 mod 也可以，但 `all` 會顯示載入失敗。要移除全部 mod，移除 `all` 後執行 `claude plugin prune`。
+
+### 只裝部分
+
 ```bash
 claude plugin marketplace add wen-hsiu-hsu/cc-mod-trimtab
 ```

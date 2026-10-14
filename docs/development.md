@@ -13,6 +13,7 @@
 | 為什麼這樣做（決定與理由） | `docs/adr/`（[索引](adr/README.md)） |
 | 畫面的顏色、版面、控制項、快捷鍵、用詞 | [`DESIGN.md`](../DESIGN.md) |
 | 畫面的設計稿（每一輪提案與定案） | [`design/`](../design/README.md) |
+| 一次裝全部 mod 的總包 `all`（沒有 hook，只列依賴） | `bundles/all/`（[ADR 0030](adr/0030-install-all-through-a-bundle.md)） |
 | mod 說明文件裡的預覽圖（實際 pane 擷取的 SVG） | `docs/images/<mod>/`，由 `scripts/capture-pane.py` 產生 |
 | 還沒做的事、暫緩與不做的提案、已知問題、查證結果 | [`ROADMAP.md`](../ROADMAP.md) |
 | 每個版本改了什麼 | [`CHANGELOG.md`](../CHANGELOG.md) |
@@ -97,7 +98,7 @@ mod 不能 import 自己資料夾以外的檔案（見 [ADR 0011](adr/0011-share
 | 改了什麼 | 要更新 |
 | --- | --- |
 | mod 的行為、指令、設定、預設值、門檻、快捷鍵 | `docs/mods/<mod>.md` 與 `.zh-TW.md`（兩份一起改）；影響分層或共用指令時也改 `docs/settings*.md` |
-| 新增、改名、移除 mod | 上一列，加上 `README.md` 與 `README.zh-TW.md` 的表、`docs/install*.md` 的安裝清單、`marketplace.json`、`SECURITY.md`（有保護範圍時） |
+| 新增、改名、移除 mod | 上一列，加上 `README.md` 與 `README.zh-TW.md` 的表、`docs/install*.md` 的安裝清單、`marketplace.json`、`bundles/all/.claude-plugin/plugin.json` 的 `dependencies`（`secret-scrub` 維持第一個，並調高 `all` 的 `version`）、`SECURITY.md`（有保護範圍時） |
 | 在幾個做法之間取捨過、之後難以反悔的決定 | 新增一個 ADR（見下方「ADR」） |
 | 畫面規範 | 先改 `DESIGN.md`，再改程式 |
 | 畫面設計定案 | `design/<mod>/main/` 新增定案頁（見下方「設計稿」） |

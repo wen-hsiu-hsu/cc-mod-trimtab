@@ -29,21 +29,10 @@ A trim tab is the small flap on a rudder that steers the whole ship. These mods 
 Requires Claude Code 2.1.296 or later, in the CLI or desktop app (cloud sessions cannot load mods yet).
 
 ```bash
-claude plugin marketplace add wen-hsiu-hsu/cc-mod-trimtab
+claude plugin install all --marketplace wen-hsiu-hsu/cc-mod-trimtab
 ```
 
-Then, in Claude Code, install the mods you want. Install `secret-scrub` first so that it sees every prompt before other mods do:
-
-```
-/plugin install secret-scrub@cc-mod-trimtab
-/plugin install tool-guard@cc-mod-trimtab
-/plugin install output-trimmer@cc-mod-trimtab
-/plugin install subagent-dispatch@cc-mod-trimtab
-/plugin install open-items@cc-mod-trimtab
-/plugin install session-keeper@cc-mod-trimtab
-/plugin install self-check@cc-mod-trimtab
-/plugin install project-memory@cc-mod-trimtab
-```
+This installs every mod, `secret-scrub` first so that it sees every prompt before other mods do. To install only some of them, or to drop one later, see [Install and update](docs/install.md).
 
 The mods work right after install, with safe defaults. Features that call a model (in `session-keeper` and `project-memory`) stay off until you run `/<mod> on` or turn them on in `/config`. Run `/<mod> status` to see what a mod is set to.
 

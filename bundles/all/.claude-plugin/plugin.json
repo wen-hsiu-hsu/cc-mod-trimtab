@@ -1,0 +1,20 @@
+{
+  "name": "all",
+  "version": "0.1.0",
+  "description": "Installs every cc-mod-trimtab mod at once; it has no hooks of its own",
+  "author": {
+    "name": "wen-hsiu hsu"
+  },
+  "repository": "https://github.com/wen-hsiu-hsu/cc-mod-trimtab",
+  "license": "MIT",
+  "dependencies": [
+    "secret-scrub",
+    "tool-guard",
+    "output-trimmer",
+    "subagent-dispatch",
+    "open-items",
+    "session-keeper",
+    "self-check",
+    "project-memory"
+  ]
+}

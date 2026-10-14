@@ -6,6 +6,11 @@
   },
   "plugins": [
     {
+      "name": "all",
+      "source": "./bundles/all",
+      "description": "Installs every mod at once, secret-scrub first; uninstall any you do not want"
+    },
+    {
       "name": "subagent-dispatch",
       "source": "./mods/subagent-dispatch",
       "description": "Shows running background agents above the prompt box and re-dispatches interrupted ones in one press"

@@ -3,6 +3,17 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [0.10.0] - 2026-10-15
+
+| Mod | Version |
+| --- | --- |
+| `all` | 0.1.0 |
+- `all` 0.1.0:
+  - Added: installs every mod at once, `secret-scrub` first:
+    `claude plugin install all --marketplace wen-hsiu-hsu/cc-mod-trimtab`. It
+    has no hooks of its own. To drop one mod later, uninstall `all` first
+    (see the install docs).
+
 ## [0.9.2] - 2026-10-14
 
 | Mod | Version |

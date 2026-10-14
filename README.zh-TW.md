@@ -29,21 +29,10 @@ trim tab（配平片）是舵上那片小小的板子，用很小的力氣帶動
 需要 Claude Code 2.1.296 以上，CLI 或 desktop（雲端 session 目前無法載入 mod）。
 
 ```bash
-claude plugin marketplace add wen-hsiu-hsu/cc-mod-trimtab
+claude plugin install all --marketplace wen-hsiu-hsu/cc-mod-trimtab
 ```
 
-然後在 Claude Code 裡安裝要用的 mod。`secret-scrub` 要第一個裝，它才會比其他 mod 先看到每則 prompt：
-
-```
-/plugin install secret-scrub@cc-mod-trimtab
-/plugin install tool-guard@cc-mod-trimtab
-/plugin install output-trimmer@cc-mod-trimtab
-/plugin install subagent-dispatch@cc-mod-trimtab
-/plugin install open-items@cc-mod-trimtab
-/plugin install session-keeper@cc-mod-trimtab
-/plugin install self-check@cc-mod-trimtab
-/plugin install project-memory@cc-mod-trimtab
-```
+這行會裝好全部 mod，`secret-scrub` 排第一，它才會比其他 mod 先看到每則 prompt。只想裝部分，或之後要拿掉某個 mod，見[安裝與更新](docs/install.zh-TW.md)。
 
 裝好就能用，預設值都是安全的。會呼叫模型的功能（`session-keeper` 與 `project-memory`）預設關，用 `/<mod> on` 或在 `/config` 開啟。`/<mod> status` 看 mod 目前的設定。
 

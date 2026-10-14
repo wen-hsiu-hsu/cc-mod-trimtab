@@ -7,6 +7,18 @@ English | [繁體中文](install.zh-TW.md) · [Back to README](../README.md)
 
 ## CLI and desktop
 
+### Every mod at once
+
+```bash
+claude plugin install all --marketplace wen-hsiu-hsu/cc-mod-trimtab
+```
+
+This adds the marketplace and installs `all`, which has no hooks of its own: it lists every mod as a dependency, `secret-scrub` first, so they are all installed in the right order (see [Install order](#install-order)). Inside Claude Code, the same is `/plugin marketplace add wen-hsiu-hsu/cc-mod-trimtab` followed by `/plugin install all@cc-mod-trimtab`.
+
+To drop a mod later, uninstall `all` first (`/plugin uninstall all@cc-mod-trimtab`; the mods it brought in stay installed), then uninstall that mod. Uninstalling a mod while `all` is still installed works, but `all` then shows as failed to load. To remove every mod, uninstall `all` and run `claude plugin prune`.
+
+### Only some mods
+
 ```bash
 claude plugin marketplace add wen-hsiu-hsu/cc-mod-trimtab
 ```

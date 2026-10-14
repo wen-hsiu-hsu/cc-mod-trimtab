@@ -33,3 +33,4 @@ A decision gets an ADR when it is hard to reverse, surprising without its contex
 | [0027](0027-period-window-and-column-priority.md) | The stats period is a window moved with h / l, and the list drops columns by priority | 2026-10-14 |
 | [0028](0028-docs-images-from-the-real-pane.md) | The mod docs show the real pane, captured as SVG | 2026-10-14 |
 | [0029](0029-usage-details-wording-only.md) | "Usage details" renames the words, not the keys | 2026-10-14 |
+| [0030](0030-install-all-through-a-bundle.md) | Every mod is installed at once through a bundle plugin with dependencies | 2026-10-15 |
