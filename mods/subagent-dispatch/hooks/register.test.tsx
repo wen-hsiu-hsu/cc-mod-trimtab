@@ -461,17 +461,16 @@ describe('usage ledger', () => {
 
     return world
   }
-
-  test('stats opens a pane: summary, rows that open to each spawn, and the period', async ($, on) => {
+  test('stats opens a pane: the period, its summary, and rows that open to each spawn', async ($, on) => {
     const world = await twoWeeks($, on)
     await stats($, 'stats')
     expect(world.opened).toEqual(['subagent-dispatch-stats'])
 
     for (const bodyColumns of [52, 110]) {
       const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' } as never)
-      expect(await pane.find({ type: 'Text', text: 'Sep 13 – Oct 12' })).toBeDefined()
-      expect(await pane.find({ type: 'Text', text: '1,320' })).toBeDefined()
-      // Grouped by repo by default, named by the folder; bars are colored spaces, never '█'.
+      expect((await pane.find({ key: 'period' }))?.text).toContain('Sep 13 – Oct 12')
+      expect((await pane.find({ key: 'tokens-line' }))?.text).toMatch(/^1k token/)
+      // Grouped by repo by default, named by the folder; bars are glyphs and colored spaces, never '█'.
       expect(await pane.find({ key: 'row:/repo' })).toBeDefined()
       expect(await pane.find({ key: 'row:/old' })).toBeDefined()
       expect(await pane.find({ type: 'Text', text: /█/ })).toBeUndefined()
@@ -480,7 +479,7 @@ describe('usage ledger', () => {
     }
 
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    await choose(pane, 'group', 'model')
+    await choose(pane, 'group', 'by model')
     await pane.press({ key: 'row:claude-opus-4' })
     expect(await pane.find({ type: 'Text', text: 'deep review' })).toBeDefined()
     expect(await pane.find({ type: 'Text', text: /old task/ })).toBeUndefined()
@@ -488,7 +487,7 @@ describe('usage ledger', () => {
 
     await pane.press({ key: 'back' })
     expect(await pane.find({ type: 'Text', text: 'deep review' })).toBeUndefined()
-    await choose(pane, 'group', 'type')
+    await choose(pane, 'group', 'by type')
     await pane.press({ key: 'row:Explore' })
     expect(await pane.find({ type: 'Text', text: 'old task' })).toBeDefined()
 
@@ -496,27 +495,38 @@ describe('usage ledger', () => {
     await choose(pane, 'days', '7 days')
     expect(await pane.find({ key: 'row:Explore' })).toBeUndefined()
     await choose(pane, 'days', '30 days')
-    await choose(pane, 'group', 'session')
+    await choose(pane, 'group', 'by session')
     expect(await pane.find({ type: 'Text', text: 'last week' })).toBeDefined()
-    expect(await pane.find({ type: 'Text', text: 'Oct 5 09:00 · old' })).toBeDefined()
+    expect((await pane.find({ key: `line-/old|${new Date(2026, 9, 5, 9).getTime()}` }))?.text).toMatch(/^last week.*old.*Oct 5 09:00/)
     await pane.unmount()
   })
 
-  test('stats heads the pane with its name, keeps only unshown keys in the hint, and lists the sessions of a main-only model', async ($, on) => {
+  test('stats heads the pane with its name and when it read the ledgers, keeps only unshown keys in the hint, and lists the sessions of a main-only model', async ($, on) => {
     await twoWeeks($, on)
     await step($, 'claude-sonnet-4')
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    expect(await pane.find({ type: 'Text', text: 'subagent-dispatch stats' })).toBeDefined()
+    expect((await pane.find({ key: 'title' }))?.text).toMatch(/^subagent-dispatch stats─+Updated 12:00:00$/)
     expect(await pane.find({ type: 'Text', text: /p period/ })).toBeUndefined()
     expect(await pane.find({ type: 'Text', text: 'Enter opens a row' })).toBeDefined()
-
-    await choose(pane, 'group', 'model')
-    await pane.press({ key: 'row:claude-sonnet-4' })
-    expect((await pane.find({ key: 'list-columns' }))?.text).toMatch(/session/)
-    expect(await pane.find({ type: 'Text', text: /s sorts|Back \(b\)/ })).toBeUndefined()
-    // The back button shows its key, and the crumb keeps its width beside a long name.
-    expect((await pane.find({ key: 'back' }))?.props.hotkey).toBe('b')
     await pane.unmount()
+    // Too narrow for the word: the time alone.
+    const narrow = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 }, surface: 'terminal' } as never)
+    expect((await narrow.find({ key: 'title' }))?.text).toMatch(/^subagent-dispatch stats─+12:00:00$/)
+    await narrow.unmount()
+
+    const wide = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
+    await choose(wide, 'group', 'by model')
+    await wide.press({ key: 'row:claude-sonnet-4' })
+    expect((await wide.find({ key: 'list-columns' }))?.text).toMatch(/session/)
+    expect(await wide.find({ type: 'Text', text: /s sorts|Back \(b\)/ })).toBeUndefined()
+    // The back button shows its key, and the crumb keeps its width beside a long name.
+    expect((await wide.find({ key: 'back' }))?.props.hotkey).toBe('b')
+    expect((await wide.find({ key: 'crumb' }))?.text).toMatch(/‹ Back model ›claude-sonnet-4$/)
+    // The period, to read only.
+    expect((await wide.find({ key: 'period' }))?.text).toBe('Period 30 days · Sep 13 – Oct 12')
+    expect(await wide.find({ key: 'days' })).toBeUndefined()
+    expect(await wide.find({ key: 'heatmap' })).toBeUndefined()
+    await wide.unmount()
   })
 
   test('an open pane redraws a second after a step lands, once for steps in that second', async ($, on) => {
@@ -526,14 +536,14 @@ describe('usage ledger', () => {
     await step($, 'claude-opus-4')
     await stats($, 'stats')
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    expect(await pane.find({ type: 'Text', text: '160' })).toBeDefined()
+    expect((await pane.find({ key: 'tokens-line' }))?.text).toMatch(/^160 token/)
 
     await step($, 'claude-opus-4')
     await step($, 'claude-opus-4')
-    expect(await pane.find({ type: 'Text', text: '160' })).toBeDefined()
+    expect((await pane.find({ key: 'tokens-line' }))?.text).toMatch(/^160 token/)
     await clock.advance(1000)
-    expect(await pane.find({ type: 'Text', text: '480' })).toBeDefined()
-    expect((await pane.find({ key: 'cache-read' }))?.text).toMatch(/Updated 12:00:01$/)
+    expect((await pane.find({ key: 'tokens-line' }))?.text).toMatch(/^480 token/)
+    expect((await pane.find({ key: 'title' }))?.text).toMatch(/Updated 12:00:01$/)
     await pane.unmount()
   })
 
@@ -555,7 +565,7 @@ describe('usage ledger', () => {
     expect(world.opened).toEqual([])
   })
 
-  test('the overview has a token card and a spawns card whose three kinds add up', async ($, on) => {
+  test('the summary is two figures, each its total, what it is made of, and a bar as wide as the pane', async ($, on) => {
     const world = newWorld()
     engine(on, { value: 'running' }, '', world)
     await start($)
@@ -570,21 +580,18 @@ describe('usage ledger', () => {
     for (const bodyColumns of [52, 110]) {
       const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' } as never)
       const text = async (key: string) => (await pane.find({ key }))?.text ?? ''
-      expect(await text('card:tokens')).toContain('320')
-      expect(await text('card:tokens')).toContain('by subagents 50%')
-      expect(await text('share:main')).toMatch(/main session.*160$/)
-      expect(await text('share:sub')).toMatch(/subagent.*160$/)
-      expect(await text('card:spawns')).toContain('where the model came from')
-      expect(await text('spawned:named')).toMatch(/named a model \(Opus: 1\).*2$/)
-      expect(await text('spawned:default')).toMatch(/default model.*1$/)
-      expect(await text('spawned:fork')).toMatch(/fork \(main session's model\).*1$/)
-      expect(await text('cache-read')).toMatch(/^Cache read 2,000, not counted.*Updated 12:00:00$/)
-      expect((await pane.find({ key: 'cache-read' }))?.props.flexDirection).toBe('row')
+      expect(await text('tokens-line')).toMatch(/^320 token\s*main 160 {2}sub 160$/)
+      expect(await text('spawns-line')).toMatch(/^4 spawns\s*named 2 {2}default 1 {2}fork 1$/)
+      expect(await text('tokens-bar')).toBe(' '.repeat(bodyColumns))
+      expect(await text('spawns-bar')).toBe(' '.repeat(bodyColumns))
+      expect(await text('cache-read')).toBe('Cache read 2k, not counted')
+      // No card frames.
+      expect(await pane.find({ key: 'card:tokens' })).toBeUndefined()
       await pane.unmount()
     }
-    // Too narrow for both: the time goes on the next line, at the left.
-    const narrow = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 }, surface: 'terminal' } as never)
-    expect((await narrow.find({ key: 'cache-read' }))?.props.flexDirection).toBe('column')
+    // Too narrow for the parts: the total alone over its bar.
+    const narrow = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 24 }, surface: 'terminal' } as never)
+    expect((await narrow.find({ key: 'tokens-line' }))?.text).toBe('320 token')
     await narrow.unmount()
   })
 
@@ -627,14 +634,15 @@ describe('usage ledger', () => {
   test('an opened row lists its spawns as a table, most tokens first, ten before "more"', async ($, on) => {
     await busyDay($, on)
     const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 52 }, surface: 'terminal' } as never)
-    await choose(pane, 'group', 'model')
+    await choose(pane, 'group', 'by model')
     await pane.press({ key: 'row:claude-haiku-4-5' })
     expect(await tasks(pane)).toEqual(['task 11', 'task 10', 'task 9', 'task 8', 'task 7', 'task 6', 'task 5', 'task 4', 'task 3', 'task 2'])
     // A dot in the color of where its model came from, and the day it ran.
     const dot = async (id: string) => (await pane.find({ key: `dot:${id}` }))?.children[0] as { props: { color?: string } } | undefined
     expect((await dot('a10'))?.props.color).toBe('yellow')
     expect((await dot('a9'))?.props.color).toBe('gray')
-    expect((await pane.find({ key: 'line:a9' }))?.text).toMatch(/task 9.*10,000.*Oct 12/)
+    // Rows above and below each other draw their bars in ▆, a gap between them.
+    expect((await pane.find({ key: 'line:a9' }))?.text).toMatch(/task 9.*▆+.*10,000.*Oct 12/)
     expect((await pane.find({ key: 'more' }))?.text).toContain('2 more')
     // "More" is a way around the pane, not something waiting on the user: no yellow.
     expect(((await pane.find({ key: 'more' }))?.children[0] as { props?: { color?: string } } | undefined)?.props?.color).toBeUndefined()
@@ -649,7 +657,7 @@ describe('usage ledger', () => {
   test('an opened row sorts by time or by how long a spawn ran', async ($, on) => {
     await busyDay($, on)
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    await choose(pane, 'group', 'model')
+    await choose(pane, 'group', 'by model')
     await pane.press({ key: 'row:claude-haiku-4-5' })
     await choose(pane, 'sort', 'time')
     expect((await tasks(pane)).slice(0, 2)).toEqual(['task 11', 'task 10'])
@@ -661,10 +669,11 @@ describe('usage ledger', () => {
     expect((await pane.find({ key: 'sort' }))?.text).toContain('‹ most tokens ›')
     await pane.unmount()
   })
+
   test('a spawn opens in place to its type, model, run and session, one at a time', async ($, on) => {
     await busyDay($, on)
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    await choose(pane, 'group', 'model')
+    await choose(pane, 'group', 'by model')
     await pane.press({ key: 'row:claude-haiku-4-5' })
     await choose(pane, 'sort', 'duration')
     expect(await pane.find({ key: 'detail:a0' })).toBeUndefined()
@@ -684,26 +693,28 @@ describe('usage ledger', () => {
     expect(await pane.find({ key: 'detail:a1:type' })).toBeUndefined()
     await pane.unmount()
   })
-  test('an opened row sums its own tokens and spawns in two cards', async ($, on) => {
+
+  test("an opened row's summary is its own tokens, spawns and cache read", async ($, on) => {
     await busyDay($, on)
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    await choose(pane, 'group', 'model')
+    await choose(pane, 'group', 'by model')
     await pane.press({ key: 'row:claude-haiku-4-5' })
     const text = async (key: string) => (await pane.find({ key }))?.text ?? ''
-    expect(await text('card:tokens')).toMatch(/78,000 token.*by subagents 100%/)
-    expect(await text('card:spawns')).toMatch(/12 spawns/)
-    expect(await text('card:spawns')).toMatch(/named 6 \(Opus: 0\).*default 6.*fork 0/)
+    // No main session tokens: only the subagents' part is named.
+    expect(await text('tokens-line')).toMatch(/^78k token\s*sub 78k$/)
+    expect(await text('spawns-line')).toMatch(/^12 spawns\s*named 6 {2}default 6 {2}fork 0$/)
+    expect(await text('cache-read')).toBe('Cache read 0, not counted')
     await pane.unmount()
   })
 
-  test('the main session row of the type grouping lists each session\'s own tokens', async ($, on) => {
+  test("the main session row of the type grouping lists each session's own tokens", async ($, on) => {
     await twoWeeks($, on)
     await stats($, 'stats')
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    await choose(pane, 'group', 'type')
+    await choose(pane, 'group', 'by type')
     await pane.press({ key: 'row:main' })
-    expect(await pane.find({ key: 'card:spawns' })).toBeUndefined()
-    expect((await pane.find({ key: 'card:tokens' }))?.text).toMatch(/160 token/)
+    expect(await pane.find({ key: 'spawns-line' })).toBeUndefined()
+    expect((await pane.find({ key: 'tokens-line' }))?.text).toMatch(/^160 token\s*main 160$/)
     expect((await pane.find({ key: 'list-columns' }))?.text).toMatch(/session.*token.*date/)
     expect((await pane.find({ key: `session:/repo|${Date.parse('2026-10-12T12:00:00')}` }))?.text).toMatch(/\(no prompt\).*160.*Oct 12/)
     // Sessions sort by tokens or by time; duration is a spawn's.
@@ -714,54 +725,62 @@ describe('usage ledger', () => {
     expect((await pane.find({ key: 'sort' }))?.text).toBe('‹ most tokens ›')
     await pane.unmount()
   })
-  test('the two cards sit side by side from 60 body columns, stacked below', async ($, on) => {
-    await busyDay($, on)
-    for (const [bodyColumns, direction] of [[52, 'column'], [60, 'row'], [64, 'row']] as const) {
-      const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' } as never)
-      expect((await pane.find({ key: 'cards' }))?.props.flexDirection).toBe(direction)
-      await pane.press({ key: 'row:/repo' })
-      expect((await pane.find({ key: 'cards' }))?.props.flexDirection).toBe(direction)
-      await pane.press({ key: 'back' })
-      await pane.unmount()
-    }
-  })
 
-  test('an opened session splits its token card by the main session\'s models', async ($, on) => {
+  test("an opened session names the main session's models on its token line", async ($, on) => {
     const world = await twoWeeks($, on)
     await step($, 'claude-sonnet-4-6')
     await step($, 'claude-sonnet-4-6')
     await stats($, 'stats')
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
-    await choose(pane, 'group', 'session')
+    await choose(pane, 'group', 'by session')
     await pane.press({ key: `row:/repo|${world.now}` })
-    const card = (await pane.find({ key: 'card:tokens' }))?.text ?? ''
-    expect(card).toMatch(/claude-sonnet-4-6 320.*claude-opus-4 160.*subagent 160/)
+    expect((await pane.find({ key: 'tokens-line' }))?.text).toMatch(/^640 token\s*claude-sonnet-4-6 320 {2}claude-opus-4 160 {2}sub 160$/)
     // Every other grouping keeps one main session part.
     await pane.press({ key: 'back' })
-    await choose(pane, 'group', 'repo')
+    await choose(pane, 'group', 'by repo')
     await pane.press({ key: 'row:/repo' })
-    expect((await pane.find({ key: 'card:tokens' }))?.text).toMatch(/main session 480.*subagent 160/)
+    expect((await pane.find({ key: 'tokens-line' }))?.text).toMatch(/main 480 {2}sub 160$/)
     await pane.unmount()
   })
 
-  test('at any width the period leads the top line and the grouping heads the list, each row in two lines', async ($, on) => {
-    await busyDay($, on)
-    for (const bodyColumns of [52, 110]) {
+  test('the list puts in columns by how much they matter, the first that does not fit stopping the rest', async ($, on) => {
+    await twoWeeks($, on)
+    await stats($, 'stats')
+    const heads = async (bodyColumns: number) => {
       const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' } as never)
-      await choose(pane, 'group', 'model')
-      // The header's left part holds the period first; the day steps sit at the right.
-      type Node = { props: { key?: string }; children: Node[] }
-      const header = (await pane.find({ key: 'header' })) as Node | undefined
-      expect(header?.children[0]?.children[0]?.children[0]?.props.key).toBe('switch:days')
-      expect(header?.children[1]?.props.key).toBe('day-steps')
-      expect((await pane.find({ key: 'group-line' }))?.text).toMatch(/model/)
-      expect((await pane.find({ key: 'name:claude-haiku-4-5' }))?.text).toMatch(/claude-haiku-4-5.*spawns/)
-      expect((await pane.find({ key: 'bar:claude-haiku-4-5' }))?.text).toMatch(/78,000.*%/)
+      const found: string[] = []
+      for (const key of ['tokens', 'share', 'bar', 'sub', 'spawns', 'kinds', 'sessions', 'last', 'cache']) {
+        if ((await pane.find({ key: `head:${key}` })) !== undefined) {
+          found.push(key)
+        }
+      }
       await pane.unmount()
+
+      return found
     }
+    expect(await heads(40)).toEqual(['tokens', 'bar', 'spawns'])
+    expect(await heads(55)).toEqual(['tokens', 'share', 'bar', 'sub', 'spawns'])
+    expect(await heads(80)).toEqual(['tokens', 'share', 'bar', 'sub', 'spawns', 'sessions', 'last'])
+    expect(await heads(110)).toEqual(['tokens', 'share', 'bar', 'sub', 'spawns', 'kinds', 'sessions', 'last', 'cache'])
+
+    const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 110 }, surface: 'terminal' } as never)
+    // The grouping heads the name column, the column names sit over a rule.
+    expect((await pane.find({ key: 'list-columns' }))?.text).toMatch(/^‹ by repo ›\s*token\s*Share\s*sub\s*Spawns\s*Named\/default\/fork\s*session\s*Last\s*Cache read$/)
+    expect((await pane.find({ key: 'list-rule' }))?.text).toBe('─'.repeat(110))
+    // repo: 320 of 1,320 tokens, half by its subagent; one spawn that named its model; its cache read.
+    expect((await pane.find({ key: 'line-/repo' }))?.text).toMatch(/^repo\s*320\s*24%\s*▆+\s*50%\s*1\s*1\/0\/0\s*1\s*Oct 12\s*2k$/)
+    expect((await pane.find({ key: 'line-/old' }))?.text).toMatch(/^old\s*1k\s*76%\s*▆+\s*100%\s*1\s*0\/1\/0\s*1\s*Oct 5\s*0$/)
+    await choose(pane, 'group', 'by session')
+    expect((await pane.find({ key: 'list-columns' }))?.text).toMatch(/repo\s*Started/)
+    await choose(pane, 'group', 'by model')
+    expect((await pane.find({ key: 'list-columns' }))?.text).toMatch(/Avg\/spawn\s*Last/)
+    // Avg/spawn counts the subagents' tokens alone: 160 for its one spawn. It is wider than session,
+    // so the cache read no longer fits at 110.
+    expect((await pane.find({ key: 'line-claude-opus-4' }))?.text).toMatch(/1\s*1\/0\/0\s*160\s*Oct 12$/)
+    await pane.unmount()
   })
 
-  test('a row is a card whose name is cut to one line by its cells, leaving its spawns count whole', async ($, on) => {
+  test("a row's name is cut to its column by cells, a session's to its prompt", async ($, on) => {
     const world = await twoWeeks($, on)
     world.store[`ledger:long`] = {
       updated: world.now,
@@ -773,18 +792,36 @@ describe('usage ledger', () => {
     }
     await stats($, 'stats')
     const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 52 }, surface: 'terminal' } as never)
-    await choose(pane, 'group', 'session')
-    const card = await pane.find({ key: `line-/repo|${world.now - 1000}` })
-    expect(card?.props.borderStyle).toBe('round')
+    await choose(pane, 'group', 'by session')
     const long = (await pane.find({ key: `row:/repo|${world.now - 1000}` }))?.text ?? ''
     expect(long.endsWith('…')).toBe(true)
-    expect(cells(long)).toBeLessThanOrEqual(52 - 4 - cells('0 spawns') - 3)
-    expect((await pane.find({ key: `name:/repo|${world.now - 1000}` }))?.text).toMatch(/…0 spawns$/)
-    expect((await pane.find({ key: 'name:/old|' + new Date(2026, 9, 5, 9).getTime() }))?.text).toBe('last week1 spawns')
+    // 52 columns hold the tokens, share, bar and spawns: 5 + 5 + 6 + 6 and their gaps.
+    expect(cells(long)).toBeLessThanOrEqual(52 - 30 - 2)
+    expect((await pane.find({ key: `line-/repo|${world.now - 1000}` }))?.text).not.toContain('\n')
     await pane.unmount()
   })
 
-  test('period, grouping and sort switch in place: one cycling button in the terminal, segments on desktop', async ($, on) => {
+  test('the list shows ten rows and ten more at each "more"', async ($, on) => {
+    const world = newWorld()
+    const tally = { input: 100, cacheWrite: 0, cacheRead: 0, output: 0, steps: 1 }
+    world.store = Object.fromEntries(
+      Array.from({ length: 12 }, (_, i) => [`ledger:r${i}`, { updated: world.now, repo: `/r${i}`, started: world.now - i, prompt: '', daily: { '2026-10-12': { m: tally } }, spawns: [] }]),
+    )
+    engine(on, { value: 'running' }, '', world)
+    await start($)
+    await stats($, 'stats')
+    const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
+    const rows = async () => (await pane.findAll({ type: 'Text', text: /^r\d+$/ })).length
+    expect(await rows()).toBe(10)
+    expect((await pane.find({ key: 'more' }))?.text).toBe('2 more ▸')
+    expect((await pane.find({ key: 'more' }))?.props.hotkey).toBe('m')
+    await pane.press({ key: 'more' })
+    expect(await rows()).toBe(12)
+    expect(await pane.find({ key: 'more' })).toBeUndefined()
+    await pane.unmount()
+  })
+
+  test('period and grouping switch in place: one cycling button in the terminal, segments on desktop', async ($, on) => {
     await twoWeeks($, on, 'desktop')
     await stats($, 'stats')
     const term = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)
@@ -805,7 +842,7 @@ describe('usage ledger', () => {
     expect(await term.find({ key: 'row:/old' })).toBeUndefined()
     expect((await term.find({ key: 'group' }))?.props.hotkey).toBe('g')
     await term.press({ key: 'group' })
-    expect((await term.find({ key: 'group' }))?.text).toContain('‹ session ›')
+    expect((await term.find({ key: 'group' }))?.text).toContain('‹ by session ›')
     await term.unmount()
 
     const desk = await $.ui.mount({ ...PANE, surface: 'desktop' } as never)
@@ -827,9 +864,9 @@ describe('usage ledger', () => {
     await twoWeeks($, on, 'desktop')
     await stats($, 'stats')
     const pane = await $.ui.mount({ ...PANE, surface: 'desktop' } as never)
-    // The heatmap, the two cards' bars and the two rows'.
+    // The heatmap, the two summary bars and the two rows'.
     expect(await pane.findAll({ type: 'Svg' })).toHaveLength(5)
-    expect(await pane.find({ type: 'Text', text: /█/ })).toBeUndefined()
+    expect(await pane.find({ type: 'Text', text: /█|▆/ })).toBeUndefined()
     await pane.unmount()
   })
 })
@@ -977,16 +1014,6 @@ describe('heatmap', () => {
       return rows
     }
     const dayCells = async (pane: Mounted) => (await rowCells(pane)).flat()
-    // Chooses `day` with j / k from the chosen day `from`, or from none, where j first chooses today.
-    const pickDay = async (pane: Mounted, day: string, from = '') => {
-      if (from === '') {
-        await pane.press({ key: 'prev-day' })
-      }
-      const steps = Math.round((Date.parse(from || '2026-10-12') - Date.parse(day)) / 86_400_000)
-      for (let i = 0; i < Math.abs(steps); i++) {
-        await pane.press({ key: steps > 0 ? 'prev-day' : 'next-day' })
-      }
-    }
     // The cell of `day` in a pane of 53 weeks.
     const glyph = async (pane: Mounted, day: string) => {
       const index = Math.round((Date.parse(day) - Date.parse(heatStart(53, NOW))) / 86_400_000)
@@ -994,6 +1021,12 @@ describe('heatmap', () => {
       return (await rowCells(pane))[index % 7]?.[Math.floor(index / 7)]
     }
     const glyphText = async (pane: Mounted, day: string) => String((await glyph(pane, day))?.children[0] ?? '')
+    const text = async (pane: Mounted, key: string) => (await pane.find({ key }))?.text ?? ''
+    const press = async (pane: Mounted, key: string, times = 1) => {
+      for (let i = 0; i < times; i++) {
+        await pane.press({ key })
+      }
+    }
 
     test('draws as many weeks as the width holds, none below 12 columns or in an opened row', async ($, on) => {
       await heatWorld($, on)
@@ -1014,142 +1047,181 @@ describe('heatmap', () => {
 
       const pane = await mount($)
       expect(await pane.find({ key: 'heat-months' })).toBeDefined()
-      expect((await pane.find({ key: 'heat-legend' }))?.text).toMatch(/^No data · {2}None ■ {2}Less ■■■■ More {2}Selected ■.*Most Jul 1 4k$/)
-      // 30 days span 11 columns at the right: too few for the label, which goes before the bracket.
-      expect((await pane.find({ key: 'heat-note' }))?.text).toMatch(/30 days └─+┘$/)
-      await pane.press({ key: 'days' })
-      expect((await pane.find({ key: 'heat-note' }))?.text).toMatch(/└─+ 90 days ─+┘$/)
-      await pane.press({ key: 'days' })
-      expect((await pane.find({ key: 'heat-note' }))?.text).toMatch(/^ {104}▲ today$/)
-      await pane.press({ key: 'row:/repo' })
+      // 30 days span 11 columns at the right: too few for the length, the legend whole at the left.
+      expect(await text(pane, 'heat-note')).toMatch(/^ {4}Less ■■■■ More {2}None ■ {2}No data · {2}Most Jul 1 4k +└─{9}┘$/)
+      expect((await text(pane, 'heat-note')).indexOf('└')).toBe(4 + 47 * 2)
+      await press(pane, 'days')
+      expect(await text(pane, 'heat-note')).toMatch(/└─{8} 90 days ─{8}┘$/)
+      // One day: the orange mark under it, its name before it where the line ends first.
+      await press(pane, 'days')
+      const note = await text(pane, 'heat-note')
+      expect(note).toMatch(/Mon Oct 12 ▲$/)
+      expect(note.indexOf('▲')).toBe(4 + 52 * 2)
+      await press(pane, 'row:/repo')
       expect(await pane.find({ key: 'heatmap' })).toBeUndefined()
       await pane.unmount()
     })
 
-    test('no data, no use, use and the chosen day are each drawn their own way', async ($, on) => {
+    test('the legend fits item by item beside the mark, and moves right of a mark at the left', async ($, on) => {
+      await heatWorld($, on)
+      const at = async (columns: number) => {
+        const pane = await mount($, columns)
+        const found = await text(pane, 'heat-note')
+        await pane.unmount()
+
+        return found
+      }
+      expect(await at(80)).toMatch(/^ {4}Less ■■■■ More {2}None ■ {2}No data · {2}Most Jul 1 4k +└─+┘$/)
+      expect(await at(52)).toMatch(/^ {4}Less ■■■■ More {2}None ■ {2}No data · +└─+┘$/)
+      expect(await at(40)).toMatch(/^ {4}Less ■■■■ More {2}None ■ +└─+┘$/)
+      // A week 20 weeks back sits near the left: the legend goes after it, flush with the right edge.
+      const pane = await mount($, 52)
+      await press(pane, 'days', 3)
+      await press(pane, 'earlier', 20)
+      expect(await text(pane, 'period')).toContain('May 19 – May 25')
+      expect(await text(pane, 'heat-note')).toMatch(/^ {8}└─┘ +Less ■■■■ More {2}None ■ {2}No data ·$/)
+      expect((await text(pane, 'heat-note')).length).toBe(52)
+      await pane.unmount()
+    })
+
+    test("no data, no use and use are each drawn their own way; the days outside the period dim, a day's own goes orange", async ($, on) => {
       await heatWorld($, on)
       const pane = await mount($)
       expect((await glyph(pane, '2026-10-05'))?.props.dimColor).toBe(true)
       expect(await glyphText(pane, '2026-10-05')).toBe('·')
       expect((await glyph(pane, '2026-10-10'))?.props.color).toBe('#4a4a52')
-      // Three used days: Oct 2 the least, then today, then the July day row.
-      expect((await glyph(pane, '2026-10-02'))?.props.color).toBe('#1f5a6d')
+      // Three used days: Oct 2 the least, then today, then the July day row, out of the period.
+      expect((await glyph(pane, '2026-10-02'))?.props).toMatchObject({ color: '#1f5a6d', dimColor: false })
       expect((await glyph(pane, '2026-10-12'))?.props.color).toBe('#2a7f9c')
-      expect((await glyph(pane, '2026-07-01'))?.props.color).toBe('#3aa6cc')
+      expect((await glyph(pane, '2026-07-01'))?.props).toMatchObject({ color: '#3aa6cc', dimColor: true })
       expect(await glyphText(pane, '2026-10-12')).toBe('■')
 
-      await pickDay(pane, '2026-10-10')
+      // Today alone, then two days back: no use, said in place of the summary, and nothing to list.
+      await press(pane, 'today')
+      await press(pane, 'earlier', 2)
       expect((await glyph(pane, '2026-10-10'))?.props).toMatchObject({ color: '#ff8c42', bold: true })
-      expect(await pane.find({ type: 'Text', text: /^Sat Oct 10: no usage \(the day was recorded/ })).toBeDefined()
-      expect(await pane.find({ key: 'card:tokens' })).toBeUndefined()
+      expect(await text(pane, 'empty-note')).toBe('Sat Oct 10: no usage.')
+      expect(await pane.find({ key: 'tokens-line' })).toBeUndefined()
+      expect(await pane.find({ key: 'list-columns' })).toBeUndefined()
+      expect(await text(pane, 'hint')).toBe('Tab moves · Esc closes')
 
-      await pickDay(pane, '2026-10-05', '2026-10-10')
+      await press(pane, 'earlier', 5)
       expect(await glyphText(pane, '2026-10-05')).toBe('■')
-      expect(await pane.find({ type: 'Text', text: /^Mon Oct 5: no data \(neither a ledger nor a day row/ })).toBeDefined()
-      expect(await pane.find({ type: 'Text', text: /no usage/ })).toBeUndefined()
+      expect(await text(pane, 'empty-note')).toBe('Mon Oct 5: no data.')
       await pane.unmount()
     })
 
-    test("j and k choose the period's day; p lets it go", async ($, on) => {
+    test('p changes the length and keeps the last day; h and l move by the length, l no later than today; t jumps to today', async ($, on) => {
       await heatWorld($, on)
       const pane = await mount($)
-      expect((await pane.find({ key: 'card:tokens' }))?.text).toMatch(/3,200/)
-
-      await pickDay(pane, '2026-10-02')
-      expect((await pane.find({ key: 'days' }))?.text).toContain('‹ Fri Oct 2 ›')
-      expect((await pane.find({ key: 'header' }))?.text).toContain('1 day · p back to 30 days')
-      expect((await pane.find({ key: 'card:tokens' }))?.text).toMatch(/1,200.*main session.*300.*subagent.*900/)
-      // Oct 2 is in week 50 of 0–52, too near the right edge for the label after its mark.
-      const note = (await pane.find({ key: 'heat-note' }))?.text ?? ''
-      expect(note).toMatch(/^ +Fri Oct 2 ▲$/)
-      expect(note.indexOf('▲')).toBe(50 * 2)
-      expect(await pane.find({ key: 'row:/repo' })).toBeDefined()
-
-      await pane.press({ key: 'next-day' })
-      expect((await pane.find({ key: 'days' }))?.text).toContain('‹ Sat Oct 3 ›')
-      await pane.press({ key: 'prev-day' })
-      await pane.press({ key: 'prev-day' })
-      expect((await pane.find({ key: 'days' }))?.text).toContain('‹ Thu Oct 1 ›')
-      expect((await pane.find({ key: 'prev-day' }))?.props.hotkey).toBe('j')
-      expect((await pane.find({ key: 'next-day' }))?.props.hotkey).toBe('k')
-
-      // p lets the day go first, and only then steps the period.
+      expect(await text(pane, 'period')).toMatch(/^Period ‹ 30 days › {2}‹ Sep 13 – Oct 12 ›Today$/)
       expect((await pane.find({ key: 'days' }))?.props.hotkey).toBe('p')
-      await pane.press({ key: 'days' })
-      expect((await pane.find({ key: 'days' }))?.text).toContain('‹ 30 days ›')
-      expect((await pane.find({ key: 'card:tokens' }))?.text).toMatch(/3,200/)
+      expect((await pane.find({ key: 'earlier' }))?.props.hotkey).toBe('h')
+      expect((await pane.find({ key: 'later' }))?.props.hotkey).toBe('l')
+      expect((await pane.find({ key: 'today' }))?.props.hotkey).toBe('t')
+      expect(await text(pane, 'tokens-line')).toMatch(/^3k token/)
 
-      // k does nothing with no day chosen; j from none chooses today, and k stops there.
-      await pane.press({ key: 'next-day' })
-      expect((await pane.find({ key: 'days' }))?.text).toContain('‹ 30 days ›')
-      await pane.press({ key: 'prev-day' })
-      expect((await pane.find({ key: 'days' }))?.text).toContain('‹ Mon Oct 12 ›')
-      await pane.press({ key: 'next-day' })
-      expect((await pane.find({ key: 'days' }))?.text).toContain('‹ Mon Oct 12 ›')
-      // Near the right edge the label goes before its mark.
-      expect((await pane.find({ key: 'heat-note' }))?.text).toMatch(/Mon Oct 12 ▲$/)
-      await pickDay(pane, '2026-07-01', '2026-10-12')
-      expect((await pane.find({ key: 'heat-note' }))?.text).toMatch(/^ +▲ Wed Jul 1$/)
+      await press(pane, 'earlier')
+      expect(await text(pane, 'period')).toContain('Aug 14 – Sep 12')
+      expect(await text(pane, 'empty-note')).toBe('Aug 14 – Sep 12: no data.')
+      await press(pane, 'later', 2)
+      expect(await text(pane, 'period')).toContain('Sep 13 – Oct 12')
+
+      // 90 days to the same last day; a step back lies wholly before the ledgers: the day rows' totals
+      // and no rows.
+      await press(pane, 'days')
+      expect(await text(pane, 'period')).toContain('Jul 15 – Oct 12')
+      await press(pane, 'earlier')
+      expect(await text(pane, 'period')).toContain('Apr 16 – Jul 14')
+      expect(await text(pane, 'tokens-line')).toMatch(/^4k token\s*main 4k$/)
+      expect(await text(pane, 'pruned')).toBe('Apr 16 – Jul 14: the details are kept 90 days and were deleted.')
+      expect(await pane.find({ key: 'row:/repo' })).toBeUndefined()
+      expect(await text(pane, 'hint')).toBe('Tab moves · Esc closes')
+
+      // A shorter length keeps the last day.
+      await press(pane, 'days', 2)
+      expect(await text(pane, 'period')).toContain('Jul 8 – Jul 14')
+
+      await press(pane, 'today')
+      expect((await pane.find({ key: 'days' }))?.text).toBe('‹ 1 day ›')
+      expect(await text(pane, 'period')).toContain('Today, Mon Oct 12')
+      expect(await text(pane, 'tokens-line')).toMatch(/^2k token/)
+      await press(pane, 'earlier')
+      expect(await text(pane, 'period')).toContain(' Sun Oct 11 ')
+      expect(await text(pane, 'period')).not.toContain('Today,')
       await pane.unmount()
     })
 
-    test("j stops at the heatmap's first day; a day before the ledgers reach shows its day row", async ($, on) => {
+    test('a narrow period drops its word, then the spaces in its days; t wraps last', async ($, on) => {
       await heatWorld($, on)
-      const pane = await mount($, 12)
-      await pickDay(pane, '2026-09-21')
-      await pane.press({ key: 'prev-day' })
-      expect((await pane.find({ key: 'days' }))?.text).toContain('‹ Mon Sep 21 ›')
-      await pane.unmount()
+      const at = async (columns: number) => {
+        const pane = await mount($, columns)
+        const found = await text(pane, 'period')
+        await pane.unmount()
 
-      const wide = await mount($)
-      // The day chosen above stays chosen.
-      await pickDay(wide, '2026-07-01', '2026-09-21')
-      expect((await wide.find({ key: 'card:tokens' }))?.text).toMatch(/4,321/)
-      expect(await wide.find({ type: 'Text', text: /^Only the day's summary is kept for Wed Jul 1/ })).toBeDefined()
-      expect(await wide.find({ key: 'group-line' })).toBeUndefined()
-      await wide.unmount()
+        return found
+      }
+      // 58 columns with the word, 51 without, 48 tight; `p: `, `h: `, `l: ` and `t: ` drawn by the terminal.
+      expect(await at(58)).toMatch(/^Period ‹ 30 days › {2}‹ Sep 13 – Oct 12 ›Today$/)
+      expect(await at(57)).toMatch(/^‹ 30 days › {2}‹ Sep 13 – Oct 12 ›Today$/)
+      expect(await at(51)).toMatch(/^‹ 30 days › {2}‹ Sep 13 – Oct 12 ›Today$/)
+      expect(await at(50)).toMatch(/^‹ 30 days › ‹ Sep 13–Oct 12 ›Today$/)
+      expect(await at(40)).toMatch(/^‹ 30 days › ‹ Sep 13–Oct 12 ›Today$/)
     })
 
-    test('the chosen day is written the zh-TW way', async ($, on) => {
+    test('the days are written the zh-TW way', async ($, on) => {
       await heatWorld($, on, 'terminal', '{"*":{"language":"zh-TW"}}')
       const pane = await mount($)
-      expect((await pane.find({ key: 'heat-legend' }))?.text).toMatch(/^無資料 · {2}無用量 ■ {2}少 ■■■■ 多 {2}選到 ■.*最多 7\/1 4k$/)
-      await pickDay(pane, '2026-10-02')
-      expect((await pane.find({ key: 'days' }))?.text).toContain('‹ 10/02 週五 ›')
-      expect((await pane.find({ key: 'header' }))?.text).toContain('1 天 · p 回到 30 天')
-      await pickDay(pane, '2026-10-04', '2026-10-02')
-      expect(await pane.find({ type: 'Text', text: /^10\/04（日）沒有資料（帳本與每日摘要都沒有這天/ })).toBeDefined()
+      expect(await text(pane, 'heat-note')).toMatch(/^ {4}少 ■■■■ 多 {2}無用量 ■ {2}無資料 · {2}最多 07\/01 4k +└─ 30 天 ─┘$/)
+      expect(await text(pane, 'period')).toMatch(/^期間 ‹ 30 天 › {2}‹ 09\/13 – 10\/12 ›今天$/)
+      expect(await text(pane, 'title')).toMatch(/更新於 12:00:00$/)
+      await press(pane, 'today')
+      expect(await text(pane, 'period')).toContain('今天 10/12（一）')
+      expect(await text(pane, 'heat-note')).toMatch(/10\/12（一） ▲$/)
+      await press(pane, 'earlier', 2)
+      expect(await text(pane, 'empty-note')).toBe('10/10（六）沒有用量。')
+      // Seven days to Oct 10: recorded, none used; two weeks back, nothing recorded.
+      await press(pane, 'days')
+      expect(await text(pane, 'empty-note')).toBe('10/04 – 10/10 沒有用量。')
+      await press(pane, 'earlier', 2)
+      expect(await text(pane, 'empty-note')).toBe('09/20 – 09/26 沒有資料。')
       await pane.unmount()
     })
 
     test('a redraw within 30 seconds reuses the store as last read; a write of its own or opening the pane reads it again', async ($, on) => {
       const world = await heatWorld($, on)
-      const tokensCard = async (columns: number) => {
+      const tokensLine = async (columns: number) => {
         const pane = await mount($, columns)
-        const text = (await pane.find({ key: 'card:tokens' }))?.text ?? ''
+        const found = await text(pane, 'tokens-line')
         await pane.unmount()
 
-        return text
+        return found
       }
-      expect(await tokensCard(110)).toMatch(/3,200/)
+      expect(await tokensLine(110)).toMatch(/^3k token/)
       // Another session writes: a resize does not read the store again.
       world.store['ledger:other'] = ledgerOf(at(10, 12, 9), at(10, 12, 10), { '2026-10-12': { m: tally(1000) } })
-      expect(await tokensCard(80)).toMatch(/3,200/)
+      expect(await tokensLine(80)).toMatch(/^3k token/)
       await world.clock.advance(30_000)
-      expect(await tokensCard(52)).toMatch(/4,200/)
-      world.store['ledger:other2'] = ledgerOf(at(10, 12, 9), at(10, 12, 10), { '2026-10-12': { m: tally(10) } })
+      expect(await tokensLine(52)).toMatch(/^4k token/)
+      world.store['ledger:other2'] = ledgerOf(at(10, 12, 9), at(10, 12, 10), { '2026-10-12': { m: tally(1000) } })
       await $.command.run({ command: 'subagent-dispatch', args: 'stats' } as never)
-      expect(await tokensCard(110)).toMatch(/4,210/)
+      expect(await tokensLine(110)).toMatch(/^5k token/)
     })
 
-    test('the desktop pane draws the heatmap as one Svg', async ($, on) => {
+    test('the desktop pane draws the heatmap as one Svg, the period under its grid', async ($, on) => {
       await heatWorld($, on, 'desktop')
       const pane = await mount($, 110, 'desktop')
-      const svg = (await pane.find({ key: 'heatmap' }))?.children[0] as { type: string; props: { source: string } } | undefined
-      expect(svg?.type).toBe('Svg')
-      expect(svg?.props.source).toContain('stroke-dasharray')
-      expect(svg?.props.source).toContain('fill-opacity="0.25"')
+      const svg = async () => ((await pane.find({ key: 'heatmap' }))?.children[0] as { type: string; props: { source: string } } | undefined)
+      expect((await svg())?.type).toBe('Svg')
+      expect((await svg())?.props.source).toContain('stroke-dasharray')
+      // Oct 10, in the period, as it is; Jul 1, out of it, at 30%.
+      expect((await svg())?.props.source).toContain('fill-opacity="0.25"')
+      expect((await svg())?.props.source).toContain('fill-opacity="0.225"')
+      expect((await svg())?.props.source).toMatch(/<path d="M[^"]+"[^>]*\/><text[^>]*>30 days<\/text>/)
       expect(await dayCells(pane)).toHaveLength(0)
+      expect(await text(pane, 'heat-note')).toBe('Less ■■■■ More  None ■  No data ·  Most Jul 1 4k')
+      await press(pane, 'today')
+      expect((await svg())?.props.source).toContain('Mon Oct 12 ▲</text>')
       await pane.unmount()
     })
   })

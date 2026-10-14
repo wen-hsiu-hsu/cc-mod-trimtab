@@ -172,6 +172,18 @@ export function dayLabel(lang: Lang, ms: number): string {
   return monthDay(lang, d.getMonth() + 1, d.getDate())
 }
 
+// A day in the stats pane: `Oct 2`, `10/02`.
+export function shortDay(lang: Lang, day: string): string {
+  const [, month, date] = day.split('-').map(Number) as [number, number, number]
+
+  return pick(lang, { en: `${MONTHS[month - 1]} ${date}`, 'zh-TW': `${String(month).padStart(2, '0')}/${String(date).padStart(2, '0')}` })
+}
+
+// A stats period's days: `Sep 15 – Oct 14`, `09/15 – 10/14`; `tight` drops the spaces around the dash.
+export function span(lang: Lang, from: string, to: string, tight = false): string {
+  return `${shortDay(lang, from)}${tight ? '–' : ' – '}${shortDay(lang, to)}`
+}
+
 // The days a report covers: `Sep 13 – Oct 12`, `9/13 至 10/12`.
 export function range(lang: Lang, report: Report): string {
   const label = (day: string) => {
@@ -243,7 +255,19 @@ export function tokens(t: Tally): number {
   return t.input + t.cacheWrite + t.output
 }
 
-export type SessionRow = { repo: string; started: number; prompt: string; main: number; mainByModel: [string, number][]; cacheRead: number; spawns: Spawn[] }
+// `cacheByModel` is the main session's cache read per model, `lastByModel` the last day in the
+// window each model had main session tokens.
+export type SessionRow = {
+  repo: string
+  started: number
+  prompt: string
+  main: number
+  mainByModel: [string, number][]
+  cacheByModel: Record<string, number>
+  lastByModel: Record<string, string>
+  cacheRead: number
+  spawns: Spawn[]
+}
 
 export type Report = {
   // When the ledgers were read.
@@ -306,15 +330,50 @@ export function readLedger(value: unknown): Ledger | undefined {
 // Every session written to in the window, with its main tokens of the days in the window and
 // its spawns whose last step falls in it. The window is `days` days ending today, or `day` alone.
 export function buildReport(stored: unknown[], days: number, now: number, day?: string): Report {
-  const from = day ?? firstDay(now, days)
-  const to = day ?? dayOf(now)
-  const report: Report = { at: now, days: day === undefined ? days : 1, from, to, main: 0, sub: 0, cacheRead: 0, spawned: { all: 0, explicit: 0, opus: 0, forks: 0, defaults: 0 }, sessions: [] }
+  return ledgerReport(stored, day ?? firstDay(now, days), day ?? dayOf(now), now)
+}
+
+// The days from `from` to `to`, both included.
+export function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T12:00:00`) - Date.parse(`${from}T12:00:00`)) / 86_400_000) + 1
+}
+
+// The stats pane's period, `from` to `to`: the days from liveFrom on from the ledgers, with their
+// sessions, and the days before from their day rows, counted in the totals alone. `kept` says
+// whether any of it reaches the ledgers, so there are rows to list.
+export function windowReport(stored: unknown[], dayRows: Record<string, unknown>, from: string, to: string, now: number): Report & { kept: boolean } {
+  const live = liveFrom(now)
+  const kept = to >= live
+  const report = ledgerReport(kept ? stored : [], from < live ? live : from, to, now)
+  report.from = from
+  report.days = daysBetween(from, to)
+  for (let day = from; day <= to && day < live; day = addDays(day, 1)) {
+    const row = readDayRow(dayRows[day])
+    if (row === undefined) {
+      continue
+    }
+    const part = dayReport(row, day, now)
+    report.main += part.main
+    report.sub += part.sub
+    report.cacheRead += part.cacheRead
+    for (const key of Object.keys(report.spawned) as (keyof Report['spawned'])[]) {
+      report.spawned[key] += part.spawned[key]
+    }
+  }
+
+  return { ...report, kept }
+}
+
+function ledgerReport(stored: unknown[], from: string, to: string, now: number): Report {
+  const report: Report = { at: now, days: daysBetween(from, to), from, to, main: 0, sub: 0, cacheRead: 0, spawned: { all: 0, explicit: 0, opus: 0, forks: 0, defaults: 0 }, sessions: [] }
   for (const ledger of stored.map(readLedger)) {
     if (ledger === undefined || dayOf(ledger.updated) < from) {
       continue
     }
     const spawns = ledger.spawns.filter(spawn => dayOf(spawn.last) >= from && dayOf(spawn.last) <= to)
     const main = new Map<string, number>()
+    const cacheByModel: Record<string, number> = {}
+    const lastByModel: Record<string, string> = {}
     let cacheRead = 0
     for (const [day, models] of Object.entries(ledger.daily)) {
       if (day < from || day > to) {
@@ -322,6 +381,10 @@ export function buildReport(stored: unknown[], days: number, now: number, day?: 
       }
       for (const [model, tally] of Object.entries(models)) {
         main.set(model, (main.get(model) ?? 0) + tokens(tally))
+        cacheByModel[model] = (cacheByModel[model] ?? 0) + tally.cacheRead
+        if (tokens(tally) > 0 && day > (lastByModel[model] ?? '')) {
+          lastByModel[model] = day
+        }
         cacheRead += tally.cacheRead
       }
     }
@@ -332,6 +395,8 @@ export function buildReport(stored: unknown[], days: number, now: number, day?: 
       prompt: ledger.prompt,
       main: mainByModel.reduce((sum, [, count]) => sum + count, 0),
       mainByModel,
+      cacheByModel,
+      lastByModel,
       cacheRead,
       spawns,
     }
@@ -690,18 +755,55 @@ export type GroupBy = 'repo' | 'session' | 'model' | 'type'
 export const GROUP_BYS: readonly GroupBy[] = ['repo', 'session', 'model', 'type']
 
 // One row of the pane's grouping, and what it opens to: per session, the main tokens that
-// fall in the group and the spawns that do.
-export type Group = { key: string; label: string; tokens: number; spawns: number; detail: { session: SessionRow; main: number; spawns: Spawn[] }[] }
+// fall in the group and the spawns that do. `main` is the main session's part of `tokens`,
+// `cacheRead` both parts' cache read, and `last` the last day either used tokens ('' for none).
+export type Group = {
+  key: string
+  label: string
+  tokens: number
+  main: number
+  spawns: number
+  cacheRead: number
+  last: string
+  detail: { session: SessionRow; main: number; spawns: Spawn[] }[]
+}
+
+// What of a session's main tokens falls in a group: those of `models`, or of every model.
+type MainPart = { tokens: number; cacheRead: number; last: string }
+
+function mainPart(session: SessionRow, models = session.mainByModel.map(([model]) => model)): MainPart {
+  const tokensOf = new Map(session.mainByModel)
+  const part: MainPart = { tokens: 0, cacheRead: 0, last: '' }
+  for (const model of models) {
+    part.tokens += tokensOf.get(model) ?? 0
+    part.cacheRead += session.cacheByModel[model] ?? 0
+    const last = session.lastByModel[model] ?? ''
+    if (last > part.last) {
+      part.last = last
+    }
+  }
+
+  return part
+}
 
 export function groups(lang: Lang, report: Report, by: GroupBy): Group[] {
   const found = new Map<string, Group>()
-  const add = (key: string, label: string, session: SessionRow, main: number, spawns: Spawn[]) => {
+  const none: MainPart = { tokens: 0, cacheRead: 0, last: '' }
+  const add = (key: string, label: string, session: SessionRow, part: MainPart, spawns: Spawn[]) => {
+    const main = part.tokens
     let group = found.get(key)
     if (group === undefined) {
-      group = { key, label, tokens: 0, spawns: 0, detail: [] }
+      group = { key, label, tokens: 0, main: 0, spawns: 0, cacheRead: 0, last: '', detail: [] }
       found.set(key, group)
     }
     group.tokens += main + spawns.reduce((sum, spawn) => sum + tokens(spawn), 0)
+    group.main += main
+    group.cacheRead += part.cacheRead + spawns.reduce((sum, spawn) => sum + spawn.cacheRead, 0)
+    for (const day of [part.last, ...spawns.filter(spawn => tokens(spawn) > 0).map(spawn => dayOf(spawn.last))]) {
+      if (day > group.last) {
+        group.last = day
+      }
+    }
     group.spawns += spawns.filter(spawn => spawn.type !== 'unknown').length
     const last = group.detail.at(-1)
     if (last?.session === session) {
@@ -713,22 +815,22 @@ export function groups(lang: Lang, report: Report, by: GroupBy): Group[] {
   }
   for (const session of report.sessions) {
     if (by === 'repo') {
-      add(session.repo, repoName(lang, session.repo), session, session.main, session.spawns)
+      add(session.repo, repoName(lang, session.repo), session, mainPart(session), session.spawns)
     } else if (by === 'session') {
-      add(`${session.repo}|${session.started}`, sessionName(lang, session), session, session.main, session.spawns)
+      add(`${session.repo}|${session.started}`, sessionName(lang, session), session, mainPart(session), session.spawns)
     } else if (by === 'model') {
-      for (const [model, count] of session.mainByModel) {
-        add(model, model, session, count, [])
+      for (const [model] of session.mainByModel) {
+        add(model, model, session, mainPart(session, [model]), [])
       }
       for (const spawn of session.spawns) {
-        add(spawn.model, spawn.model, session, 0, [spawn])
+        add(spawn.model, spawn.model, session, none, [spawn])
       }
     } else {
       if (session.main > 0) {
-        add('main', pick(lang, { en: 'main session', 'zh-TW': '主 session' }), session, session.main, [])
+        add('main', pick(lang, { en: 'main session', 'zh-TW': '主 session' }), session, mainPart(session), [])
       }
       for (const spawn of session.spawns) {
-        add(spawn.type, spawn.type, session, 0, [spawn])
+        add(spawn.type, spawn.type, session, none, [spawn])
       }
     }
   }

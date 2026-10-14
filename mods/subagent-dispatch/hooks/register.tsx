@@ -3,7 +3,8 @@ import type { EngineInterface, Register, RenderNode } from 'claude-code'
 
 import type { WatchedAgent } from '../types'
 import { configCommand, LANGUAGE, loadConfig, pick, type ConfigIO, type Lang, type Specs } from './config'
-import { CARD, COLORS, emptyState, hintLine, MAIN_SHADES, switcher as switchIn, TONE } from './ui'
+import { fitColumns, fitLegend, listBarWidth, movePeriod, periodMark, type Column } from './layout'
+import { COLORS, emptyState, hintLine, MAIN_SHADES, switcher as switchIn, TONE } from './ui'
 import {
   addDays,
   applyMeta,
@@ -12,15 +13,16 @@ import {
   cells,
   clockTime,
   shortCount,
+  shortDay,
+  span,
   countKinds,
   DAY_KEEP,
   DAY_PREFIX,
   dayHead,
   dayLabel,
-  dayName,
   dayOf,
-  dayReport,
   dayRow,
+  daysBetween,
   heatLevels,
   heatStart,
   heatWeeks,
@@ -29,16 +31,17 @@ import {
   monthMarks,
   parseSubagent,
   parseTranscript,
-  readDayRow,
   recordedDays,
   settledDays,
   transcriptLedger,
   weekdayLabels,
+  windowReport,
   type HeatDay,
   elapsed,
   DEFAULT_DAYS,
   GROUP_BYS,
   groups,
+  type Group,
   type GroupBy,
   n,
   repoName,
@@ -57,7 +60,6 @@ import {
   LEDGER_SPEC,
   MAX_DAYS,
   promptSummary,
-  range,
   recordSpawn,
   recordStep,
   renderStats,
@@ -67,15 +69,15 @@ import {
   type SessionMeta,
 } from './ledger'
 
-// An opened row lists this many spawns, and this many more at each "more".
+// A list shows this many rows, and this many more at each "more".
 const PAGE = 10
 
 const running = atom({ plugin: 'subagent-dispatch', key: 'running' } as const, [])
 const stopped = atom({ plugin: 'subagent-dispatch', key: 'stopped' } as const, [])
-// What the stats pane shows: the period, the grouping, the row opened to its spawns, their
-// order, how many of them are listed, the one opened in place, and the day chosen on the
-// heatmap (`YYYY-MM-DD`, in place of the period).
-const view = atom({ plugin: 'subagent-dispatch', key: 'view' } as const, { days: 30, by: 'repo', item: '', sort: 'tokens', limit: PAGE, spawn: '', day: '' })
+// What the stats pane shows: the period's length and its last day (`YYYY-MM-DD`, '' for today), the
+// grouping, the row opened to its spawns, their order, how many rows are listed, and the spawn
+// opened in place.
+const view = atom({ plugin: 'subagent-dispatch', key: 'view' } as const, { days: 30, by: 'repo', item: '', sort: 'tokens', limit: PAGE, spawn: '', end: '' })
 
 // How an opened row orders its spawns: most tokens, newest, or longest run first.
 type SortBy = 'tokens' | 'time' | 'duration'
@@ -93,7 +95,7 @@ const PANE = 'subagent-dispatch-stats'
 const PERIODS = [1, 7, 30, 90]
 // Below this many body columns the heatmap is not drawn: four weeks and the labels.
 const HEAT_COLUMNS = 12
-// The heatmap's colors (DESIGN.md「熱圖色階」): no use, levels 1–4, the chosen day.
+// The heatmap's colors (DESIGN.md「熱圖色階」): no use, levels 1–4, the day of a 1-day period.
 const HEAT = { none: '#4a4a52', levels: ['#1f5a6d', '#2a7f9c', '#3aa6cc', '#86d6f0'], chosen: '#ff8c42' } as const
 // Under `backfill`: whether the transcripts were read into ledgers, so it runs once per store.
 const BACKFILL_KEY = 'backfill'
@@ -101,10 +103,8 @@ const BACKFILL_KEY = 'backfill'
 const BACKFILL_STALE_MS = 10 * 60_000
 // `$.fs.read` rejects a file over this; a larger transcript is read through `cat`.
 const READ_LIMIT = 4 * 1024 * 1024
-// From this many body columns a row is one line; below, its bar goes on a second line.
+// From this many body columns an opened row's bars are twice as long.
 const WIDE_COLUMNS = 80
-// From this many body columns the two cards sit side by side; below, one above the other.
-const CARD_COLUMNS = 60
 const SPECS: Specs = { ledger: LEDGER_SPEC, language: LANGUAGE }
 const POLL_MS = 3000
 const STOPPED = new Set(['killed', 'failed'])
@@ -499,7 +499,7 @@ async function stats($: EngineInterface, lang: Lang, args: string[], interactive
     })
   }
   if (!text && interactive) {
-    await update($, view, current => ({ ...current, days }))
+    await update($, view, current => ({ ...current, days, end: '', item: '', limit: PAGE }))
     const opened = await $.ui.open({ id: PANE, title: pick(lang, { en: 'subagent-dispatch usage', 'zh-TW': 'subagent-dispatch 用量' }), focus: true, closeOnEscape: true })
     if (opened.isPlaced) {
       return pick(lang, { en: 'Opened the usage pane (Esc closes it).', 'zh-TW': '已開啟用量 pane（Esc 關閉）。' })
@@ -536,15 +536,8 @@ function barCells(part: number, most: number, width: number): number {
   return part <= 0 ? 0 : Math.max(1, Math.round((part / most) * width))
 }
 
-function svgBar(cells: number, width: number): string {
-  const unit = 8
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width * unit}" height="10"><rect width="${cells * unit}" height="10" rx="2" fill="${COLORS.sub.fill}"/></svg>`
-}
-
-// One colored part of a card's bar and its legend line: `ink` on the terminal, `fill` on desktop.
-// `tally` follows it on every card, `note` only on the overview's.
-type Part = { key: string; label: string; short?: string; tally?: string; note?: string; value: number; ink: string; fill: string }
+// One colored part of a summary's bar and of the line above it: `ink` on the terminal, `fill` on desktop.
+type Part = { key: string; label: string; value: number; ink: string; fill: string }
 
 // `width` cells shared out by `values`, each part with any value at least one cell.
 function splitCells(values: number[], width: number): number[] {
@@ -574,30 +567,56 @@ function svgStack(parts: { cells: number; fill: string }[]): string {
 }
 
 // The heatmap on desktop: a 10px cell every 12px, a week a column, the month row above and the
-// weekday names at the left. Colors as DESIGN.md「熱圖色階」sets them.
-function svgHeatmap(lang: Lang, days: HeatDay[], chosen: string, level: (value: number | null) => number): string {
+// weekday names at the left; the days outside the period from `from` to `to` faded, and under the
+// grid its bracket and length, or for one day (`one`) a `▲` and its `name`. Colors as DESIGN.md
+//「熱圖色階」sets them.
+function svgHeatmap(lang: Lang, days: HeatDay[], from: string, to: string, one: boolean, level: (value: number | null) => number, length: string, name: string): string {
   const [left, top, pitch, size] = [28, 14, 12, 10]
   const weeks = Math.ceil(days.length / 7)
+  const width = left + weeks * pitch
   const rects = days.map((item, i) => {
     const x = left + Math.floor(i / 7) * pitch
     const y = top + (i % 7) * pitch
-    if (item.day === chosen) {
+    // Out of the period at 30%, rounded so the source does not carry float noise.
+    const fade = (opacity: number) => Number((item.day >= from && item.day <= to ? opacity : opacity * 0.3).toFixed(3))
+    if (one && item.day === to) {
       return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2" fill="${HEAT.chosen}"/>`
     }
     if (item.tokens === null) {
-      return `<rect x="${x + 0.5}" y="${y + 0.5}" width="${size - 1}" height="${size - 1}" rx="2" fill="none" stroke="${COLORS.default.fill}" stroke-dasharray="2 2"/>`
+      return `<rect x="${x + 0.5}" y="${y + 0.5}" width="${size - 1}" height="${size - 1}" rx="2" fill="none" stroke="${COLORS.default.fill}" stroke-opacity="${fade(1)}" stroke-dasharray="2 2"/>`
     }
     if (item.tokens === 0) {
-      return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2" fill="${COLORS.default.fill}" fill-opacity="0.25"/>`
+      return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2" fill="${COLORS.default.fill}" fill-opacity="${fade(0.25)}"/>`
     }
 
-    return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2" fill="${COLORS.sub.fill}" fill-opacity="${[0.35, 0.55, 0.75, 1][level(item.tokens) - 1]}"/>`
+    return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2" fill="${COLORS.sub.fill}" fill-opacity="${fade([0.35, 0.55, 0.75, 1][level(item.tokens) - 1]!)}"/>`
   })
-  const text = (x: number, y: number, words: string) => `<text x="${x}" y="${y}" font-size="9" fill="${COLORS.default.fill}" font-family="sans-serif">${words}</text>`
+  const text = (x: number, y: number, words: string, extra = '') =>
+    `<text x="${x}" y="${y}" font-size="9" fill="${COLORS.default.fill}" font-family="sans-serif"${extra}>${words}</text>`
   const months = monthMarks(lang, days).map(mark => text(left + mark.week * pitch, 9, mark.label))
-  const names = weekdayLabels(lang).flatMap((name, row) => (name === '' ? [] : [text(0, top + row * pitch + 8, name)]))
+  const names = weekdayLabels(lang).flatMap((label, row) => (label === '' ? [] : [text(0, top + row * pitch + 8, label)]))
+  // The period's weeks; none where it ends before the first.
+  const last = days.findIndex(item => item.day === to)
+  const firstAt = days.findIndex(item => item.day >= from)
+  const bottom = top + 7 * pitch
+  const marks: string[] = []
+  if (last >= 0 && firstAt >= 0) {
+    const [w0, w1] = [Math.floor(firstAt / 7), Math.floor(last / 7)]
+    const [x0, x1] = [left + w0 * pitch, left + w1 * pitch + size]
+    if (one) {
+      // About 6px a cell; where the name runs past the edge it goes before the mark.
+      const after = `▲ ${name}`
+      const fits = x0 + cells(after) * 6 <= width
+      marks.push(
+        `<text x="${fits ? x0 : x1}" y="${bottom + 12}" font-size="10" font-weight="700" fill="${HEAT.chosen}" font-family="sans-serif"${fits ? '' : ' text-anchor="end"'}>${fits ? after : `${name} ▲`}</text>`,
+      )
+    } else {
+      marks.push(`<path d="M${x0} ${bottom + 1}V${bottom + 6}H${x1}V${bottom + 1}" fill="none" stroke="#a8a8b0"/>`)
+      marks.push(`<text x="${(x0 + x1) / 2}" y="${bottom + 17}" font-size="10" fill="#d4d4d4" font-family="sans-serif" text-anchor="middle">${length}</text>`)
+    }
+  }
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${left + weeks * pitch}" height="${top + 7 * pitch}">${[...months, ...names, ...rects].join('')}</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${bottom + 22}">${[...months, ...names, ...rects, ...marks].join('')}</svg>`
 }
 
 // A spawn's key in the pane: its agent id, or for one recorded without, when it started.
@@ -608,10 +627,6 @@ function spawnId(spawn: Spawn): string {
 // Where a spawn's model came from: forked, named, or the default.
 function kindColor(spawn: Spawn): { ink: string; fill: string } {
   return spawn.fork ? COLORS.fork : spawn.requested !== undefined ? COLORS.named : COLORS.default
-}
-
-function clamp(value: number, low: number, high: number): number {
-  return Math.min(high, Math.max(low, value))
 }
 
 // --- configIO: the same block in every mod (scripts/check-copies.sh) ---
@@ -834,7 +849,8 @@ export const register: Register = (on, options) => {
   })
 
   // Laid out by the body's columns, never padded with spaces (a CJK character takes two cells).
-  // Each row is a button that opens it to its sessions and spawns; Back returns.
+  // The overview: the heatmap, the period, its summary and a row a line; a row opens to its spawns,
+  // Back returns.
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const parts = $.ui.resolve(e)
     const { Box, Button, Text } = parts
@@ -847,32 +863,18 @@ export const register: Register = (on, options) => {
     const store = await paneStore($, ledger)
     const body = e.props.bodyColumns
     const today = dayOf(now)
-    // The heatmap's weeks and days; a chosen day it no longer reaches (the pane narrowed) is let go.
-    const weeks = heatWeeks(body)
-    const first = heatStart(weeks, now)
+    // The period: `days` days to its last day, today unless moved back, never before the day rows reach.
+    const oldest = addDays(today, -(DAY_KEEP - 1))
+    const days = Number.isInteger(shown.days) && shown.days >= 1 && shown.days <= MAX_DAYS ? shown.days : DEFAULT_DAYS
+    const end = typeof shown.end === 'string' && shown.end >= oldest && shown.end < today ? shown.end : today
+    const begin = addDays(end, -(days - 1))
+    const report = windowReport(store.ledgers, store.dayRows, begin, end, now)
     const heat = buildHeatmap(store.ledgers, store.dayRows, MAX_WEEKS, now).days
-    const drawn = heat.filter(item => item.day >= first)
-    const chosen = typeof shown.day === 'string' && shown.day >= first && shown.day <= today ? shown.day : ''
-    const chosenTokens = heat.find(item => item.day === chosen)?.tokens ?? null
-    // A chosen day before the ledgers reach has only its day row: the cards, no sessions.
-    const summaryOnly = chosen !== '' && chosen < liveFrom(now)
-    const chosenRow = summaryOnly ? readDayRow(store.dayRows[chosen]) : undefined
-    const report =
-      chosen === ''
-        ? buildReport(store.ledgers, shown.days, now)
-        : chosenRow !== undefined
-          ? dayReport(chosenRow, chosen, now)
-          : buildReport(summaryOnly ? [] : store.ledgers, 1, now, chosen)
-    const rows = groups(lang, report, by)
-    const open = rows.find(row => row.key === shown.item)
-    const wide = body >= WIDE_COLUMNS
     const all = report.main + report.sub
-    const most = Math.max(1, ...rows.map(row => row.tokens))
-    // A row is a card (its border and padding take four columns); its bar takes what the line leaves
-    // after the tokens and the share.
-    const rowInner = Math.max(8, body - 4)
-    const barWidth = clamp(rowInner - 18, 8, 60)
-    const byLabel: Record<GroupBy, string> = {
+    const rows = report.kept ? groups(lang, report, by) : []
+    const open = rows.find(row => row.key === shown.item)
+    const limit = Math.max(PAGE, Number(shown.limit) || PAGE)
+    const crumbLabel: Record<GroupBy, string> = {
       repo: 'repo',
       session: 'session',
       model: pick(lang, { en: 'model', 'zh-TW': '模型' }),
@@ -880,359 +882,124 @@ export const register: Register = (on, options) => {
     }
     const switcher = (key: string, label: string, hotkey: string, options: { value: string; label: string }[], value: string, onPick: (value: string) => void) =>
       switchIn(parts, e.surface, key, label, hotkey, options, value, onPick)
-    // The cache read line ends with when the ledgers were read; where both do not fit, the time goes
-    // on the next line, at the left.
-    const cacheText = pick(lang, { en: `Cache read ${n(report.cacheRead)}, not counted`, 'zh-TW': `快取讀取 ${n(report.cacheRead)}，不計入` })
-    const updatedText = pick(lang, { en: `Updated ${clockTime(store.at)}`, 'zh-TW': `更新於 ${clockTime(store.at)}` })
-    const spawnCount = (count: number) => pick(lang, { en: `${count} spawns`, 'zh-TW': `${count} 次` })
-    const cellBar = (part: number, whole: number, width: number) => {
-      const cells = barCells(part, whole, width)
-      if (Svg !== undefined) {
-        return <Svg source={svgBar(cells, width)} alt={n(part)} width={width * 8} height={10} />
-      }
-
-      return cells === 0 ? <Text> </Text> : <Text backgroundColor="cyan">{' '.repeat(cells)}</Text>
-    }
-    const bar = (part: number) => cellBar(part, most, barWidth)
-    // As in open-items: the command's name over a dim rule at the top, the hint line at the foot.
-    // A dock is as tall as its room, so the frame fills it; an inline pane keeps its own height.
+    // The period's days: one day by its name, more by their first and last.
+    const periodName = (tight = false) => (days === 1 ? dayHead(lang, end) : span(lang, begin, end, tight))
+    // As in open-items: the command's name over a dim rule at the top, here with when the ledgers were
+    // read at its right (the time alone where both do not fit), and the hint line at the foot. A dock
+    // is as tall as its room, so the frame fills it; an inline pane keeps its own height.
     const heading = `${MOD} ${STATS}`
+    const updated = pick(lang, { en: `Updated ${clockTime(store.at)}`, 'zh-TW': `更新於 ${clockTime(store.at)}` })
+    const stamped = cells(heading) + cells(updated) + 6 <= body ? updated : clockTime(store.at)
     const room = e.props.placement === 'dock' ? (e.props.scroll as { bodyRows?: number } | undefined)?.bodyRows : undefined
     const frame = room === undefined ? {} : { minHeight: room }
     const title = (
       <Box key="title" flexDirection="row" gap={1} marginBottom={1}>
         <Text bold>{heading}</Text>
-        <Text dimColor>{'─'.repeat(Math.max(0, body - heading.length - 1))}</Text>
+        <Text dimColor>{'─'.repeat(Math.max(1, body - cells(heading) - cells(stamped) - 2))}</Text>
+        <Text dimColor>{stamped}</Text>
       </Box>
     )
-    // A session by its first prompt; its time and repo go on a line of their own.
+    // A dim rule across the pane, under a list's column names or over an opened row's list.
+    const rule = (
+      <Box key="list-rule">
+        <Text dimColor>{'─'.repeat(body)}</Text>
+      </Box>
+    )
+    // A session by its first prompt.
     const promptOf = (session: Report['sessions'][number]) => session.prompt || pick(lang, { en: '(no prompt)', 'zh-TW': '（沒有 prompt）' })
-    // A dim rule across the pane, over a list.
-    const rule = (key: string) => (
-      <Text key={key} dimColor>
-        {'─'.repeat(body)}
-      </Text>
-    )
 
-    const periodLabel = pick(lang, { en: 'Period ', 'zh-TW': '期間 ' })
-    // With a day chosen the period shows the day, and its first press lets the day go.
-    const periodSwitch =
-      chosen === '' ? (
-        switcher(
-          'days',
-          periodLabel,
-          'p',
-          PERIODS.map(days => ({ value: String(days), label: daysLabel(lang, days) })),
-          String(shown.days),
-          value => void update($, view, current => ({ ...current, days: Number(value), item: '' })),
-        )
-      ) : (
-        <Box key="switch:days" flexDirection="row" flexShrink={0}>
-          <Text dimColor>{periodLabel}</Text>
-          <Button key="days" plain hotkey="p" onPress={() => void update($, view, current => ({ ...current, day: '', item: '' }))}>
-            <Text bold>‹ {dayName(lang, chosen)} ›</Text>
-          </Button>
-        </Box>
-      )
-    const choose = (day: string) => void update($, view, current => ({ ...current, day, item: '', limit: PAGE, spawn: '' }))
-    // j steps back a day (from today when none is chosen) to the heatmap's first; k forward to today.
-    const dayButtons = (
-      <Box key="day-steps" flexDirection="row" gap={2} flexShrink={0}>
-        <Button
-          key="prev-day"
-          plain
-          hotkey="j"
-          onPress={() => {
-            const day = chosen === '' ? today : addDays(chosen, -1)
-            if (day >= first) {
-              choose(day)
-            }
-          }}
-        >
-          <Text>{pick(lang, { en: '‹ Prev day', 'zh-TW': '‹ 前一天' })}</Text>
-        </Button>
-        <Button
-          key="next-day"
-          plain
-          hotkey="k"
-          onPress={() => {
-            if (chosen !== '' && chosen < today) {
-              choose(addDays(chosen, 1))
-            }
-          }}
-        >
-          <Text>{pick(lang, { en: 'Next day ›', 'zh-TW': '後一天 ›' })}</Text>
-        </Button>
-      </Box>
-    )
-    const heatmap = () => {
-      if (body < HEAT_COLUMNS) {
-        return null
-      }
-      const level = heatLevels(drawn)
-      const peak = drawn.reduce<HeatDay | undefined>((top, item) => ((item.tokens ?? 0) > (top?.tokens ?? 0) ? item : top), undefined)
-      const ink = (item: HeatDay) => (item.day === chosen ? HEAT.chosen : item.tokens === 0 ? HEAT.none : HEAT.levels[level(item.tokens) - 1])
-      // The columns of the grid: a week every two, its last cell one before the next week.
-      const gridWidth = weeks * 2 - 1
-      const column = (day: string) => Math.floor(drawn.findIndex(item => item.day === day) / 7) * 2
-      const legend = (
-        <Box key="heat-legend" flexDirection="row" flexWrap="wrap" justifyContent="space-between" columnGap={2} paddingLeft={4}>
-          <Text>
-            <Text dimColor>{pick(lang, { en: 'No data ', 'zh-TW': '無資料 ' })}</Text>
-            <Text dimColor>·</Text>
-            <Text dimColor>{pick(lang, { en: '  None ', 'zh-TW': '  無用量 ' })}</Text>
-            <Text color={HEAT.none}>■</Text>
-            <Text dimColor>{pick(lang, { en: '  Less ', 'zh-TW': '  少 ' })}</Text>
-            {HEAT.levels.map(color => (
-              <Text color={color}>■</Text>
-            ))}
-            <Text dimColor>{pick(lang, { en: ' More  Selected ', 'zh-TW': ' 多  選到 ' })}</Text>
-            <Text bold color={HEAT.chosen}>
-              ■
-            </Text>
-          </Text>
-          {peak === undefined ? null : (
-            <Text>
-              <Text dimColor>{pick(lang, { en: 'Most ', 'zh-TW': '最多 ' })}</Text>
-              {`${dayLabel(lang, Date.parse(`${peak.day}T12:00:00`))} ${shortCount(peak.tokens ?? 0)}`}
-            </Text>
-          )}
-        </Box>
-      )
+    // A bar of `width` cells shared by `of`: colored spaces in the terminal, an Svg on desktop.
+    const stack = (of: Part[], width: number) => {
+      const shares = splitCells(of.map(part => part.value), width)
       if (Svg !== undefined) {
-        return (
-          <Box key="heatmap" flexDirection="column" marginBottom={1}>
-            <Svg source={svgHeatmap(lang, drawn, chosen, level)} alt={pick(lang, { en: `Tokens per day, ${weeks} weeks`, 'zh-TW': `每天的 token，${weeks} 週` })} width={28 + weeks * 12} height={14 + 7 * 12} />
-            {legend}
-          </Box>
-        )
+        return <Svg source={svgStack(of.map((part, i) => ({ cells: shares[i] ?? 0, fill: part.fill })))} alt={of.map(part => `${part.label} ${n(part.value)}`).join(', ')} width={width * 8} height={8} />
       }
-      // The month row as one line of text: a label at its week's column where it fits.
-      let months = ''
-      for (const mark of monthMarks(lang, drawn)) {
-        const at = mark.week * 2
-        if (at >= cells(months) + (months === '' ? 0 : 1) && at + cells(mark.label) <= gridWidth + 1) {
-          months += ' '.repeat(at - cells(months)) + mark.label
-        }
-      }
-      // Under the grid: the chosen day's column, or the weeks the period covers.
-      let note: RenderNode
-      if (chosen !== '') {
-        const name = dayName(lang, chosen)
-        const at = column(chosen)
-        const fits = at + cells(name) + 2 <= gridWidth
-        note = (
-          <Text>
-            {' '.repeat(fits ? at : Math.max(0, at + 1 - cells(name) - 2))}
-            <Text bold color={HEAT.chosen}>
-              {fits ? `▲ ${name}` : `${name} ▲`}
-            </Text>
-          </Text>
-        )
-      } else if (shown.days === 1) {
-        note = (
-          <Text>
-            {' '.repeat(column(today))}
-            <Text bold>{pick(lang, { en: '▲ today', 'zh-TW': '▲ 今天' })}</Text>
-          </Text>
-        )
-      } else {
-        const from = addDays(today, -(Number(shown.days) - 1))
-        const at = from < first ? 0 : column(from)
-        const span = gridWidth - at
-        const label = daysLabel(lang, Number(shown.days))
-        // Inside the bracket with a rule each side, or where the weeks are too few, before it.
-        const dashes = span - 4 - cells(label)
-        note =
-          dashes >= 2 ? (
-            <Text>
-              {' '.repeat(at)}
-              <Text dimColor>{`└${'─'.repeat(Math.floor(dashes / 2))} `}</Text>
-              <Text bold>{label}</Text>
-              <Text dimColor>{` ${'─'.repeat(Math.ceil(dashes / 2))}┘`}</Text>
-            </Text>
-          ) : (
-            <Text>
-              {' '.repeat(Math.max(0, at - cells(label) - 1))}
-              <Text bold>{label}</Text>
-              <Text dimColor>{` └${'─'.repeat(Math.max(0, span - 2))}┘`}</Text>
-            </Text>
-          )
-      }
-      const labels = weekdayLabels(lang)
 
-      return (
-        <Box key="heatmap" flexDirection="column" marginBottom={1}>
-          <Box key="heat-months" paddingLeft={4}>
-            <Text dimColor wrap="truncate-end">
-              {months === '' ? ' ' : months}
-            </Text>
-          </Box>
-          {labels.map((name, row) => (
-            <Box key={`heat-row:${row}`} flexDirection="row">
-              <Box width={4} flexShrink={0}>
-                <Text dimColor>{name}</Text>
-              </Box>
-              {/* One Text a row, a colored glyph a day: a button a cell made each redraw slow (ADR 0026). */}
-              <Text>
-                {Array.from({ length: weeks }, (_, week) => {
-                  const item = drawn[week * 7 + row]
-                  const gap = week === 0 ? '' : ' '
-                  if (item === undefined) {
-                    return gap
-                  }
-
-                  return [
-                    gap,
-                    item.tokens === null && item.day !== chosen ? (
-                      <Text dimColor>·</Text>
-                    ) : (
-                      <Text color={ink(item)} bold={item.day === chosen}>
-                        ■
-                      </Text>
-                    ),
-                  ]
-                })}
-              </Text>
-            </Box>
-          ))}
-          <Box key="heat-note" paddingLeft={4}>
-            {note}
-          </Box>
-          {legend}
-        </Box>
-      )
+      return <Text>{of.map((part, i) => ((shares[i] ?? 0) === 0 ? '' : <Text backgroundColor={part.ink}>{' '.repeat(shares[i] ?? 0)}</Text>))}</Text>
     }
-    const groupSwitch = switcher(
-      'group',
-      pick(lang, { en: 'Group by ', 'zh-TW': '分組 ' }),
-      'g',
-      GROUP_BYS.map(value => ({ value, label: byLabel[value] })),
-      by,
-      value => void update($, view, current => ({ ...current, by: value, item: '' })),
-    )
-    // Two cards, each a total over a bar of what it is made of: stacked in a dock, side by side
-    // from CARD_COLUMNS. A card's border and padding take four of its columns.
-    const paired = body >= CARD_COLUMNS
-    const cardWidth = paired ? Math.floor((body - 2) / 2) : body
-    const tokenPartsOf = (main: number, sub: number): Part[] => [
-      { key: 'main', label: pick(lang, { en: 'main session', 'zh-TW': '主 session' }), value: main, ...COLORS.main },
-      { key: 'sub', label: 'subagent', value: sub, ...COLORS.sub },
+    // A list row's bar: `cells` of `width` in `▆`, lines apart from the rows above and below
+    // (DESIGN.md「長條」), parts in their own colors.
+    const rowBar = (of: { cells: number; ink: string; fill: string }[], width: number) => {
+      if (Svg !== undefined) {
+        return <Svg source={svgStack(of)} alt="" width={Math.max(1, of.reduce((sum, part) => sum + part.cells, 0)) * 8} height={8} />
+      }
+
+      return <Text>{of.map(part => (part.cells === 0 ? '' : <Text color={part.ink}>{'▆'.repeat(part.cells)}</Text>))}</Text>
+    }
+    // A figure in two lines: its total and unit, what it is made of at the right where that fits, and
+    // a bar the width of the pane.
+    const figure = (key: string, total: string, unit: string, of: Part[], listed: Part[], count: (value: number) => string) => {
+      const aside = listed.map(part => `${part.label} ${count(part.value)}`).join('  ')
+      const fits = cells(`${total} ${unit}`) + 2 + cells(aside) <= body
+
+      return [
+        <Box key={`${key}-line`} flexDirection="row" justifyContent="space-between">
+          <Text>
+            <Text bold>{total}</Text> <Text dimColor>{unit}</Text>
+          </Text>
+          {fits ? <Text>{listed.map((part, i) => [i === 0 ? '' : '  ', <Text color={part.ink}>{part.label}</Text>, ` ${count(part.value)}`])}</Text> : null}
+        </Box>,
+        <Box key={`${key}-bar`}>{stack(of, body)}</Box>,
+      ]
+    }
+    const tokenParts = (main: number, sub: number): Part[] => [
+      { key: 'main', label: pick(lang, { en: 'main', 'zh-TW': '主' }), value: main, ...COLORS.main },
+      { key: 'sub', label: 'sub', value: sub, ...COLORS.sub },
     ]
-    const tokenParts = tokenPartsOf(report.main, report.sub)
     // An opened session's main tokens by model, most first, in alternating shades of purple.
     const modelParts = (byModel: [string, number][]): Part[] =>
       [...byModel]
         .sort((a, b) => b[1] - a[1])
         .map(([model, value], i) => ({ key: `main:${model}`, label: model, value, ...MAIN_SHADES[i % MAIN_SHADES.length]! }))
-    const kindPartsOf = (s: Report['spawned']): Part[] => [
-      {
-        key: 'named',
-        label: pick(lang, { en: 'named a model', 'zh-TW': '指定模型' }),
-        short: pick(lang, { en: 'named', 'zh-TW': '指定' }),
-        tally: pick(lang, { en: ` (Opus: ${s.opus})`, 'zh-TW': `（Opus ${s.opus}）` }),
-        value: s.explicit,
-        ...COLORS.named,
-      },
-      { key: 'default', label: pick(lang, { en: 'default model', 'zh-TW': '沿用預設' }), short: pick(lang, { en: 'default', 'zh-TW': '預設' }), value: s.defaults, ...COLORS.default },
-      {
-        key: 'fork',
-        label: 'fork',
-        note: pick(lang, { en: " (main session's model)", 'zh-TW': '（用主 session 的模型）' }),
-        short: 'fork',
-        value: s.forks,
-        ...COLORS.fork,
-      },
+    const kindParts = (s: Report['spawned']): Part[] => [
+      { key: 'named', label: pick(lang, { en: 'named', 'zh-TW': '指定' }), value: s.explicit, ...COLORS.named },
+      { key: 'default', label: pick(lang, { en: 'default', 'zh-TW': '預設' }), value: s.defaults, ...COLORS.default },
+      { key: 'fork', label: 'fork', value: s.forks, ...COLORS.fork },
     ]
-    const kindParts = kindPartsOf(report.spawned)
-    const card = (key: string, title: string, aside: RenderNode, total: string, parts: Part[], legendKey: string) => (
-      <Box key={`card:${key}`} flexDirection="column" width={cardWidth} flexShrink={0} {...CARD}>
-        <Box flexDirection="row" justifyContent="space-between" gap={1}>
-          <Text dimColor>{title}</Text>
-          {aside}
+    // The tokens and the spawns, each a figure, then the cache read they leave out.
+    const summary = (made: Part[], spawned: Report['spawned'], cacheRead: number) => (
+      <Box key="summary" flexDirection="column" marginTop={1}>
+        {figure('tokens', shortCount(made.reduce((sum, part) => sum + part.value, 0)), 'token', made, made.filter(part => part.value > 0), shortCount)}
+        {spawned.all === 0 ? null : figure('spawns', String(spawned.all), pick(lang, { en: 'spawns', 'zh-TW': '次派出' }), kindParts(spawned), kindParts(spawned), String)}
+        <Box key="cache-read">
+          <Text dimColor>{pick(lang, { en: `Cache read ${shortCount(cacheRead)}, not counted`, 'zh-TW': `快取讀取 ${shortCount(cacheRead)} 另計` })}</Text>
         </Box>
-        <Text bold>{total}</Text>
-        {stack(parts, cardWidth - 4)}
-        {parts.map(part => (
-          <Box key={`${legendKey}:${part.key}`} flexDirection="row" justifyContent="space-between" gap={1}>
-            <Box flexShrink={1}>
-              <Text wrap="truncate-end">
-                <Text color={part.ink}>●</Text> {part.label}
-                {part.tally === undefined && part.note === undefined ? '' : <Text dimColor>{`${part.tally ?? ''}${part.note ?? ''}`}</Text>}
-              </Text>
-            </Box>
-            <Text>{n(part.value)}</Text>
-          </Box>
-        ))}
       </Box>
     )
-    // An opened row's card: its total and `aside`, and only when it has more than one part, the bar and a
-    // legend on one line by short labels: `named 22 (Opus: 0)`. A spawns card always splits.
-    const compact = (key: string, total: RenderNode, aside: RenderNode, parts: Part[], kinds = false) => {
-      const split = kinds || parts.filter(part => part.value > 0).length > 1
-
-      return (
-        <Box key={`card:${key}`} flexDirection="column" width={cardWidth} flexShrink={0} {...CARD}>
-          <Box flexDirection="row" justifyContent="space-between" gap={1}>
-            {total}
-            {aside}
-          </Box>
-          {split ? stack(parts, cardWidth - 4) : null}
-          {split ? (
-            <Text wrap="wrap">
-              {parts.map((part, i) => [
-                i === 0 ? '' : '  ',
-                <Text color={part.ink}>●</Text>,
-                ` ${part.short ?? part.label} ${n(part.value)}`,
-                part.tally === undefined ? '' : <Text dimColor>{part.tally}</Text>,
-              ])}
-            </Text>
-          ) : null}
-        </Box>
-      )
-    }
-    const stack = (parts: Part[], width: number) => {
-      const cells = splitCells(parts.map(part => part.value), width)
-      if (Svg !== undefined) {
-        return <Svg source={svgStack(parts.map((part, i) => ({ cells: cells[i] ?? 0, fill: part.fill })))} alt={parts.map(part => `${part.label} ${n(part.value)}`).join(', ')} width={width * 8} height={8} />
-      }
-
-      return (
-        <Text>
-          {parts.map((part, i) => ((cells[i] ?? 0) === 0 ? '' : <Text backgroundColor={part.ink}>{' '.repeat(cells[i] ?? 0)}</Text>))}
-        </Text>
-      )
-    }
+    const note = (key: string, text: string) => (
+      <Box key={key} marginTop={1}>
+        {emptyState(parts, text)}
+      </Box>
+    )
 
     if (open !== undefined) {
       const sort: SortBy = shown.sort in SORTS ? (shown.sort as SortBy) : 'tokens'
       const listed = open.detail
         .flatMap(part => part.spawns.map(spawn => ({ spawn, session: part.session })))
         .sort((a, b) => SORTS[sort](b.spawn) - SORTS[sort](a.spawn))
-      const limit = Math.max(PAGE, Number(shown.limit) || PAGE)
-      const openMain = open.detail.reduce((sum, part) => sum + part.main, 0)
-      const openSub = open.tokens - openMain
+      const openSub = open.tokens - open.main
       const counted = countKinds(listed.map(item => item.spawn))
       const top = Math.max(1, ...listed.map(item => tokens(item.spawn)))
-      const rowBar = wide ? 16 : 8
+      const barWidth = body >= WIDE_COLUMNS ? 16 : 8
       // A row with no spawns lists its sessions instead, by tokens or by when they started.
       const bySessions = listed.length === 0
       const sessionRows = bySessions ? [...open.detail].sort((a, b) => (sort === 'time' ? b.session.started - a.session.started : b.main - a.main)) : []
       const topMain = Math.max(1, ...sessionRows.map(part => part.main))
       const count = bySessions ? sessionRows.length : listed.length
+      const cellsOf = (part: number, whole: number) => barCells(part, whole, barWidth)
 
       return (
         <Box flexDirection="column" {...frame}>
           {title}
           {/* The back button and the crumb keep their width; only the row's name gives way. */}
-          <Box flexDirection="row" gap={1}>
+          <Box key="crumb" flexDirection="row" gap={1}>
             <Box flexShrink={0}>
-              <Button key="back" plain hotkey="b" onPress={() => void update($, view, current => ({ ...current, item: '' }))}>
+              <Button key="back" plain hotkey="b" onPress={() => void update($, view, current => ({ ...current, item: '', limit: PAGE }))}>
                 <Text>{pick(lang, { en: '‹ Back', 'zh-TW': '‹ 返回' })}</Text>
               </Button>
             </Box>
             <Box flexShrink={0}>
-              <Text dimColor>{byLabel[by]} ›</Text>
+              <Text dimColor> {crumbLabel[by]} ›</Text>
             </Box>
             <Box flexShrink={1} minWidth={0}>
               <Text bold wrap="truncate-end">
@@ -1240,34 +1007,24 @@ export const register: Register = (on, options) => {
               </Text>
             </Box>
           </Box>
-          <Text dimColor>{chosen === '' ? daysLabel(lang, shown.days) : dayName(lang, chosen)}</Text>
-          <Box key="cards" flexDirection={paired ? 'row' : 'column'} marginTop={1} gap={paired ? 2 : 0}>
-            {compact(
-              'tokens',
-              <Text>
-                <Text bold>{n(open.tokens)}</Text> <Text dimColor>token</Text>
-              </Text>,
-              openSub === 0 ? null : (
-                <Text color={COLORS.sub.ink}>{pick(lang, { en: `by subagents ${share(openSub, open.tokens)}`, 'zh-TW': `subagent 佔 ${share(openSub, open.tokens)}` })}</Text>
-              ),
-              by === 'session' ? [...modelParts(open.detail.flatMap(part => part.session.mainByModel)), ...tokenPartsOf(openMain, openSub).slice(1)] : tokenPartsOf(openMain, openSub),
-            )}
-            {counted.all === 0
-              ? null
-              : compact(
-                  'spawns',
-                  <Text>
-                    <Text bold>{counted.all}</Text> <Text dimColor>{pick(lang, { en: 'spawns', 'zh-TW': '次派出' })}</Text>
-                  </Text>,
-                  null,
-                  kindPartsOf(counted),
-                  true,
-                )}
+          {/* The period as the overview set it, to read only. */}
+          <Box key="period" marginTop={1}>
+            <Text wrap="truncate-end">
+              <Text dimColor>{pick(lang, { en: 'Period ', 'zh-TW': '期間 ' })}</Text>
+              {daysLabel(lang, days)}
+              <Text dimColor> · </Text>
+              <Text bold>{periodName()}</Text>
+            </Text>
           </Box>
+          {summary(
+            by === 'session' ? [...modelParts(open.detail.flatMap(part => part.session.mainByModel)), ...tokenParts(open.main, openSub).slice(1)] : tokenParts(open.main, openSub),
+            counted,
+            open.cacheRead,
+          )}
           {/* Under a rule: the sort, the column names, then a row per spawn, or for a row with no spawns
               (a model only the main session used, or the main session by type) a row per session. */}
           <Box key="list" flexDirection="column" marginTop={1}>
-            {rule('list-rule')}
+            {rule}
             <Box>
               {switcher(
                 'sort',
@@ -1287,7 +1044,7 @@ export const register: Register = (on, options) => {
               <Box flexGrow={1} flexShrink={1}>
                 <Text dimColor>{bySessions ? 'session' : pick(lang, { en: 'Spawns', 'zh-TW': '派出' })}</Text>
               </Box>
-              <Box width={rowBar} flexShrink={0} />
+              <Box width={barWidth} flexShrink={0} />
               <Box width={9} flexShrink={0} justifyContent="flex-end">
                 <Text dimColor>token</Text>
               </Box>
@@ -1306,8 +1063,8 @@ export const register: Register = (on, options) => {
                   <Box flexGrow={1} flexShrink={1}>
                     <Text wrap="truncate-end">{promptOf(part.session)}</Text>
                   </Box>
-                  <Box width={rowBar} flexShrink={0}>
-                    {cellBar(part.main, topMain, rowBar)}
+                  <Box width={barWidth} flexShrink={0}>
+                    {rowBar([{ cells: cellsOf(part.main, topMain), ...COLORS.main }], barWidth)}
                   </Box>
                   <Box width={9} flexShrink={0} justifyContent="flex-end">
                     <Text>{n(part.main)}</Text>
@@ -1354,8 +1111,8 @@ export const register: Register = (on, options) => {
                       <Text wrap="truncate-end">{spawnParts(lang, spawn)[0]}</Text>
                     </Button>
                   </Box>
-                  <Box width={rowBar} flexShrink={0}>
-                    {cellBar(tokens(spawn), top, rowBar)}
+                  <Box width={barWidth} flexShrink={0}>
+                    {rowBar([{ cells: cellsOf(tokens(spawn), top), ...COLORS.sub }], barWidth)}
                   </Box>
                   <Box width={9} flexShrink={0} justifyContent="flex-end">
                     <Text>{n(tokens(spawn))}</Text>
@@ -1401,153 +1158,362 @@ export const register: Register = (on, options) => {
       )
     }
 
-    // A chosen day with nothing to count says why in place of the cards: no use, or no record.
-    const chosenNote =
-      chosen === ''
-        ? undefined
-        : chosenTokens === null
-          ? pick(lang, {
-              en: `${dayHead(lang, chosen)}: no data (neither a ledger nor a day row has this day: before the backfill, or its transcript was deleted).`,
-              'zh-TW': `${dayHead(lang, chosen)}沒有資料（帳本與每日摘要都沒有這天：回填以前，或 transcript 已被刪掉）。`,
-            })
-          : chosenTokens === 0
-            ? pick(lang, {
-                en: `${dayHead(lang, chosen)}: no usage (the day was recorded; the main session and subagents used 0 tokens).`,
-                'zh-TW': `${dayHead(lang, chosen)}沒有用量（這天有紀錄，主 session 和 subagent 都是 0 token）。`,
-              })
-            : undefined
+    // The heatmap: a cell a day, a week a column, the days outside the period dimmed, and under it the
+    // period's mark beside as much of the legend as fits.
+    const heatmap = () => {
+      if (body < HEAT_COLUMNS) {
+        return null
+      }
+      const weeks = heatWeeks(body)
+      const first = heatStart(weeks, now)
+      const drawn = heat.filter(item => item.day >= first)
+      const level = heatLevels(drawn)
+      const inside = (day: string) => day >= begin && day <= end
+      const one = (day: string) => days === 1 && day === end
+      const peak = drawn.reduce<HeatDay | undefined>((most, item) => ((item.tokens ?? 0) > (most?.tokens ?? 0) ? item : most), undefined)
+      const ink = (item: HeatDay) => (one(item.day) ? HEAT.chosen : item.tokens === 0 ? HEAT.none : HEAT.levels[level(item.tokens) - 1])
+      const weekOf = (day: string) => Math.floor((daysBetween(first, day) - 1) / 7)
+      const lengthLabel = daysLabel(lang, days)
+      const legend: { width: number; node: RenderNode }[] = [
+        {
+          width: cells(pick(lang, { en: 'Less ■■■■ More', 'zh-TW': '少 ■■■■ 多' })),
+          node: (
+            <Text>
+              <Text dimColor>{pick(lang, { en: 'Less ', 'zh-TW': '少 ' })}</Text>
+              {HEAT.levels.map(color => (
+                <Text color={color}>■</Text>
+              ))}
+              <Text dimColor>{pick(lang, { en: ' More', 'zh-TW': ' 多' })}</Text>
+            </Text>
+          ),
+        },
+        {
+          width: cells(pick(lang, { en: 'None ■', 'zh-TW': '無用量 ■' })),
+          node: (
+            <Text>
+              <Text dimColor>{pick(lang, { en: 'None ', 'zh-TW': '無用量 ' })}</Text>
+              <Text color={HEAT.none}>■</Text>
+            </Text>
+          ),
+        },
+        { width: cells(pick(lang, { en: 'No data ·', 'zh-TW': '無資料 ·' })), node: <Text dimColor>{pick(lang, { en: 'No data ·', 'zh-TW': '無資料 ·' })}</Text> },
+      ]
+      if (peak !== undefined) {
+        const most = `${shortDay(lang, peak.day)} ${shortCount(peak.tokens ?? 0)}`
+        const word = pick(lang, { en: 'Most ', 'zh-TW': '最多 ' })
+        legend.push({
+          width: cells(word + most),
+          node: (
+            <Text>
+              <Text dimColor>{word}</Text>
+              {most}
+            </Text>
+          ),
+        })
+      }
+      if (Svg !== undefined) {
+        const height = 14 + 7 * 12 + 22
+        return (
+          <Box key="heatmap" flexDirection="column" marginBottom={1}>
+            <Svg
+              source={svgHeatmap(lang, drawn, begin, end, days === 1, level, lengthLabel, dayHead(lang, end))}
+              alt={pick(lang, { en: `Tokens per day, ${weeks} weeks; the period bracketed`, 'zh-TW': `每天的 token，${weeks} 週，括號標出期間` })}
+              width={28 + weeks * 12}
+              height={height}
+            />
+            <Box key="heat-note">
+              <Text wrap="wrap">{legend.map((item, i) => [i === 0 ? '' : '  ', item.node])}</Text>
+            </Box>
+          </Box>
+        )
+      }
+      // The month row as one line of text: a label at its week's column where it fits.
+      const gridWidth = weeks * 2 - 1
+      let months = ''
+      for (const mark of monthMarks(lang, drawn)) {
+        const at = mark.week * 2
+        if (at >= cells(months) + (months === '' ? 0 : 1) && at + cells(mark.label) <= gridWidth + 1) {
+          months += ' '.repeat(at - cells(months)) + mark.label
+        }
+      }
+      // Under the grid, one line: the period's mark and as much of the legend as fits beside it.
+      const mark = periodMark(body, weekOf(begin), weekOf(end), lengthLabel, days === 1 ? dayHead(lang, end) : undefined)
+      const fitted = fitLegend(body, mark === undefined ? undefined : { at: mark.at, width: cells(mark.text) }, legend.map(item => item.width))
+      const line: RenderNode[] = []
+      let column = 0
+      const moveTo = (at: number) => {
+        if (at > column) {
+          line.push(' '.repeat(at - column))
+          column = at
+        }
+      }
+      const putLegend = () => {
+        moveTo(fitted.at)
+        legend.slice(0, fitted.count).forEach((item, i) => {
+          line.push(i === 0 ? '' : '  ', item.node)
+          column += (i === 0 ? 0 : 2) + item.width
+        })
+      }
+      const putMark = () => {
+        if (mark !== undefined) {
+          moveTo(mark.at)
+          line.push(days === 1 ? <Text bold color={HEAT.chosen}>{mark.text}</Text> : mark.text)
+          column += cells(mark.text)
+        }
+      }
+      if (fitted.count > 0 && fitted.at <= (mark?.at ?? body)) {
+        putLegend()
+        putMark()
+      } else {
+        putMark()
+        putLegend()
+      }
+      const labels = weekdayLabels(lang)
 
-    // The days the period covers, or for a chosen day how to go back. The day steps share the line
-    // where it all fits, and go to the next line where it does not (a docked pane): the terminal
-    // draws `p: ` before a plain button with a hotkey.
-    const periodAside =
-      chosen === '' ? range(lang, report) : pick(lang, { en: `1 day · p back to ${daysLabel(lang, shown.days)}`, 'zh-TW': `1 天 · p 回到 ${daysLabel(lang, shown.days)}` })
-    const periodWidth = cells(periodLabel) + 3 + cells(`‹ ${chosen === '' ? daysLabel(lang, shown.days) : dayName(lang, chosen)} ›`) + 2 + cells(periodAside)
-    const stepsWidth = 3 + cells(pick(lang, { en: '‹ Prev day', 'zh-TW': '‹ 前一天' })) + 2 + 3 + cells(pick(lang, { en: 'Next day ›', 'zh-TW': '後一天 ›' }))
-    const headerFits = periodWidth + 2 + stepsWidth <= body
+      return (
+        <Box key="heatmap" flexDirection="column" marginBottom={1}>
+          <Box key="heat-months" paddingLeft={4}>
+            <Text dimColor wrap="truncate-end">
+              {months === '' ? ' ' : months}
+            </Text>
+          </Box>
+          {labels.map((name, row) => (
+            <Box key={`heat-row:${row}`} flexDirection="row">
+              <Box width={4} flexShrink={0}>
+                <Text dimColor>{name}</Text>
+              </Box>
+              {/* One Text a row, a colored glyph a day: a button a cell made each redraw slow (ADR 0026). */}
+              <Text>
+                {Array.from({ length: weeks }, (_, week) => {
+                  const item = drawn[week * 7 + row]
+                  const gap = week === 0 ? '' : ' '
+                  if (item === undefined) {
+                    return gap
+                  }
+
+                  return [
+                    gap,
+                    item.tokens === null && !one(item.day) ? (
+                      <Text dimColor>·</Text>
+                    ) : (
+                      <Text color={ink(item)} bold={one(item.day)} dimColor={!inside(item.day)}>
+                        ■
+                      </Text>
+                    ),
+                  ]
+                })}
+              </Text>
+            </Box>
+          ))}
+          <Box key="heat-note">
+            <Text>{line.length === 0 ? ' ' : line}</Text>
+          </Box>
+        </Box>
+      )
+    }
+
+    // The period: its length, moved back and forth by that length, and today at the right. Where it
+    // does not fit, the word goes, then the spaces in the days and around them; then `t` wraps. The
+    // terminal draws `p: ` before a plain button with a hotkey.
+    const periodWord = pick(lang, { en: 'Period ', 'zh-TW': '期間 ' })
+    const todayWord = pick(lang, { en: 'Today', 'zh-TW': '今天' })
+    const fullName = days === 1 && end === today ? pick(lang, { en: `Today, ${periodName()}`, 'zh-TW': `今天 ${periodName()}` }) : periodName()
+    const variants = [
+      { word: true, gap: 2, name: fullName },
+      { word: false, gap: 2, name: fullName },
+      { word: false, gap: 1, name: periodName(true) },
+    ]
+    const widthOf = (v: (typeof variants)[number]) =>
+      (v.word ? cells(periodWord) : 0) + 3 + cells(`‹ ${daysLabel(lang, days)} ›`) + v.gap + cells('h: ‹') + cells(` ${v.name} `) + cells('l: ›') + 2 + 3 + cells(todayWord)
+    const variant = variants.find(v => widthOf(v) <= body) ?? variants[2]!
+    const moveEnd = (to: string) => void update($, view, current => ({ ...current, end: to === today ? '' : to, item: '', limit: PAGE }))
+    const period = (
+      <Box key="period" flexDirection="row" flexWrap="wrap" justifyContent="space-between" columnGap={2}>
+        <Box key="period-days" flexDirection="row" flexShrink={0}>
+          {switcher(
+            'days',
+            variant.word ? periodWord : '',
+            'p',
+            PERIODS.map(value => ({ value: String(value), label: daysLabel(lang, value) })),
+            String(days),
+            value => void update($, view, current => ({ ...current, days: Number(value), end: end === today ? '' : end, item: '', limit: PAGE })),
+          )}
+          <Text>{' '.repeat(variant.gap)}</Text>
+          <Button key="earlier" plain hotkey="h" onPress={() => moveEnd(movePeriod(end, days, -1, today, oldest))}>
+            <Text>‹</Text>
+          </Button>
+          <Text bold {...(days === 1 ? { color: HEAT.chosen } : {})}>{` ${variant.name} `}</Text>
+          <Button key="later" plain hotkey="l" onPress={() => moveEnd(movePeriod(end, days, 1, today, oldest))}>
+            <Text>›</Text>
+          </Button>
+        </Box>
+        <Button key="today" plain hotkey="t" onPress={() => void update($, view, current => ({ ...current, days: 1, end: '', item: '', limit: PAGE }))}>
+          <Text {...(days === 1 && end === today ? { dimColor: true } : {})}>{todayWord}</Text>
+        </Button>
+      </Box>
+    )
+
+    // A row a line: the name, then the columns that fit by how much they matter (DESIGN.md「欄位清單」).
+    type ListColumn = Column & { head: string; value?: (row: Group) => string; left?: boolean; max?: number; ink?: string }
+    const subOf = (row: Group) => row.tokens - row.main
+    const listed = rows.reduce((sum, row) => sum + row.tokens, 0)
+    const last: ListColumn = { key: 'last', head: pick(lang, { en: 'Last', 'zh-TW': '上次' }), width: 0, priority: 7, value: row => (row.last === '' ? '—' : shortDay(lang, row.last)) }
+    const average: ListColumn = {
+      key: 'average',
+      head: pick(lang, { en: 'Avg/spawn', 'zh-TW': '平均/次' }),
+      width: 0,
+      priority: 6,
+      value: row => (row.spawns === 0 ? '—' : shortCount(subOf(row) / row.spawns)),
+    }
+    const own: Record<GroupBy, ListColumn[]> = {
+      repo: [{ key: 'sessions', head: 'session', width: 0, priority: 6, value: row => String(new Set(row.detail.map(part => part.session)).size) }, last],
+      session: [
+        { key: 'repo', head: 'repo', width: 0, priority: 6, left: true, max: 14, value: row => repoName(lang, row.detail[0]?.session.repo ?? '') },
+        { key: 'started', head: pick(lang, { en: 'Started', 'zh-TW': '開始' }), width: 0, priority: 7, value: row => stamp(lang, row.detail[0]?.session.started ?? 0) },
+      ],
+      model: [average, last],
+      type: [average, last],
+    }
+    const barWidth = listBarWidth(body)
+    const base: ListColumn[] = [
+      { key: 'tokens', head: 'token', width: 0, priority: 1, value: row => shortCount(row.tokens) },
+      { key: 'share', head: pick(lang, { en: 'Share', 'zh-TW': '佔比' }), width: 0, priority: 4, value: row => share(row.tokens, listed) },
+      { key: 'bar', head: '', width: barWidth, priority: 3 },
+      { key: 'sub', head: 'sub', width: 0, priority: 5, value: row => share(subOf(row), row.tokens), ink: COLORS.sub.ink },
+      { key: 'spawns', head: pick(lang, { en: 'Spawns', 'zh-TW': '派出' }), width: 0, priority: 2, value: row => String(row.spawns) },
+      {
+        key: 'kinds',
+        head: pick(lang, { en: 'Named/default/fork', 'zh-TW': '指定/預設/fork' }),
+        width: 0,
+        priority: 8,
+        value: row => {
+          const kinds = countKinds(row.detail.flatMap(part => part.spawns))
+
+          return `${kinds.explicit}/${kinds.defaults}/${kinds.forks}`
+        },
+      },
+      ...own[by],
+      { key: 'cache', head: pick(lang, { en: 'Cache read', 'zh-TW': '快取讀取' }), width: 0, priority: 9, value: row => shortCount(row.cacheRead) },
+    ]
+    const columns = base.map(column =>
+      column.value === undefined ? column : { ...column, width: Math.min(column.max ?? Infinity, Math.max(cells(column.head), ...rows.map(row => cells(column.value!(row))))) },
+    )
+    const groupLabel: Record<GroupBy, string> = {
+      repo: pick(lang, { en: 'by repo', 'zh-TW': '依 repo' }),
+      session: pick(lang, { en: 'by session', 'zh-TW': '依 session' }),
+      model: pick(lang, { en: 'by model', 'zh-TW': '依模型' }),
+      type: pick(lang, { en: 'by type', 'zh-TW': '依種類' }),
+    }
+    // The name keeps 16 cells, and room for the grouping's switch heading it in the terminal.
+    const nameMin = Math.max(16, ...(Svg === undefined ? GROUP_BYS.map(value => 3 + cells(`‹ ${groupLabel[value]} ›`)) : []))
+    const fitted = fitColumns(columns, body, nameMin)
+    const nameWidth = Math.max(1, body - fitted.used)
+    const maxTokens = Math.max(1, ...rows.map(row => row.tokens))
+    const groupSwitch = switcher(
+      'group',
+      '',
+      'g',
+      GROUP_BYS.map(value => ({ value, label: groupLabel[value] })),
+      by,
+      value => void update($, view, current => ({ ...current, by: value, item: '', limit: PAGE })),
+    )
+    const cell = (column: ListColumn, row: Group) => {
+      if (column.key === 'bar') {
+        const length = barCells(row.tokens, maxTokens, column.width)
+        const sub = subOf(row) > 0 ? Math.max(1, Math.round((length * subOf(row)) / row.tokens)) : 0
+
+        return rowBar(
+          [
+            { cells: Math.max(0, length - sub), ...COLORS.main },
+            { cells: Math.min(sub, length), ...COLORS.sub },
+          ],
+          column.width,
+        )
+      }
+      const value = fit(column.value!(row), column.width)
+      const plain = column.key === 'tokens' || column.key === 'spawns'
+
+      return column.ink !== undefined ? <Text color={column.ink}>{value}</Text> : <Text dimColor={!plain}>{value}</Text>
+    }
+    const list = (
+      <Box key="list" flexDirection="column" marginTop={1}>
+        {Svg === undefined ? null : <Box key="group-line">{groupSwitch}</Box>}
+        <Box key="list-columns" flexDirection="row">
+          <Box width={nameWidth} flexShrink={0}>
+            {Svg === undefined ? groupSwitch : null}
+          </Box>
+          {fitted.shown.map(column => (
+            <Box key={`head:${column.key}`} width={column.width} marginLeft={2} flexShrink={0} justifyContent={column.left ? 'flex-start' : 'flex-end'}>
+              <Text dimColor>{column.head}</Text>
+            </Box>
+          ))}
+        </Box>
+        {rule}
+        {rows.slice(0, limit).map(row => {
+          // The name is cut by cells, with two to spare for what the terminal draws around a button (a
+          // Button's text wraps instead of truncating once CJK and Latin mix).
+          const session = by === 'session' ? row.detail[0]?.session : undefined
+
+          return (
+            <Box key={`line-${row.key}`} flexDirection="row">
+              <Box width={nameWidth} flexShrink={0}>
+                <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key, sort: 'tokens', limit: PAGE, spawn: '' }))}>
+                  <Text>{fit(session === undefined ? row.label : promptOf(session), Math.max(1, nameWidth - 2))}</Text>
+                </Button>
+              </Box>
+              {fitted.shown.map(column => (
+                <Box key={`${row.key}:${column.key}`} width={column.width} marginLeft={2} flexShrink={0} justifyContent={column.left ? 'flex-start' : 'flex-end'}>
+                  {cell(column, row)}
+                </Box>
+              ))}
+            </Box>
+          )
+        })}
+        {rows.length > limit ? (
+          <Box key="more-line">
+            <Button key="more" plain hotkey="m" onPress={() => void update($, view, current => ({ ...current, limit: limit + PAGE }))}>
+              <Text>{pick(lang, { en: `${rows.length - limit} more ▸`, 'zh-TW': `還有 ${rows.length - limit} 筆 ▸` })}</Text>
+            </Button>
+          </Box>
+        ) : null}
+      </Box>
+    )
+
+    // In place of the summary: why there is nothing to count. Nothing recorded at all keeps the long
+    // sentence on how recording starts.
+    const said = days === 1 ? dayHead(lang, end) : span(lang, begin, end)
+    const nothing = heat.every(item => item.tokens === null) && report.sessions.length === 0
+    const inPeriod = heat.filter(item => item.day >= begin && item.day <= end)
+    const empty =
+      all > 0
+        ? undefined
+        : nothing
+          ? emptyText(lang)
+          : inPeriod.some(item => item.tokens !== null)
+            ? pick(lang, { en: `${said}: no usage.`, 'zh-TW': `${said}${days === 1 ? '' : ' '}沒有用量。` })
+            : pick(lang, { en: `${said}: no data.`, 'zh-TW': `${said}${days === 1 ? '' : ' '}沒有資料。` })
+    const pruned = pick(lang, {
+      en: `${said}: the details are kept ${MAX_DAYS} days and were deleted.`,
+      'zh-TW': `${said}${days === 1 ? '' : ' '}的詳細資料保存超過 ${MAX_DAYS} 天，已刪除。`,
+    })
 
     return (
       <Box flexDirection="column" {...frame}>
         {title}
         {heatmap()}
-        {/* The period, then the days it covers, and the day steps at the right; the grouping heads the list below. */}
-        <Box key="header" flexDirection={headerFits ? 'row' : 'column'} justifyContent="space-between" columnGap={2}>
-          <Box flexDirection="row" gap={2} flexShrink={1} minWidth={0}>
-            <Box flexShrink={0}>{periodSwitch}</Box>
-            <Box flexShrink={1}>
-              <Text dimColor wrap="truncate-end">
-                {periodAside}
-              </Text>
-            </Box>
-          </Box>
-          {dayButtons}
-        </Box>
-        {chosenNote !== undefined ? (
-          <Box marginTop={1}>{emptyState(parts, chosenNote)}</Box>
-        ) : report.sessions.length === 0 && chosenRow === undefined ? (
-          <Box marginTop={1}>{emptyState(parts, emptyText(lang))}</Box>
+        {period}
+        {empty !== undefined ? (
+          note('empty-note', empty)
         ) : (
-          <Box flexDirection="column">
-            <Box key="cards" flexDirection={paired ? 'row' : 'column'} marginTop={1} gap={paired ? 2 : 0}>
-              {card(
-                'tokens',
-                pick(lang, { en: 'Tokens', 'zh-TW': '總 token' }),
-                <Text color={COLORS.sub.ink}>{pick(lang, { en: `by subagents ${share(report.sub, all)}`, 'zh-TW': `subagent 佔 ${share(report.sub, all)}` })}</Text>,
-                n(all),
-                tokenParts,
-                'share',
-              )}
-              {card(
-                'spawns',
-                pick(lang, { en: 'Spawns', 'zh-TW': '派出' }),
-                <Text dimColor>{pick(lang, { en: 'where the model came from', 'zh-TW': '模型怎麼來' })}</Text>,
-                pick(lang, { en: String(report.spawned.all), 'zh-TW': `${report.spawned.all} 次` }),
-                kindParts,
-                'spawned',
-              )}
-            </Box>
-            <Box key="cache-read" flexDirection={cells(cacheText) + 1 + cells(updatedText) <= body ? 'row' : 'column'} justifyContent="space-between" columnGap={1}>
-              <Text dimColor wrap="wrap">
-                {cacheText}
-              </Text>
-              <Box flexShrink={0}>
-                <Text dimColor>{updatedText}</Text>
-              </Box>
-            </Box>
-            <Box key="list" flexDirection="column" marginTop={1}>
-              {rule('list-rule')}
-              {chosenRow === undefined ? (
-                <Box key="group-line">{groupSwitch}</Box>
-              ) : (
-                emptyState(
-                  parts,
-                  pick(lang, {
-                    en: `Only the day's summary is kept for ${dayHead(lang, chosen)}: its sessions and spawns were pruned with the ledgers after ${MAX_DAYS} days.`,
-                    'zh-TW': `${dayHead(lang, chosen)}只剩每日摘要：各 session 與派出已隨帳本在 ${MAX_DAYS} 天後刪除。`,
-                  }),
-                )
-              )}
-            </Box>
-            {rows.map(row => {
-              // Each row is a card: its name with its spawns at the right, a session's time and repo, then its
-              // bar with the tokens and share at the right. The name is cut by cells to leave the count its
-              // own fixed width (a Button's text wraps instead of truncating once CJK and Latin mix), with two
-              // columns to spare for what the terminal draws around a button.
-              const session = by === 'session' ? row.detail[0]?.session : undefined
-              const count = spawnCount(row.spawns)
-              const label = fit(session === undefined ? row.label : promptOf(session), Math.max(1, rowInner - cells(count) - 3))
-
-              return (
-                <Box key={`line-${row.key}`} flexDirection="column" {...CARD}>
-                  <Box key={`name:${row.key}`} flexDirection="row" gap={1}>
-                    {/* A Button holds only text, so the name is the button and the count sits beside it. */}
-                    <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
-                      <Button key={`row:${row.key}`} plain onPress={() => void update($, view, current => ({ ...current, item: row.key, sort: 'tokens', limit: PAGE, spawn: '' }))}>
-                        <Text wrap="truncate-end">{label}</Text>
-                      </Button>
-                    </Box>
-                    <Box width={cells(count)} flexShrink={0}>
-                      <Text dimColor wrap="truncate-end">
-                        {count}
-                      </Text>
-                    </Box>
-                  </Box>
-                  {session === undefined ? null : (
-                    <Box key={`meta:${row.key}`}>
-                      <Text dimColor wrap="truncate-end">
-                        {fit(`${stamp(lang, session.started)} · ${repoName(lang, session.repo)}`, rowInner)}
-                      </Text>
-                    </Box>
-                  )}
-                  <Box key={`bar:${row.key}`} flexDirection="row" gap={1}>
-                    <Box flexGrow={1} flexShrink={1}>
-                      {bar(row.tokens)}
-                    </Box>
-                    <Box width={11} flexShrink={0} justifyContent="flex-end">
-                      <Text>{n(row.tokens)}</Text>
-                    </Box>
-                    <Box width={5} flexShrink={0} justifyContent="flex-end">
-                      <Text dimColor>{share(row.tokens, all)}</Text>
-                    </Box>
-                  </Box>
-                </Box>
-              )
-            })}
+          <Box key="body" flexDirection="column">
+            {summary(tokenParts(report.main, report.sub), report.spawned, report.cacheRead)}
+            {!report.kept ? note('pruned', pruned) : rows.length === 0 ? null : list}
           </Box>
         )}
         {/* Takes up what the list leaves, so the hint line sits at the foot of a docked pane. The period
             and group buttons already show their keys. */}
         <Box key="spacer" flexGrow={1} />
-        {hintLine(
-          parts,
-          lang,
-          report.sessions.length === 0
-            ? []
-            : [
-                { en: 'Tab moves', 'zh-TW': 'Tab 移動' },
-                { en: 'Enter opens a row', 'zh-TW': 'Enter 打開一列' },
-              ],
-        )}
+        {hintLine(parts, lang, [{ en: 'Tab moves', 'zh-TW': 'Tab 移動' }, ...(empty === undefined && rows.length > 0 ? [{ en: 'Enter opens a row', 'zh-TW': 'Enter 打開一列' }] : [])])}
       </Box>
     )
   })

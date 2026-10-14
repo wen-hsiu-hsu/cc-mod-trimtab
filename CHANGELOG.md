@@ -3,6 +3,29 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [0.9.0] - 2026-10-14
+
+| Mod | Version |
+| --- | --- |
+| `subagent-dispatch` | 0.6.0 |
+- `subagent-dispatch` 0.6.0:
+  - Changed: the stats period is a window you move. `p` changes its length and
+    keeps its last day, `h` / `l` move it back and forth by that length, and
+    `t` jumps to today alone. `j` / `k` and choosing a single day are gone:
+    a day is a 1-day period. The heatmap dims the days outside the period.
+  - Changed: the summary drops its card frames: the tokens and the spawns are
+    two lines each, the total with its parts at the right over a bar across the
+    pane. `Updated` moves to the title line.
+  - Changed: the overview lists one row a line under column names: tokens,
+    share, a bar, sub share, spawns, the three kinds, two columns of the
+    grouping's own (such as `Last`, the last day the row used tokens) and cache
+    read. Columns that do not fit are dropped, least important first. The list
+    shows ten rows and `m` ten more.
+  - Changed: an opened row shows the period to read only and the same summary;
+    bars in rows above and below each other are drawn in `▆`.
+  - Changed: the heatmap legend shares the line under the grid with the
+    period's mark, item by item as far as it fits.
+
 ## [0.8.2] - 2026-10-14
 
 | Mod | Version |
