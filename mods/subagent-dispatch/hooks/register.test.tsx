@@ -654,6 +654,33 @@ describe('usage ledger', () => {
     await pane.unmount()
   })
 
+  test("an opened row cuts each spawn's description to its column by cells, so it never wraps", async ($, on) => {
+    const world = await twoWeeks($, on)
+    await spawn($, world, { description: '調整 subagent-dispatch stats 的熱圖與清單，讓中英混合的描述也只佔一行', model: 'haiku' }, 'a2')
+    await step($, 'claude-opus-4', 'a2')
+    await stats($, 'stats')
+    for (const [by, row] of [
+      ['by repo', 'row:/repo'],
+      ['by session', `row:/repo|${world.now}`],
+      ['by model', 'row:claude-haiku-4'],
+      ['by type', 'row:general-purpose'],
+    ] as const) {
+      for (const bodyColumns of [52, 110]) {
+        const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' } as never)
+        await choose(pane, 'group', by)
+        await pane.press({ key: row })
+        const name = (await pane.find({ key: 'spawn:a2' }))?.text ?? ''
+        // The dot, the bar, the tokens, the date and their gaps take 20 columns and the bar's; two more
+        // for what the terminal draws around a button.
+        // 67 cells: cut at 52 columns, whole at 110.
+        expect(name.endsWith('…')).toBe(bodyColumns === 52)
+        expect(cells(name)).toBeLessThanOrEqual(bodyColumns - 20 - (bodyColumns >= 80 ? 16 : 8) - 2)
+        await pane.press({ key: 'back' })
+        await pane.unmount()
+      }
+    }
+  })
+
   test('an opened row sorts by time or by how long a spawn ran', async ($, on) => {
     await busyDay($, on)
     const pane = await $.ui.mount({ ...PANE, surface: 'terminal' } as never)

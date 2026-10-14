@@ -987,6 +987,10 @@ export const register: Register = (on, options) => {
       const topMain = Math.max(1, ...sessionRows.map(part => part.main))
       const count = bySessions ? sessionRows.length : listed.length
       const cellsOf = (part: number, whole: number) => barCells(part, whole, barWidth)
+      // What a row's name leaves the rest: the dot, the bar, the tokens (9), the date (6) and four gaps.
+      // The name is cut to it by cells, with two to spare for what the terminal draws around a button:
+      // a Button's `truncate-end` wraps instead once CJK and Latin mix (DESIGN.md「控制項」).
+      const nameCells = Math.max(1, body - 20 - barWidth - 2)
 
       return (
         <Box flexDirection="column" {...frame}>
@@ -1061,7 +1065,7 @@ export const register: Register = (on, options) => {
                     <Text color={COLORS.main.ink}>●</Text>
                   </Box>
                   <Box flexGrow={1} flexShrink={1}>
-                    <Text wrap="truncate-end">{promptOf(part.session)}</Text>
+                    <Text wrap="truncate-end">{fit(promptOf(part.session), nameCells)}</Text>
                   </Box>
                   <Box width={barWidth} flexShrink={0}>
                     {rowBar([{ cells: cellsOf(part.main, topMain), ...COLORS.main }], barWidth)}
@@ -1108,7 +1112,7 @@ export const register: Register = (on, options) => {
                   </Box>
                   <Box flexGrow={1} flexShrink={1}>
                     <Button key={`spawn:${id}`} plain onPress={() => void update($, view, current => ({ ...current, spawn: current.spawn === id ? '' : id }))}>
-                      <Text wrap="truncate-end">{spawnParts(lang, spawn)[0]}</Text>
+                      <Text>{fit(spawnParts(lang, spawn)[0], nameCells)}</Text>
                     </Button>
                   </Box>
                   <Box width={barWidth} flexShrink={0}>
