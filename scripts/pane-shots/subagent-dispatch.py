@@ -4,7 +4,7 @@ Read by scripts/capture-pane.py. `OPEN` opens the pane, `store(now)` is the mod'
 `SHOTS` names each image under docs/images/subagent-dispatch/ and the keys that lead to it.
 """
 import random
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 PLUGIN = 'subagent-dispatch'
 # The command that opens the pane.

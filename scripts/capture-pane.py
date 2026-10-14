@@ -9,7 +9,7 @@ that file's `OPEN` command, sends each shot's keys, reads the screen with pyte a
 docs/images/<mod>/<shot>.svg. `--text` prints the screens instead of writing images.
 
 Needs Python 3 with pyte (`python3 -m venv .venv && .venv/bin/pip install pyte`) and a `claude`
-on PATH. Nothing is sent to the API: the session is not logged in.
+on PATH. The session is not logged in, so no prompt is sent.
 """
 import fcntl
 import hashlib

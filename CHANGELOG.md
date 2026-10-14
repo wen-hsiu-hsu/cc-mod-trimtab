@@ -24,7 +24,11 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
   - Changed: an opened row shows the period to read only and the same summary;
     bars in rows above and below each other are drawn in `▆`.
   - Changed: the heatmap legend shares the line under the grid with the
-    period's mark, item by item as far as it fits.
+    period's mark, item by item as far as it fits. The `Selected` item is
+    gone; a 1-day period on today reads `Today, Wed Oct 14`.
+  - Changed: the Chinese cache line reads `快取讀取 182M 另計`.
+  - Fixed: an opened row's spawn names are cut to the width by cells, so mixed
+    Chinese and English names no longer wrap.
 
 ## [0.8.2] - 2026-10-14
 

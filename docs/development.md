@@ -141,8 +141,8 @@ mod 不能 import 自己資料夾以外的檔案（見 [ADR 0011](adr/0011-share
 
 mod 說明文件的圖是實際的 pane，不是設計稿的截圖：`scripts/capture-pane.py <mod> [<畫面>...]` 在 pty 裡用 `claude --plugin-dir mods/<mod>` 開 pane，用 pyte 讀出每格的字與顏色，把 pane 的框輸出成 `docs/images/<mod>/<畫面>.svg`。中英兩份 `docs/mods/<mod>*.md` 共用同一張。
 
-- **環境**：要有 `claude` 與裝了 pyte 的 Python（`python3 -m venv .venv && .venv/bin/pip install pyte`，再用 `.venv/bin/python scripts/capture-pane.py`）。session 在空的暫存設定資料夾裡跑、沒有登入，不會呼叫 API，也讀不到自己的 transcript 與 store。
-- **畫面清單與假資料**：`scripts/pane-shots/<mod>.py` 的 `store(now)` 產生 mod 的 `$.store`（日期相對於執行當天），`OPEN` 是開 pane 的指令，`SHOTS` 列出每張圖的名稱、欄寬與開 pane 之後要按的鍵。只挑一兩個代表畫面，不求每種寬度都有。
+- **環境**：要有 `claude` 與裝了 pyte 的 Python（`python3 -m venv .venv && .venv/bin/pip install pyte`，再用 `.venv/bin/python scripts/capture-pane.py`）。session 在空的暫存設定資料夾裡跑、沒有登入，不送出任何 prompt（只會下載 marketplace 清單這類公開資料），也讀不到自己的 transcript 與 store。
+- **畫面清單與假資料**：`scripts/pane-shots/<mod>.py` 的 `PLUGIN` 是 plugin 名稱（決定 store 檔名），`store(now)` 產生 mod 的 `$.store`（日期相對於執行當天），`OPEN` 是開 pane 的指令，`SHOTS` 列出每張圖的名稱、欄寬與開 pane 之後要按的鍵。只挑一兩個代表畫面，不求每種寬度都有。
 - **何時重跑**：畫面有變的版本發佈前重跑，連同 SVG 一起 commit。圖上的日期與「Updated」時間每次都不同，沒改畫面就不用重跑。
 - `--text` 只印出終端機畫面、不寫檔，調整按鍵時用。
 

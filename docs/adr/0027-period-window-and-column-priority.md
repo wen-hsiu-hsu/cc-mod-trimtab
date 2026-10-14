@@ -10,4 +10,4 @@ Considered:
 - Fixed breakpoints (a column set per width band): simpler, but a width just under a breakpoint wasted columns, and every new column needed every band redone.
 - Skipping a column that does not fit to place a narrower one after it: denser, but which columns show then jumps around as the pane is resized.
 
-Consequences: a day 100 days back is `t` and then `h` 100 times, or 14 presses of `h` at 7 days. `j` and `k` are free again in the pane. A window wholly before the ledgers' 90 days shows its totals from the day rows, with no rows to list.
+Consequences: a day 100 days back is `t` and then `h` 100 times, or 15 presses of `h` at 7 days. `j` and `k` are free again in the pane. A window wholly before the ledgers' 90 days shows its totals from the day rows, with no rows to list.
