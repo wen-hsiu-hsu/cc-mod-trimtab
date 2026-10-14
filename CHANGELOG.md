@@ -12,7 +12,7 @@ Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
   - Changed: the stats period is a window you move. `p` changes its length and
     keeps its last day, `h` / `l` move it back and forth by that length, and
     `t` jumps to today alone. `j` / `k` and choosing a single day are gone:
-    a day is a 1-day period. The heatmap dims the days outside the period.
+    a day is a 1-day period, its cell orange on the heatmap.
   - Changed: the summary drops its card frames: the tokens and the spawns are
     two lines each, the total with its parts at the right over a bar across the
     pane. `Updated` moves to the title line.

@@ -1111,16 +1111,18 @@ describe('heatmap', () => {
       await pane.unmount()
     })
 
-    test("no data, no use and use are each drawn their own way; the days outside the period dim, a day's own goes orange", async ($, on) => {
+    test("no data, no use and use are each drawn their own way; a cell keeps its color outside the period, a 1-day period's goes orange", async ($, on) => {
       await heatWorld($, on)
       const pane = await mount($)
       expect((await glyph(pane, '2026-10-05'))?.props.dimColor).toBe(true)
       expect(await glyphText(pane, '2026-10-05')).toBe('·')
       expect((await glyph(pane, '2026-10-10'))?.props.color).toBe('#4a4a52')
-      // Three used days: Oct 2 the least, then today, then the July day row, out of the period.
-      expect((await glyph(pane, '2026-10-02'))?.props).toMatchObject({ color: '#1f5a6d', dimColor: false })
+      // Three used days: Oct 2 the least, then today, then the July day row. Out of the period a cell is
+      // not dimmed: dim reads as gray, as no use does.
+      expect((await glyph(pane, '2026-10-02'))?.props.color).toBe('#1f5a6d')
       expect((await glyph(pane, '2026-10-12'))?.props.color).toBe('#2a7f9c')
-      expect((await glyph(pane, '2026-07-01'))?.props).toMatchObject({ color: '#3aa6cc', dimColor: true })
+      expect((await glyph(pane, '2026-07-01'))?.props).toMatchObject({ color: '#3aa6cc' })
+      expect((await glyph(pane, '2026-07-01'))?.props.dimColor).toBeUndefined()
       expect(await glyphText(pane, '2026-10-12')).toBe('■')
 
       // Today alone, then two days back: no use, said in place of the summary, and nothing to list.
@@ -1241,9 +1243,10 @@ describe('heatmap', () => {
       const svg = async () => ((await pane.find({ key: 'heatmap' }))?.children[0] as { type: string; props: { source: string } } | undefined)
       expect((await svg())?.type).toBe('Svg')
       expect((await svg())?.props.source).toContain('stroke-dasharray')
-      // Oct 10, in the period, as it is; Jul 1, out of it, at 30%.
+      // Oct 10 and Jul 1, in the period and out of it, at the same opacity as their level.
       expect((await svg())?.props.source).toContain('fill-opacity="0.25"')
-      expect((await svg())?.props.source).toContain('fill-opacity="0.225"')
+      expect((await svg())?.props.source).toContain('fill-opacity="0.75"')
+      expect((await svg())?.props.source).not.toContain('stroke-opacity')
       expect((await svg())?.props.source).toMatch(/<path d="M[^"]+"[^>]*\/><text[^>]*>30 days<\/text>/)
       expect(await dayCells(pane)).toHaveLength(0)
       expect(await text(pane, 'heat-note')).toBe('Less ■■■■ More  None ■  No data ·  Most Jul 1 4k')

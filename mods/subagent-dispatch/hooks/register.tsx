@@ -567,9 +567,9 @@ function svgStack(parts: { cells: number; fill: string }[]): string {
 }
 
 // The heatmap on desktop: a 10px cell every 12px, a week a column, the month row above and the
-// weekday names at the left; the days outside the period from `from` to `to` faded, and under the
-// grid its bracket and length, or for one day (`one`) a `▲` and its `name`. Colors as DESIGN.md
-//「熱圖色階」sets them.
+// weekday names at the left, each cell colored by its use alone; under the grid, the bracket and
+// length of the period from `from` to `to`, or for one day (`one`) a `▲` and its `name`. Colors as
+// DESIGN.md「熱圖色階」sets them.
 function svgHeatmap(lang: Lang, days: HeatDay[], from: string, to: string, one: boolean, level: (value: number | null) => number, length: string, name: string): string {
   const [left, top, pitch, size] = [28, 14, 12, 10]
   const weeks = Math.ceil(days.length / 7)
@@ -577,19 +577,17 @@ function svgHeatmap(lang: Lang, days: HeatDay[], from: string, to: string, one: 
   const rects = days.map((item, i) => {
     const x = left + Math.floor(i / 7) * pitch
     const y = top + (i % 7) * pitch
-    // Out of the period at 30%, rounded so the source does not carry float noise.
-    const fade = (opacity: number) => Number((item.day >= from && item.day <= to ? opacity : opacity * 0.3).toFixed(3))
     if (one && item.day === to) {
       return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2" fill="${HEAT.chosen}"/>`
     }
     if (item.tokens === null) {
-      return `<rect x="${x + 0.5}" y="${y + 0.5}" width="${size - 1}" height="${size - 1}" rx="2" fill="none" stroke="${COLORS.default.fill}" stroke-opacity="${fade(1)}" stroke-dasharray="2 2"/>`
+      return `<rect x="${x + 0.5}" y="${y + 0.5}" width="${size - 1}" height="${size - 1}" rx="2" fill="none" stroke="${COLORS.default.fill}" stroke-dasharray="2 2"/>`
     }
     if (item.tokens === 0) {
-      return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2" fill="${COLORS.default.fill}" fill-opacity="${fade(0.25)}"/>`
+      return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2" fill="${COLORS.default.fill}" fill-opacity="0.25"/>`
     }
 
-    return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2" fill="${COLORS.sub.fill}" fill-opacity="${fade([0.35, 0.55, 0.75, 1][level(item.tokens) - 1]!)}"/>`
+    return `<rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2" fill="${COLORS.sub.fill}" fill-opacity="${[0.35, 0.55, 0.75, 1][level(item.tokens) - 1]}"/>`
   })
   const text = (x: number, y: number, words: string, extra = '') =>
     `<text x="${x}" y="${y}" font-size="9" fill="${COLORS.default.fill}" font-family="sans-serif"${extra}>${words}</text>`
@@ -1162,8 +1160,8 @@ export const register: Register = (on, options) => {
       )
     }
 
-    // The heatmap: a cell a day, a week a column, the days outside the period dimmed, and under it the
-    // period's mark beside as much of the legend as fits.
+    // The heatmap: a cell a day, a week a column, colored by use alone (dimming would read as gray, as
+    // no use does), and under it the period's mark beside as much of the legend as fits.
     const heatmap = () => {
       if (body < HEAT_COLUMNS) {
         return null
@@ -1172,7 +1170,6 @@ export const register: Register = (on, options) => {
       const first = heatStart(weeks, now)
       const drawn = heat.filter(item => item.day >= first)
       const level = heatLevels(drawn)
-      const inside = (day: string) => day >= begin && day <= end
       const one = (day: string) => days === 1 && day === end
       const peak = drawn.reduce<HeatDay | undefined>((most, item) => ((item.tokens ?? 0) > (most?.tokens ?? 0) ? item : most), undefined)
       const ink = (item: HeatDay) => (one(item.day) ? HEAT.chosen : item.tokens === 0 ? HEAT.none : HEAT.levels[level(item.tokens) - 1])
@@ -1300,7 +1297,7 @@ export const register: Register = (on, options) => {
                     item.tokens === null && !one(item.day) ? (
                       <Text dimColor>·</Text>
                     ) : (
-                      <Text color={ink(item)} bold={one(item.day)} dimColor={!inside(item.day)}>
+                      <Text color={ink(item)} bold={one(item.day)}>
                         ■
                       </Text>
                     ),
