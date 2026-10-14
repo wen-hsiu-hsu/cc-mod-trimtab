@@ -1,6 +1,6 @@
 {
   "name": "open-items",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Keeps unresolved questions, pending decisions and deferred items outside the context, reminds you above the prompt box, and quotes one in a press",
   "author": {
     "name": "wen-hsiu hsu"

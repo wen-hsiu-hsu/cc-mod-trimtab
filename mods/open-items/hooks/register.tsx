@@ -950,9 +950,7 @@ export const register: Register = (on, pluginOptions) => {
         return Svg !== undefined ? (
           <Svg source={svgStack([{ cells: barWidth, fill: '#3a3a3a' }])} alt="0" width={barWidth * 8} height={8} />
         ) : (
-          <Text dimColor backgroundColor="gray">
-            {' '.repeat(barWidth)}
-          </Text>
+          <Text color="gray">{'▆'.repeat(barWidth)}</Text>
         )
       }
       const widths = splitCells(
@@ -965,7 +963,7 @@ export const register: Register = (on, pluginOptions) => {
         return <Svg source={svgStack(segments.map((part, i) => ({ cells: widths[i] ?? 0, fill: part.fill })))} alt={alt} width={barWidth * 8} height={8} />
       }
 
-      return <Text>{segments.map((part, i) => ((widths[i] ?? 0) === 0 ? '' : <Text key={part.key} backgroundColor={part.ink}>{' '.repeat(widths[i] ?? 0)}</Text>))}</Text>
+      return <Text>{segments.map((part, i) => ((widths[i] ?? 0) === 0 ? '' : <Text key={part.key} color={part.ink}>{'▆'.repeat(widths[i] ?? 0)}</Text>))}</Text>
     }
     const legend =
       which === 'open' && total === 0 ? (

@@ -3,6 +3,19 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [0.9.3] - 2026-10-15
+
+| Mod | Version |
+| --- | --- |
+| `open-items` | 0.6.1 |
+| `subagent-dispatch` | 0.6.3 |
+- `open-items` 0.6.1:
+  - Changed: the pane's count bar is drawn in `▆` in each kind's color instead
+    of colored spaces, as every bar is now.
+- `subagent-dispatch` 0.6.3:
+  - Changed: the stats summary's token and spawn bars are drawn in `▆` like
+    the list's, instead of colored spaces.
+
 ## [0.9.2] - 2026-10-14
 
 | Mod | Version |

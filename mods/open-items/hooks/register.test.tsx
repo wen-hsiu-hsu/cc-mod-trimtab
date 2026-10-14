@@ -427,8 +427,8 @@ test('the count bar splits by kind; g groups by nothing or by branch, s sorts ne
   const pane = await $.ui.mount({ ...PANE_MOUNT, props: { ...PANE_MOUNT.props, bodyColumns: 55 } } as never)
   // A bold 3, then 53 cells of bar: decisions (yellow) before bugs (red), in proportion.
   expect((await pane.find({ type: 'Text', text: '3' }))?.props.bold).toBe(true)
-  const segments = (await pane.findAll({ type: 'Text', text: /^ +$/ })).filter(t => t.props.backgroundColor !== undefined)
-  expect(segments.map(t => [t.props.backgroundColor, t.text.length])).toEqual([
+  const segments = (await pane.findAll({ type: 'Text', text: /^▆+$/ })).filter(t => t.props.color !== undefined)
+  expect(segments.map(t => [t.props.color, t.text.length])).toEqual([
     ['yellow', 35],
     ['red', 18],
   ])

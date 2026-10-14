@@ -14,7 +14,6 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 4. `subagent-dispatch` 回填後 `turn.step` 每次寫入的實際耗時：只在 engine 外量過（見「查證結果」21）。
 ## 待辦
 
-- **讓使用者在自己的終端機確認方塊字元會不會錯位**（subagent-dispatch，等 stats 改版合併後做）：熱圖格子 `■` 與相鄰列長條的 `▆`（U+2586）都是 East Asian Ambiguous 寬度，終端機把 ambiguous 當全形時整排會錯位。在設定流程（安裝後第一次開 stats pane，或 `/subagent-dispatch set` 相關指令）先畫一段 `■ ■ ■` 與 `▆▆▆` 加上對齊參考線，讓使用者看自己的環境決定要不要用；不用時改用替代畫法（例如熱圖用 ASCII、長條用有底色的空格）。要先查：Claude Code 沒有安裝事件（見 [subagent-dispatch 的回填](docs/mods/subagent-dispatch.zh-TW.md#回填)），觸發點只能是第一次開 pane 或指令；選擇存在哪一層設定（`pluginConfigs` 或 `$.store`）。
 - **open-items、tool-guard 的說明文件也放 pane 預覽圖**：subagent-dispatch 已用 `scripts/capture-pane.py` 做好（ADR 0028）。每個 mod 要寫 `scripts/pane-shots/<mod>.py`（假資料與一兩個代表畫面），裡面的 `OPEN` 是開 pane 的指令。
 
 ## mod 規劃
@@ -42,6 +41,7 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 | 提案 | 原因 |
 | ---- | ---- |
 | session-learn（session 結束時用 Haiku 提出記憶修改建議） | 由 project-memory 處理 |
+| 讓使用者在自己的終端機確認方塊字元會不會錯位（subagent-dispatch 第一次開 stats pane 時畫 `■` 與 `▆` 加對齊參考線，讓使用者選方塊字元或底色空格） | 2026-10-15 決定不做：`·`、`─`、`●`、`→` 這些 pane 上的字元與 Claude Code 自己的介面一樣是 East Asian Ambiguous 寬度，終端機把 ambiguous 當全形時整個畫面都會錯位，只換熱圖與長條沒有用 |
 | next-step suggest（預填下一步指令） | 仍要多跑一輪，省不到 token；Claude Code 已有內建的 prompt 建議 |
 | done-notifier（回合太久或等授權時通知） | Claude Code settings 的 `Notification` / `Stop` hook 加一行系統通知指令就能做到，不需要 mod |
 | cloud-meter（用 `$.ui.status` 顯示 ctx、cache、額度，給沒有 status line 的雲端用） | 2026-10-06 實測：debug log 顯示有算出內容並呼叫 `$.ui.status`，但互動畫面上沒有出現；已移除 |
