@@ -31,3 +31,4 @@ A decision gets an ADR when it is hard to reverse, surprising without its contex
 | [0025](0025-backfill-at-session-start.md) | The ledger is backfilled from transcripts at session start, behind a mark in the store | 2026-10-14 |
 | [0026](0026-heatmap-cells-not-buttons.md) | The heatmap's cells are text, and a day is chosen with j / k only | 2026-10-14 |
 | [0027](0027-period-window-and-column-priority.md) | The stats period is a window moved with h / l, and the list drops columns by priority | 2026-10-14 |
+| [0028](0028-docs-images-from-the-real-pane.md) | The mod docs show the real pane, captured as SVG | 2026-10-14 |

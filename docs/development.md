@@ -13,6 +13,7 @@
 | 為什麼這樣做（決定與理由） | `docs/adr/`（[索引](adr/README.md)） |
 | 畫面的顏色、版面、控制項、快捷鍵、用詞 | [`DESIGN.md`](../DESIGN.md) |
 | 畫面的設計稿（每一輪提案與定案） | [`design/`](../design/README.md) |
+| mod 說明文件裡的預覽圖（實際 pane 擷取的 SVG） | `docs/images/<mod>/`，由 `scripts/capture-pane.py` 產生 |
 | 還沒做的事、暫緩與不做的提案、已知問題、查證結果 | [`ROADMAP.md`](../ROADMAP.md) |
 | 每個版本改了什麼 | [`CHANGELOG.md`](../CHANGELOG.md) |
 | 保護範圍與回報方式 | [`SECURITY.md`](../SECURITY.md) |
@@ -91,6 +92,7 @@ mod 不能 import 自己資料夾以外的檔案（見 [ADR 0011](adr/0011-share
 | 實測結果（通過或發現限制） | `ROADMAP.md` 的「查證結果」；是限制的話也寫進 mod 頁面的「已知限制」 |
 | 做完、暫緩或放棄 ROADMAP 的項目 | `ROADMAP.md` 的「待辦」「暫緩」「不做」 |
 | 要發佈的改動 | mod 的 `version` 與 `CHANGELOG.md`（見下方「發佈」） |
+| 有預覽圖的畫面（`scripts/pane-shots/<mod>.py` 列出的畫面） | 發佈前重跑 `scripts/capture-pane.py <mod>`，commit `docs/images/<mod>/` 的 SVG（見下方「預覽圖」） |
 
 ### commit 前的檢查
 
@@ -134,6 +136,15 @@ mod 不能 import 自己資料夾以外的檔案（見 [ADR 0011](adr/0011-share
 - **上限**：一張畫布最多 40 頁、512 個檔案。主畫布快滿時把最舊的定案頁移出畫布（檔案還在 git 裡）；提案畫布不會滿，因為每次提案都開新的。
 - **同步**：畫布每發布一次，就把改到的檔案 commit 進 `design/`（在 worktree 裡）。使用者在頁面上直接改過的，先用 Artifact 的 read 拉回來，再 commit。
 - 畫布連結是私人的，只有擁有者打得開。
+
+## 預覽圖
+
+mod 說明文件的圖是實際的 pane，不是設計稿的截圖：`scripts/capture-pane.py <mod> [<畫面>...]` 在 pty 裡用 `claude --plugin-dir mods/<mod>` 開 pane，用 pyte 讀出每格的字與顏色，把 pane 的框輸出成 `docs/images/<mod>/<畫面>.svg`。中英兩份 `docs/mods/<mod>*.md` 共用同一張。
+
+- **環境**：要有 `claude` 與裝了 pyte 的 Python（`python3 -m venv .venv && .venv/bin/pip install pyte`，再用 `.venv/bin/python scripts/capture-pane.py`）。session 在空的暫存設定資料夾裡跑、沒有登入，不會呼叫 API，也讀不到自己的 transcript 與 store。
+- **畫面清單與假資料**：`scripts/pane-shots/<mod>.py` 的 `store(now)` 產生 mod 的 `$.store`（日期相對於執行當天），`OPEN` 是開 pane 的指令，`SHOTS` 列出每張圖的名稱、欄寬與開 pane 之後要按的鍵。只挑一兩個代表畫面，不求每種寬度都有。
+- **何時重跑**：畫面有變的版本發佈前重跑，連同 SVG 一起 commit。圖上的日期與「Updated」時間每次都不同，沒改畫面就不用重跑。
+- `--text` 只印出終端機畫面、不寫檔，調整按鍵時用。
 
 ## ADR
 
