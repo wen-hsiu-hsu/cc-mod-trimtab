@@ -46,12 +46,13 @@ CI（`.github/workflows/ci.yml`）在 master 與 PR 上跑上面全部，裝 `@a
 ## 模擬第一次安裝
 
 ```bash
-scripts/first-install.sh [--local] [--keep] [<mod>...]
+scripts/first-install.sh [--local] [--keep] [--debug] [<mod>...]
 ```
 
 這支腳本用空的暫存設定資料夾（`CLAUDE_CONFIG_DIR`）與空的工作資料夾開 Claude Code，跟新使用者一樣沒有設定、plugin、marketplace 與 store。開啟前會印出加 marketplace 的指令，進去後照 README 加 marketplace、用 `/plugin install` 安裝。在參數列出 mod 時，腳本會先加好 marketplace、裝好這些 mod 再開。結束時會刪掉暫存資料夾，`~/.claude` 不會被動到。
 
 - 預設從 GitHub 安裝，拿到的是已經 push 的版本。加 `--local` 改用這個 clone 已 commit 的 HEAD；它是本機資料夾，mod 會從原地載入，不會先複製到 cache。
+- `--debug` 把 debug log 寫到沙箱的 `debug.log`，結束時印出 `ui.open` 那幾行（每個 pane 開在哪、當時幾欄），並保留沙箱。pane 沒停靠在側邊時用它看原因：終端機不到 110 欄時開在輸入框上方。
 - 設定資料夾是空的，所以沒有登入：要執行 `/login`，或先設定 `ANTHROPIC_API_KEY`。
 - mod 用 `<mod>@cc-mod-trimtab` 安裝，所以讀得到 `pluginConfigs["<mod>@cc-mod-trimtab"]`。用 `--plugin-dir` 開的 session 讀不到，這支腳本補上了這個缺口。
 
