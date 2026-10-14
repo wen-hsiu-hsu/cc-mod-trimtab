@@ -268,9 +268,9 @@ class Component extends DCLogic {
       }
       NL().add('快取讀取 ' + this.short(sum * 14.7) + ' 另計', { color: C.dim });
     } else if (known) {
-      wrap(rangeName + '沒有用量（這段期間有紀錄，主 session 和 subagent 都是 0 token）。');
+      wrap(rangeName + '沒有用量。');
     } else {
-      wrap(rangeName + '沒有資料（帳本與每日摘要都沒有這段期間：回填以前，或 transcript 已被刪掉）。');
+      wrap(rangeName + '沒有資料。');
     }
     NL().add(' ');
 
@@ -300,7 +300,7 @@ class Component extends DCLogic {
         const l = NL();
         l.add(openBy === 'main' ? ' ' : '●', { color: dot }); l.add(' ');
         l.add(this.cut(desc, nameW), { color: C.hi }, () => this.setState((s) => ({ exp: !s.exp })), '展開這一筆'); l.pad(2 + nameW + 1);
-        const bw = Math.max(1, Math.round(rowBar * f)); l.add(' '.repeat(bw), { bg: openBy === 'main' ? C.main : C.sub }); l.pad(2 + nameW + 1 + rowBar + 1);
+        const bw = Math.max(1, Math.round(rowBar * f)); l.add('▆'.repeat(bw), { color: openBy === 'main' ? C.main : C.sub }); l.pad(2 + nameW + 1 + rowBar + 1);
         const tk = this.short(topT * f); l.add(' '.repeat(9 - this.W(tk))); l.add(tk); l.add(' '); l.add(date.padStart(6), { color: C.dim });
         if (i === 0 && this.state.exp && openBy !== 'main') {
           [['種類', 'Explore'], ['模型', 'claude-haiku-5-5（指定）'], ['執行', '背景 · 23 步 · 4 分 12 秒'], ['session', '調整 stats 的熱圖 · 10/12 02:11']].forEach(([k, v]) => {
@@ -320,7 +320,7 @@ class Component extends DCLogic {
       return { cols, lines: lines.map((l) => ({ cls: l.cls, segs: l.segs })), caption: cols + ' 欄 · ' + (known ? '沒有用量' : '沒有資料'), keysHint: '按 p、h、l、t 試試' };
     }
     if (old) {
-      wrap(rangeName + '只剩每日摘要：各 session 與派出已隨帳本在 90 天後刪除。');
+      wrap(rangeName + '的詳細資料保存超過 90 天，已刪除。');
       NL().add(' ');
       NL().add('Tab 移動 · Enter 打開一列 · Esc 關閉', { color: C.dim });
       return { cols, lines: lines.map((l) => ({ cls: l.cls, segs: l.segs })), caption: cols + ' 欄 · 只剩每日摘要', keysHint: '按 p、h、l、t 試試' };
@@ -328,13 +328,17 @@ class Component extends DCLogic {
 
     // 清單
     const GROUPS = [
-      { label: '依 repo', more: 0, rows: [
-        ['cc-mod-trimtab', 0.49, 0.36, 0.48, { ses: '14', last: '10/14' }],
-        ['dotfiles', 0.26, 0.30, 0.26, { ses: '6', last: '10/13' }],
-        ['blog', 0.15, 0.25, 0.17, { ses: '4', last: '10/09' }],
-        ['scratch', 0.06, 0.20, 0.06, { ses: '3', last: '09/30' }],
+      { label: '依 repo', more: 3, rows: [
+        ['cc-mod-trimtab', 0.46, 0.36, 0.45, { ses: '14', last: '10/14' }],
+        ['dotfiles', 0.25, 0.30, 0.25, { ses: '6', last: '10/13' }],
+        ['blog', 0.14, 0.25, 0.16, { ses: '4', last: '10/09' }],
+        ['scratch', 0.05, 0.20, 0.05, { ses: '3', last: '09/30' }],
         ['notes', 0.03, 0.0, 0.03, { ses: '2', last: '09/22' }],
-        ['experiments-with-a-long-name', 0.01, 0.1, 0.0, { ses: '1', last: '09/16' }],
+        ['homelab', 0.025, 0.4, 0.03, { ses: '2', last: '09/21' }],
+        ['resume', 0.02, 0.0, 0.0, { ses: '1', last: '09/20' }],
+        ['advent-of-code', 0.015, 0.2, 0.02, { ses: '1', last: '09/19' }],
+        ['experiments-with-a-long-name', 0.01, 0.1, 0.01, { ses: '1', last: '09/16' }],
+        ['tmp', 0.005, 0.0, 0.0, { ses: '1', last: '09/15' }],
       ], extras: [{ key: 'ses', head: 'session', prio: 6 }, { key: 'last', head: '上次', prio: 7 }] },
       { label: '依 session', more: 20, rows: [
         ['調整 stats 的熱圖，現在看起來很雜亂', 0.19, 0.41, 0.2, { repo: 'cc-mod-trimtab', at: '10/12 02:11' }],
@@ -408,8 +412,8 @@ class Component extends DCLogic {
           const w = Math.max(1, Math.round((r.tokV / maxTok) * c.w));
           const sw = r.subS > 0 ? Math.max(1, Math.round(w * r.subS)) : 0;
           const mw = Math.max(0, w - sw);
-          if (mw) l.add(' '.repeat(mw), { bg: C.main });
-          if (sw) l.add(' '.repeat(sw), { bg: C.sub });
+          if (mw) l.add('▆'.repeat(mw), { color: C.main });
+          if (sw) l.add('▆'.repeat(sw), { color: C.sub });
           l.add(' '.repeat(c.w - mw - sw));
           return;
         }
