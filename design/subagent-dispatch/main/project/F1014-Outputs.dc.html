@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>指令輸出與 toast</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+pre{margin:0;font-family:'JetBrains Mono','Noto Sans TC',monospace;font-size:12px;line-height:18px;white-space:pre-wrap;color:#d4d4d4}
+.box{background:#1b1b1d;border-radius:10px;padding:14px 16px}
+.cap{color:#8b8b93;font-size:13px}
+.toast{background:#26262b;border:1px solid #3a3a40;border-radius:8px;padding:8px 12px;font-family:'JetBrains Mono','Noto Sans TC',monospace;font-size:12px}
+</style>
+</helmet>
+<div style="width: 760px; min-height: 980px; box-sizing: border-box; padding: 20px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; display: flex; flex-direction: column; gap: 10px">
+<div class="cap">這次都沒有改，照現在的輸出畫。</div>
+<div class="cap">/subagent-dispatch stats --text 30</div>
+<div class="box"><pre>subagent-dispatch 用量，30 天：09/15 – 10/14
+
+Token（input + cache write + output）：12,418,302
+  主 session  8,402,117
+  subagent    4,016,185（佔全部 32%）
+Cache read（不含在上面）：182,330,914
+派出：46 次（指定模型 14，其中 Opus 3；沿用預設 24；fork 8）
+
+各模型 token
+  claude-opus-5-5             6,830,066 (55%)
+  claude-sonnet-5-5           3,725,491 (30%)
+  …
+
+各 session
+cc-mod-trimtab
+  調整 stats 的熱圖，現在看起來很雜亂  主 1,420,880 · 派出 9 次
+    - Explore：找熱圖的繪製程式 · 460,112 token · 23 步
+  …
+
+不含：各 mod 自己呼叫模型（$.model.fork/complete）的用量、雲端 session，以及安裝帳本時這台電腦已經沒有 transcript 的 session。</pre></div>
+<div class="cap">還沒有紀錄時</div>
+<div class="box"><pre>還沒有用量紀錄（ledger 設定開啟且載入 subagent-dispatch 後才開始記）。</pre></div>
+<div class="cap">/subagent-dispatch status</div>
+<div class="box"><pre>subagent-dispatch 設定（優先：session &gt; local &gt; repo &gt; 使用者 &gt; 預設）
+  ledger = true  [預設]  行為，repo 檔案不能設定
+    記錄派出與 token 用量
+改值：/subagent-dispatch set &lt;key&gt; &lt;value&gt; [--session|--local|--repo]（預設 --session），還原：/subagent-dispatch unset &lt;key&gt; [同上]</pre></div>
+<div class="cap">toast</div>
+<div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-start">
+<div class="toast">subagent-dispatch：2 個背景 agent 被中斷，輸入 /subagent-dispatch redispatch 重派</div>
+<div class="toast">subagent-dispatch：已從 transcript 補上 221 個 session（9/15 起）</div>
+<div class="toast">subagent-dispatch：/subagent-dispatch 指令沒有註冊成功（[錯誤訊息]）</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":760,"height":980}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

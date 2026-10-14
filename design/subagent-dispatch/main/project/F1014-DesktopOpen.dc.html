@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>desktop 打開一列</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+.seg{background:none;border:1px solid #3a3a40;color:#a8a8b0;padding:3px 10px;border-radius:6px;font:inherit;min-height:28px}
+.seg.on{background:#2f8fb0;border-color:#2f8fb0;color:#fff;font-weight:700}
+.key{font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b8b93;margin-right:4px}
+.row{display:grid;grid-template-columns:12px minmax(0,1fr) 128px 56px 44px;column-gap:10px;align-items:center;min-height:26px}
+.nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#e4e4e4}
+.r{text-align:right}
+</style>
+</helmet>
+<div style="width: 640px; min-height: 760px; box-sizing: border-box; padding: 24px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; font-size: 13px">
+<div style="background: #1b1b1d; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="font-weight: 700; color: #f0f0f0">subagent-dispatch</span>
+<span style="flex-grow: 1; height: 1px; background: #3a3a40"></span>
+<span style="color: #8b8b93; font-size: 12px">更新於 19:04:05</span>
+</div>
+<div style="display: flex; align-items: center; gap: 10px">
+<button class="seg"><span class="key">b</span>‹ 返回</button>
+<span style="color: #8b8b93">repo ›</span>
+<b style="color: #f0f0f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">cc-mod-trimtab</b>
+</div>
+<div><span style="color: #8b8b93">期間</span> 30 天 <span style="color: #8b8b93">·</span> <b style="color: #f0f0f0">09/15 – 10/14</b></div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><span><b style="color: #f0f0f0; font-size: 15px">5.7M</b> <span style="color: #8b8b93">token</span></span><span style="color: #a8a8b0"><span style="color: #b48ee6">●</span> 主 3.6M  <span style="color: #3aa6cc">●</span> sub 2.1M</span></div>
+<div style="display: flex; height: 8px; gap: 2px"><span style="flex: 36 1 0; background: #8a5cc7; border-radius: 2px"></span><span style="flex: 21 1 0; background: #2f8fb0; border-radius: 2px"></span></div>
+<div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px"><span><b style="color: #f0f0f0; font-size: 15px">22</b> <span style="color: #8b8b93">次派出</span></span><span style="color: #a8a8b0"><span style="color: #d7b84a">●</span> 指定 7  <span style="color: #8b8b93">●</span> 預設 11  <span style="color: #5fb36b">●</span> fork 4</span></div>
+<div style="display: flex; height: 8px; gap: 2px"><span style="flex: 7 1 0; background: #c98a12; border-radius: 2px"></span><span style="flex: 11 1 0; background: #8b8b93; border-radius: 2px"></span><span style="flex: 4 1 0; background: #3f9a4f; border-radius: 2px"></span></div>
+<div style="color: #8b8b93; margin-top: 2px">快取讀取 84M 另計</div>
+</div>
+<div style="display: flex; flex-direction: column">
+<div style="height: 1px; background: #3a3a40; margin-bottom: 8px"></div>
+<div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px"><span style="color: #8b8b93">排序</span><button class="seg on">token 多到少</button><button class="seg"><span class="key">s</span>時間</button><button class="seg">耗時</button></div>
+<div class="row" style="color: #8b8b93; font-size: 12px; border-bottom: 1px solid #3a3a40; padding-bottom: 4px"><span></span><span>派出</span><span></span><span class="r">token</span><span class="r">日期</span></div>
+<div class="row"><span style="color: #d7b84a">●</span><span class="nm">Explore：找熱圖的繪製程式</span><span style="height: 8px; width: 128px; background: #2f8fb0; border-radius: 2px"></span><span class="r">460k</span><span class="r" style="color: #8b8b93">10/12</span></div>
+<div class="row"><span style="color: #8b8b93">●</span><span class="nm">reviewer：審查清單欄位省略規則</span><span style="height: 8px; width: 95px; background: #2f8fb0; border-radius: 2px"></span><span class="r">340k</span><span class="r" style="color: #8b8b93">10/13</span></div>
+<div class="row"><span style="color: #5fb36b">●</span><span class="nm">fork：查 transcript 回填的日期</span><span style="height: 8px; width: 70px; background: #2f8fb0; border-radius: 2px"></span><span class="r">253k</span><span class="r" style="color: #8b8b93">10/09</span></div>
+<div class="row"><span style="color: #d7b84a">●</span><span class="nm">checker：TODO 是否自足</span><span style="height: 8px; width: 29px; background: #2f8fb0; border-radius: 2px"></span><span class="r">106k</span><span class="r" style="color: #8b8b93">10/08</span></div>
+<div class="row"><span style="color: #8b8b93">●</span><span class="nm">general-purpose：整理 ROADMAP 查證結果</span><span style="height: 8px; width: 15px; background: #2f8fb0; border-radius: 2px"></span><span class="r">55k</span><span class="r" style="color: #8b8b93">10/02</span></div>
+<button class="seg" style="align-self: flex-start; margin-top: 6px"><span class="key">m</span>還有 17 筆 ▸</button>
+</div>
+<div style="color: #6b6b73; font-size: 12px">Tab 移動 · Enter 展開一筆 · Esc 關閉</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":640,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

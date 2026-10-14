@@ -1,0 +1,48 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-10-14T16:30:00Z"},
+  "title": "subagent-dispatch",
+  "launch": {"view": "canvas", "page": "f1014"},
+  "pages": [
+    {"id": "inv", "name": "畫面清單"},
+    {"id": "f1014", "name": "2026-10-14 stats 改版"}
+  ],
+  "boards": {
+    "Main.dc.html": {"x": 0, "y": 0, "w": 900, "h": 980, "title": "畫面清單", "page": "inv"},
+    "F1014-T40.dc.html": {"x": 0, "y": 0, "w": 380, "h": 820, "title": "總覽 · 40 欄", "page": "f1014", "is_interactive": true},
+    "F1014-T55.dc.html": {"x": 460, "y": 0, "w": 490, "h": 820, "title": "總覽 · 55 欄（dock）", "page": "f1014", "is_interactive": true},
+    "F1014-T80.dc.html": {"x": 1030, "y": 0, "w": 680, "h": 820, "title": "總覽 · 80 欄", "page": "f1014", "is_interactive": true},
+    "F1014-T120.dc.html": {"x": 1790, "y": 0, "w": 970, "h": 820, "title": "總覽 · 120 欄", "page": "f1014", "is_interactive": true},
+    "F1014-Day.dc.html": {"x": 0, "y": 1120, "w": 490, "h": 820, "title": "期間 1 天", "page": "f1014", "is_interactive": true},
+    "F1014-NoUse.dc.html": {"x": 570, "y": 1120, "w": 490, "h": 820, "title": "沒有用量", "page": "f1014", "is_interactive": true},
+    "F1014-NoData.dc.html": {"x": 1140, "y": 1120, "w": 490, "h": 820, "title": "沒有資料", "page": "f1014", "is_interactive": true},
+    "F1014-Old.dc.html": {"x": 1710, "y": 1120, "w": 490, "h": 820, "title": "只剩每日摘要", "page": "f1014", "is_interactive": true},
+    "F1014-Session.dc.html": {"x": 2280, "y": 1120, "w": 490, "h": 820, "title": "依 session 分組＋還有 N 筆", "page": "f1014", "is_interactive": true},
+    "F1014-Open55.dc.html": {"x": 0, "y": 2240, "w": 490, "h": 760, "title": "打開一列 · repo", "page": "f1014", "is_interactive": true},
+    "F1014-OpenSession80.dc.html": {"x": 570, "y": 2240, "w": 680, "h": 760, "title": "打開一列 · session（80 欄）", "page": "f1014", "is_interactive": true},
+    "F1014-OpenExpand55.dc.html": {"x": 1330, "y": 2240, "w": 490, "h": 760, "title": "打開一列 · 展開一筆", "page": "f1014", "is_interactive": true},
+    "F1014-OpenMain55.dc.html": {"x": 1900, "y": 2240, "w": 490, "h": 760, "title": "打開沒有派出的列（主 session）", "page": "f1014", "is_interactive": true},
+    "F1014-Desktop.dc.html": {"x": 0, "y": 3300, "w": 640, "h": 900, "title": "desktop · 總覽", "page": "f1014", "is_interactive": true},
+    "F1014-DesktopOpen.dc.html": {"x": 720, "y": 3300, "w": 640, "h": 760, "title": "desktop · 打開一列", "page": "f1014"},
+    "F1014-Band.dc.html": {"x": 0, "y": 4500, "w": 760, "h": 220, "title": "重派（輸入框上方）", "page": "f1014"},
+    "F1014-Outputs.dc.html": {"x": 840, "y": 4500, "w": 760, "h": 980, "title": "指令輸出與 toast", "page": "f1014"},
+    "F1014-Term.dc.html": {"x": 2840, "y": 0, "w": 490, "h": 760, "title": "共用元件（各畫面引入）", "page": "f1014", "is_interactive": true}
+  },
+  "order": [
+    "Main.dc.html",
+    "F1014-T40.dc.html", "F1014-T55.dc.html", "F1014-T80.dc.html", "F1014-T120.dc.html",
+    "F1014-Day.dc.html", "F1014-NoUse.dc.html", "F1014-NoData.dc.html", "F1014-Old.dc.html", "F1014-Session.dc.html",
+    "F1014-Open55.dc.html", "F1014-OpenSession80.dc.html", "F1014-OpenExpand55.dc.html", "F1014-OpenMain55.dc.html",
+    "F1014-Desktop.dc.html", "F1014-DesktopOpen.dc.html",
+    "F1014-Band.dc.html", "F1014-Outputs.dc.html",
+    "F1014-Term.dc.html"
+  ],
+  "notes": {
+    "r1": {"x": 0, "y": -300, "text": "stats 總覽：40／55／80／120 欄", "kind": "title1", "maxW": 2760, "page": "f1014"},
+    "r2": {"x": 0, "y": 880, "text": "總覽的各種狀態（55 欄）", "kind": "title1", "maxW": 2770, "page": "f1014"},
+    "r3": {"x": 0, "y": 2000, "text": "打開一列", "kind": "title1", "maxW": 2390, "page": "f1014"},
+    "r4": {"x": 0, "y": 3060, "text": "desktop", "kind": "title1", "maxW": 1360, "page": "f1014"},
+    "r5": {"x": 0, "y": 4260, "text": "其他畫面（這次沒有改）", "kind": "title1", "maxW": 1600, "page": "f1014"}
+  },
+  "designSystems": []
+}

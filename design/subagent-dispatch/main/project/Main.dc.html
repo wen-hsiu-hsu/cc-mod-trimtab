@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>subagent-dispatch 畫面清單</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid #2e2e33;vertical-align:top}
+th{color:#a8a8b0;font-weight:400;font-size:12px}
+code{font-family:'JetBrains Mono',monospace;font-size:12px;color:#d4d4d4}
+</style>
+</helmet>
+<div style="width: 900px; min-height: 980px; box-sizing: border-box; padding: 40px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; font-size: 14px; display: flex; flex-direction: column; gap: 18px">
+<h1 style="margin: 0; font-size: 28px; color: #f0f0f0">subagent-dispatch 畫面清單</h1>
+<p style="margin: 0; color: #a8a8b0; line-height: 1.7">每一頁定案都要畫出這張表的每一項。沒有改到的畫面引入上一頁的 artboard；清單有增減時，在那次定案一起改這張表。最新的定案頁：2026-10-14 stats 改版。</p>
+<table style="border-collapse: collapse; width: 100%">
+<thead><tr><th>畫面</th><th>要畫的變化</th><th>介面</th></tr></thead>
+<tbody>
+<tr><td>stats 總覽</td><td>40／55／80／120 欄；期間 1 天；沒有用量；沒有資料；只剩每日摘要；依 session 分組與「還有 N 筆」</td><td>終端機、desktop</td></tr>
+<tr><td>stats 打開一列</td><td>依 repo；依 session（各模型）；展開一筆；沒有派出的列（列出 session）</td><td>終端機、desktop</td></tr>
+<tr><td>重派</td><td>輸入框上方的一行與兩顆按鈕</td><td>終端機</td></tr>
+<tr><td>指令輸出</td><td><code>stats --text</code>、<code>status</code>、還沒有紀錄時的說明</td><td>終端機</td></tr>
+<tr><td>toast</td><td>背景 agent 被中斷、回填完成、指令註冊失敗</td><td>終端機、desktop</td></tr>
+</tbody>
+</table>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":900,"height":980}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

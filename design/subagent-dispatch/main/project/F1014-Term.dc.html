@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>stats 終端機</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+.tl{display:flex;height:18px;white-space:pre}
+.tl.ul{box-shadow:inset 0 -1px #3a3a40}
+.cell{display:inline-block;height:18px;text-align:center;overflow:visible;white-space:pre}
+.seg{display:inline-flex;font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;line-height:18px}
+button.seg{cursor:pointer}
+button.seg:hover{background:#2a2a2e}
+button.seg:focus-visible{outline:1px solid #6cc4e0}
+</style>
+</helmet>
+<div style="display: inline-flex; flex-direction: column; gap: 10px; padding: 20px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; box-sizing: border-box; min-height: 300px">
+<div style="color: #8b8b93; font-size: 13px; display: flex; justify-content: space-between; gap: 12px"><span>{{caption}}</span><span>{{keysHint}}</span></div>
+<div style="background: #1b1b1d; border-radius: 10px; padding: 14px 16px; font-family: 'JetBrains Mono', 'Noto Sans TC', monospace; font-size: 12px; line-height: 18px">
+<div style="width: {{cols}}ch; display: flex; flex-direction: column">
+<sc-for list="{{lines}}" as="ln" hint-placeholder-count="28">
+<div class="{{ln.cls}}"><sc-for list="{{ln.segs}}" as="sg" hint-placeholder-count="3"><sc-if value="{{sg.btn}}" hint-placeholder-val="{{ false }}"><button class="seg" onClick="{{sg.act}}" aria-label="{{sg.label}}"><sc-for list="{{sg.cells}}" as="c" hint-placeholder-count="6"><span class="cell" style="width: {{c.w}}ch; color: {{c.color}}; background: {{c.bg}}; box-shadow: {{c.sh}}; font-weight: {{c.fw}}; opacity: {{c.op}}">{{c.ch}}</span></sc-for></button></sc-if><sc-if value="{{sg.plain}}" hint-placeholder-val="{{ true }}"><span class="seg"><sc-for list="{{sg.cells}}" as="c" hint-placeholder-count="6"><span class="cell" style="width: {{c.w}}ch; color: {{c.color}}; background: {{c.bg}}; box-shadow: {{c.sh}}; font-weight: {{c.fw}}; opacity: {{c.op}}">{{c.ch}}</span></sc-for></span></sc-if></sc-for></div>
+</sc-for>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"cols":{"editor":"range","min":36,"max":140,"step":1,"default":55},"li":{"editor":"enum","options":[0,1,2,3],"default":2},"gi":{"editor":"enum","options":[0,1,2,3],"default":0},"find":{"editor":"enum","options":["","zero","nodata","old"],"default":""},"view":{"editor":"enum","options":["overview","open"],"default":"overview"},"openBy":{"editor":"enum","options":["repo","session","main"],"default":"repo"},"expand":{"editor":"boolean","default":false},"$preview":{"width":490,"height":760}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { li: Number(props.li ?? 2), shift: this.findShift(props.find, Number(props.li ?? 2)), gi: Number(props.gi ?? 0), exp: !!props.expand };
+  }
+  hash(n, s) { const x = Math.sin(n * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); }
+  tok(d) {
+    if (d < new Date(2026, 4, 18)) return -1;
+    const n = Math.round(d.getTime() / 864e5);
+    const wd = (d.getDay() + 6) % 7;
+    const h = this.hash(n, 1);
+    if ((wd >= 5 && h < 0.6) || (wd < 5 && h < 0.1)) return 0;
+    const h2 = this.hash(n, 2);
+    return Math.round(60000 + h2 * h2 * 1050000);
+  }
+  findShift(find, li) {
+    const today = new Date(2026, 9, 14);
+    if (find === 'zero') { for (let k = 0; k < 60; k++) if (this.tok(this.add(today, -k)) === 0) return k; }
+    if (find === 'nodata') { for (let k = 0; k < 400; k++) if (this.tok(this.add(today, -k)) < 0) return k; }
+    if (find === 'old') { const L = [1, 7, 30, 90][li]; return Math.ceil(100 / L) * L; }
+    return 0;
+  }
+  add(d, k) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + k); }
+  md(d) { return String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0'); }
+  wide(ch) { return /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(ch); }
+  W(s) { let n = 0; for (const ch of s) n += this.wide(ch) ? 2 : 1; return n; }
+  cut(s, w) {
+    if (this.W(s) <= w) return s;
+    let out = '', n = 0;
+    for (const ch of s) { const cw = this.wide(ch) ? 2 : 1; if (n + cw > w - 1) break; out += ch; n += cw; }
+    return out + '…';
+  }
+  short(x) { return x >= 1e6 ? (x / 1e6).toFixed(1) + 'M' : x >= 1e3 ? Math.round(x / 1e3) + 'k' : String(Math.round(x)); }
+  line(cls) {
+    const self = this;
+    const L = { cls: cls || 'tl', segs: [], n: 0 };
+    L.add = (text, st, act, label) => {
+      st = st || {};
+      const cells = [];
+      for (const ch of text) {
+        const w = self.wide(ch) ? 2 : 1;
+        cells.push({ ch, w, color: st.color || '#d4d4d4', bg: st.bg || 'transparent', sh: st.bg ? 'inset 0 3px #1b1b1d, inset 0 -3px #1b1b1d' : 'none', fw: st.b ? 700 : 400, op: st.op ?? 1 });
+        L.n += w;
+      }
+      L.segs.push({ cells, btn: !!act, plain: !act, act: act || null, label: label || text });
+      return L;
+    };
+    L.pad = (to) => { if (L.n < to) L.add(' '.repeat(to - L.n)); return L; };
+    L.bar = (parts, width) => {
+      const total = parts.reduce((a, p) => a + p.v, 0) || 1;
+      let used = 0;
+      parts.forEach((p, i) => {
+        let w = i === parts.length - 1 ? width - used : Math.round((p.v / total) * width);
+        if (p.v > 0) w = Math.max(1, w);
+        w = Math.max(0, Math.min(w, width - used));
+        if (w > 0) L.add(' '.repeat(w), { bg: p.c });
+        used += w;
+      });
+      return L;
+    };
+    return L;
+  }
+  renderVals() {
+    const cols = Math.max(36, Number(this.props.cols ?? 55));
+    const view = this.props.view === 'open' ? 'open' : 'overview';
+    const openBy = this.props.openBy || 'repo';
+    const C = { dim: '#6b6b73', mid: '#8b8b93', hi: '#f0f0f0', rule: '#3a3a40', main: '#8a5cc7', mainInk: '#b48ee6', main2: '#b48ee6', main3: '#6b3fa8', sub: '#2f8fb0', subInk: '#3aa6cc', named: '#c98a12', namedInk: '#d7b84a', dflt: '#8b8b93', fork: '#3f9a4f', forkInk: '#5fb36b', sel: '#ff8c42' };
+    const lines = [];
+    const NL = (cls) => { const l = this.line(cls); l.cols = cols; lines.push(l); return l; };
+    const LENS = [1, 7, 30, 90];
+    const LBL = ['1 天', '7 天', '30 天', '90 天'];
+    const len = LENS[this.state.li];
+    const today = new Date(2026, 9, 14);
+    const end = this.add(today, -this.state.shift);
+    const begin = this.add(end, -(len - 1));
+    const WD = ['一', '二', '三', '四', '五', '六', '日'];
+    const dn = (d) => this.md(d) + '（' + WD[(d.getDay() + 6) % 7] + '）';
+    const old = this.add(today, -89) > end;
+
+    // 標題列
+    const upd = cols >= 24 + 16 + 4 ? '更新於 19:04:05' : '19:04:05';
+    const t = NL();
+    t.add('subagent-dispatch stats ', { b: true, color: C.hi });
+    t.add('─'.repeat(Math.max(1, cols - 24 - this.W(upd) - 1)), { color: C.rule });
+    t.add(' ' + upd, { color: C.dim });
+    NL().add(' ');
+
+    // 打開的那一列在總覽裡佔多少
+    const OPEN = {
+      repo: { group: 'repo', name: 'cc-mod-trimtab', frac: 0.49, sub: 0.36, spF: 0.48 },
+      session: { group: 'session', name: '調整 stats 的熱圖，現在看起來很雜亂', frac: 0.19, sub: 0.41, spF: 0.2 },
+      main: { group: '種類', name: '主 session', frac: 0.62, sub: 0, spF: 0 },
+    }[openBy];
+
+    if (view === 'open') {
+      const bc = NL();
+      bc.add('b ‹ 返回', { color: C.hi }, () => {}, '返回總覽');
+      bc.add('  ' + OPEN.group + ' › ', { color: C.dim });
+      bc.add(this.cut(OPEN.name, cols - bc.n), { b: true, color: C.hi });
+      NL().add(' ');
+    } else {
+      // 熱圖
+      const weeks = Math.min(53, Math.floor((cols - 4) / 2));
+      const dow = (today.getDay() + 6) % 7;
+      const start = this.add(today, -dow - (weeks - 1) * 7);
+      const at = (w, r) => this.add(start, w * 7 + r);
+      const vals = [];
+      let peak = { v: 0, d: today };
+      for (let w = 0; w < weeks; w++) for (let r = 0; r < 7; r++) { const d = at(w, r); if (d <= today) { const v = this.tok(d); if (v > 0) vals.push(v); if (v > peak.v) peak = { v, d }; } }
+      vals.sort((a, b) => a - b);
+      const q = (p) => vals[Math.floor(vals.length * p)];
+      const q1 = q(0.25), q2 = q(0.5), q3 = q(0.75);
+      const GV = ['#4a4a52', '#1f5a6d', '#2a7f9c', '#3aa6cc', '#86d6f0'];
+      const ml = NL();
+      let prev = -1;
+      for (let w = 0; w < weeks; w++) { const m = at(w, 6).getMonth(); if (w > 0 && m !== prev && 4 + w * 2 >= ml.n + (ml.n ? 1 : 0)) { ml.pad(4 + w * 2); ml.add((m + 1) + '月', { color: C.dim }); } prev = m; }
+      const LB = ['一', '', '三', '', '五', '', ''];
+      for (let r = 0; r < 7; r++) {
+        const l = NL();
+        l.add(LB[r], { color: C.dim }); l.pad(4);
+        for (let w = 0; w < weeks; w++) {
+          const d = at(w, r);
+          if (d > today) { l.add('  '); continue; }
+          const v = this.tok(d);
+          const lv = v < 0 ? -1 : v === 0 ? 0 : v <= q1 ? 1 : v <= q2 ? 2 : v <= q3 ? 3 : 4;
+          const inside = d >= begin && d <= end;
+          const color = inside && len === 1 ? C.sel : lv < 0 ? '#55555c' : GV[lv];
+          l.add(lv < 0 ? '·' : '■', { color, op: inside ? 1 : 0.32, b: inside && len === 1 });
+          l.add(' ');
+        }
+      }
+      // 標註行：期間標記，再依序放圖例項目，放不下就停
+      const wk = (d) => Math.floor((d - start) / (7 * 864e5));
+      let mark = null, bL = cols, bR = cols;
+      if (wk(end) >= 0) {
+        if (len === 1) {
+          const c0 = 4 + wk(end) * 2;
+          const txt = '▲ ' + dn(end);
+          if (c0 + this.W(txt) <= cols) { mark = { col: c0, text: txt }; bL = c0; bR = c0 + this.W(txt); }
+          else { const txt2 = dn(end) + ' ▲'; const s = c0 - this.W(txt2) + 1; mark = { col: s, text: txt2 }; bL = s; bR = c0 + 1; }
+        } else {
+          const w0 = Math.max(0, wk(begin)), w1 = wk(end);
+          const span = (w1 - w0) * 2 + 1;
+          const lab = ' ' + LBL[this.state.li] + ' ';
+          const inner = span - 2;
+          let txt;
+          if (span < 3) txt = '▲';
+          else if (inner >= this.W(lab) + 2) { const dash = inner - this.W(lab); const a = Math.floor(dash / 2); txt = '└' + '─'.repeat(a) + lab + '─'.repeat(dash - a) + '┘'; }
+          else txt = '└' + '─'.repeat(inner) + '┘';
+          bL = 4 + w0 * 2; bR = bL + span;
+          mark = { col: bL, text: txt };
+        }
+      } else { bL = cols; bR = cols; }
+      const items = [
+        { w: this.W('少 ■■■■ 多'), draw: (l) => { l.add('少 ', { color: C.dim }); GV.slice(1).forEach((g) => l.add('■', { color: g })); l.add(' 多', { color: C.dim }); } },
+        { w: this.W('無用量 ■'), draw: (l) => { l.add('無用量 ', { color: C.dim }); l.add('■', { color: GV[0] }); } },
+        { w: this.W('無資料 ·'), draw: (l) => { l.add('無資料 ·', { color: C.dim }); } },
+        { w: this.W('最多 ' + this.md(peak.d) + ' ' + this.short(peak.v)), draw: (l) => { l.add('最多 ', { color: C.dim }); l.add(this.md(peak.d) + ' ' + this.short(peak.v)); } },
+      ];
+      const fit = (space) => { const out = []; let used = 0; for (const it of items) { const need = used === 0 ? it.w : used + 2 + it.w; if (need > space) break; out.push(it); used = need; } return { out, used }; };
+      let side = 'left', got = fit(bL - 2 - 4);
+      if (got.out.length === 0) { side = 'right'; got = fit(cols - (bR + 2)); }
+      const nl = NL();
+      const drawItems = () => got.out.forEach((it, i) => { if (i > 0) nl.add('  '); it.draw(nl); });
+      if (side === 'left' && got.out.length) { nl.pad(4); drawItems(); }
+      if (mark) { nl.pad(mark.col); nl.add(mark.text, len === 1 ? { color: C.sel, b: true } : { color: '#d4d4d4' }); }
+      if (side === 'right' && got.out.length) { nl.pad(cols - got.used); drawItems(); }
+      if (!nl.segs.length) nl.add(' ');
+      NL().add(' ');
+    }
+
+    // 期間列
+    const isToday = this.state.shift === 0;
+    const rangeFull = len === 1 ? (isToday ? '今天 ' : '') + dn(end) : this.md(begin) + ' – ' + this.md(end);
+    const rangeTight = len === 1 ? dn(end) : this.md(begin) + '–' + this.md(end);
+    if (view === 'open') {
+      const pl = NL();
+      pl.add('期間 ', { color: C.dim }); pl.add(LBL[this.state.li]); pl.add(' · ', { color: C.dim }); pl.add(len === 1 ? dn(end) : this.md(begin) + ' – ' + this.md(end), { b: true, color: C.hi });
+    } else {
+      const cycle = () => this.setState((s) => ({ li: (s.li + 1) % 4 }));
+      const back = () => this.setState((s) => ({ shift: Math.min(330, s.shift + LENS[s.li]) }));
+      const fwd = () => this.setState((s) => ({ shift: Math.max(0, s.shift - LENS[s.li]) }));
+      const home = () => this.setState({ li: 0, shift: 0 });
+      const variants = [{ lab: '期間 ', gap: '  ', range: rangeFull }, { lab: '', gap: '  ', range: rangeFull }, { lab: '', gap: ' ', range: rangeTight }];
+      const tW = this.W('t 今天');
+      const vw = (v) => this.W(v.lab) + this.W('p ‹ ' + LBL[this.state.li] + ' ›') + this.W(v.gap) + this.W('h ‹ ' + v.range + ' › l') + 2 + tW;
+      const v = variants.find((x) => vw(x) <= cols) || variants[2];
+      const pl = NL();
+      if (v.lab) pl.add(v.lab, { color: C.dim });
+      pl.add('p ‹ ', { color: C.hi }, cycle, '切換期間長度');
+      pl.segs[pl.segs.length - 1].cells.push(...this.line().add(LBL[this.state.li], { b: true, color: C.hi }).segs[0].cells, ...this.line().add(' ›', { color: C.hi }).segs[0].cells);
+      pl.n += this.W(LBL[this.state.li] + ' ›');
+      pl.add(v.gap);
+      pl.add('h ‹', { color: C.hi }, back, '往前一個期間');
+      pl.add(' ' + v.range + ' ', { b: true, color: len === 1 ? C.sel : C.hi });
+      pl.add('› l', { color: C.hi }, fwd, '往後一個期間');
+      pl.pad(cols - tW);
+      pl.add('t 今天', { color: isToday && len === 1 ? C.dim : C.mid }, home, '回到今天');
+    }
+    NL().add(' ');
+
+    // 摘要
+    let all = 0, known = false;
+    for (let i = 0; i < len; i++) { const x = this.tok(this.add(end, -i)); if (x >= 0) { known = true; all += x; } }
+    const scale = view === 'open' ? OPEN.frac : 1;
+    const sum = all * scale;
+    const spawnsAll = Math.round(all / 270000);
+    const spawns = view === 'open' ? Math.round(spawnsAll * OPEN.spF) : spawnsAll;
+    const named = Math.round(spawns * 0.3), fork = Math.round(spawns * 0.17), dflt = spawns - named - fork;
+    const subShare = view === 'open' ? OPEN.sub : 0.32;
+    const mainT = sum * (1 - subShare), subT = sum * subShare;
+    const rangeName = len === 1 ? dn(end) : this.md(begin) + ' – ' + this.md(end) + ' ';
+    const wrap = (msg) => { let rest = msg; while (rest) { let piece = '', n = 0; for (const ch of rest) { const cw = this.wide(ch) ? 2 : 1; if (n + cw > cols) break; piece += ch; n += cw; } NL().add(piece, { color: C.dim }); rest = rest.slice(piece.length); } };
+    if (sum > 0) {
+      const a = NL(); a.add(this.short(sum), { b: true, color: C.hi }); a.add(' token', { color: C.dim });
+      let parts;
+      if (view === 'open' && openBy === 'session') {
+        parts = [{ k: 'opus-5-5', v: mainT * 0.7, c: C.main, ink: C.mainInk }, { k: 'sonnet-5-5', v: mainT * 0.3, c: C.main2, ink: C.main2 }, { k: 'sub', v: subT, c: C.sub, ink: C.subInk }];
+      } else if (subT === 0) {
+        parts = [{ k: '主', v: mainT, c: C.main, ink: C.mainInk }];
+      } else {
+        parts = [{ k: '主', v: mainT, c: C.main, ink: C.mainInk }, { k: 'sub', v: subT, c: C.sub, ink: C.subInk }];
+      }
+      const ra = parts.map((p) => p.k + ' ' + this.short(p.v)).join('  ');
+      if (a.n + 2 + this.W(ra) <= cols) { a.pad(cols - this.W(ra)); parts.forEach((p, i) => { if (i) a.add('  '); a.add(p.k, { color: p.ink }); a.add(' ' + this.short(p.v)); }); }
+      NL().bar(parts.map((p) => ({ v: p.v, c: p.c })), cols);
+      if (spawns > 0) {
+        const b = NL(); b.add(String(spawns), { b: true, color: C.hi }); b.add(' 次派出', { color: C.dim });
+        const rb = '指定 ' + named + ' 預設 ' + dflt + ' fork ' + fork;
+        b.pad(cols - this.W(rb)); b.add('指定', { color: C.namedInk }); b.add(' ' + named + ' '); b.add('預設', { color: C.dflt }); b.add(' ' + dflt + ' '); b.add('fork', { color: C.forkInk }); b.add(' ' + fork);
+        NL().bar([{ v: named, c: C.named }, { v: dflt, c: C.dflt }, { v: fork, c: C.fork }], cols);
+      }
+      NL().add('快取讀取 ' + this.short(sum * 14.7) + ' 另計', { color: C.dim });
+    } else if (known) {
+      wrap(rangeName + '沒有用量（這段期間有紀錄，主 session 和 subagent 都是 0 token）。');
+    } else {
+      wrap(rangeName + '沒有資料（帳本與每日摘要都沒有這段期間：回填以前，或 transcript 已被刪掉）。');
+    }
+    NL().add(' ');
+
+    if (view === 'open') {
+      // 分隔線以下：照現在
+      NL().add('─'.repeat(cols), { color: C.rule });
+      const so = NL(); so.add('s ‹ ', { color: C.hi }, () => {}, '切換排序'); so.add('token 多到少', { b: true, color: C.hi }); so.add(' ›', { color: C.hi });
+      NL().add(' ');
+      const rowBar = cols >= 80 ? 16 : 8;
+      const nameW = cols - 2 - rowBar - 1 - 9 - 1 - 6 - 1;
+      const hd = NL(); hd.add('  '); hd.add(openBy === 'main' ? 'session' : '派出', { color: C.dim }); hd.pad(2 + nameW + 1 + rowBar + 1 + 9 - 5); hd.add('token', { color: C.dim }); hd.pad(cols - 4); hd.add('日期', { color: C.dim });
+      const SP = openBy === 'main' ? [
+        [C.main, '調整 stats 的熱圖，現在看起來很雜亂', 1.0, '10/12'],
+        [C.main, '檢查 diff 並寫 ADR', 0.66, '10/09'],
+        [C.main, '整理 zsh 設定', 0.45, '10/03'],
+        [C.main, '寫部落格草稿：Ink 的重畫效能', 0.36, '10/01'],
+        [C.main, '回填測試', 0.2, '09/28'],
+      ] : [
+        [C.namedInk, 'Explore：找熱圖的繪製程式', 1.0, '10/12'],
+        [C.dflt, 'reviewer：審查清單欄位省略規則', 0.74, '10/13'],
+        [C.forkInk, 'fork：查 transcript 回填的日期', 0.55, '10/09'],
+        [C.namedInk, 'checker：TODO 是否自足', 0.23, '10/08'],
+        [C.dflt, 'general-purpose：整理 ROADMAP 查證結果', 0.12, '10/02'],
+      ];
+      const topT = sum * (openBy === 'main' ? 0.35 : 0.08);
+      SP.forEach(([dot, desc, f, date], i) => {
+        const l = NL();
+        l.add(openBy === 'main' ? ' ' : '●', { color: dot }); l.add(' ');
+        l.add(this.cut(desc, nameW), { color: C.hi }, () => this.setState((s) => ({ exp: !s.exp })), '展開這一筆'); l.pad(2 + nameW + 1);
+        const bw = Math.max(1, Math.round(rowBar * f)); l.add(' '.repeat(bw), { bg: openBy === 'main' ? C.main : C.sub }); l.pad(2 + nameW + 1 + rowBar + 1);
+        const tk = this.short(topT * f); l.add(' '.repeat(9 - this.W(tk))); l.add(tk); l.add(' '); l.add(date.padStart(6), { color: C.dim });
+        if (i === 0 && this.state.exp && openBy !== 'main') {
+          [['種類', 'Explore'], ['模型', 'claude-haiku-5-5（指定）'], ['執行', '背景 · 23 步 · 4 分 12 秒'], ['session', '調整 stats 的熱圖 · 10/12 02:11']].forEach(([k, v]) => {
+            const e = NL(); e.add(' '); e.add('│ ', { color: C.namedInk }); e.add(k, { color: C.dim }); e.pad(12); e.add(this.cut(v, cols - 12));
+          });
+        }
+      });
+      const more = NL(); more.add('  '); more.add('m 還有 ' + (openBy === 'main' ? 9 : 16) + ' 筆 ▸', { color: C.hi }, () => {}, '再列 10 筆');
+      NL().add(' ');
+      NL().add('Tab 移動 · Enter 展開一筆 · Esc 關閉', { color: C.dim });
+      return { cols, lines: lines.map((l) => ({ cls: l.cls, segs: l.segs })), caption: cols + ' 欄 · 打開一列（' + OPEN.group + '）', keysHint: '按一筆展開' };
+    }
+
+    if (old) {
+      wrap(rangeName + '只剩每日摘要：各 session 與派出已隨帳本在 90 天後刪除。');
+      NL().add(' ');
+      NL().add('Tab 移動 · Enter 打開一列 · Esc 關閉', { color: C.dim });
+      return { cols, lines: lines.map((l) => ({ cls: l.cls, segs: l.segs })), caption: cols + ' 欄 · 只剩每日摘要', keysHint: '按 p、h、l、t 試試' };
+    }
+
+    // 清單
+    const GROUPS = [
+      { label: '依 repo', more: 0, rows: [
+        ['cc-mod-trimtab', 0.49, 0.36, 0.48, { ses: '14', last: '10/14' }],
+        ['dotfiles', 0.26, 0.30, 0.26, { ses: '6', last: '10/13' }],
+        ['blog', 0.15, 0.25, 0.17, { ses: '4', last: '10/09' }],
+        ['scratch', 0.06, 0.20, 0.06, { ses: '3', last: '09/30' }],
+        ['notes', 0.03, 0.0, 0.03, { ses: '2', last: '09/22' }],
+        ['experiments-with-a-long-name', 0.01, 0.1, 0.0, { ses: '1', last: '09/16' }],
+      ], extras: [{ key: 'ses', head: 'session', prio: 6 }, { key: 'last', head: '上次', prio: 7 }] },
+      { label: '依 session', more: 19, rows: [
+        ['調整 stats 的熱圖，現在看起來很雜亂', 0.19, 0.41, 0.2, { repo: 'cc-mod-trimtab', at: '10/12 02:11' }],
+        ['檢查 diff 並寫 ADR', 0.13, 0.33, 0.13, { repo: 'cc-mod-trimtab', at: '10/09 14:30' }],
+        ['整理 zsh 設定', 0.09, 0.18, 0.07, { repo: 'dotfiles', at: '10/03 21:05' }],
+        ['寫部落格草稿：Ink 的重畫效能', 0.07, 0.25, 0.09, { repo: 'blog', at: '10/01 10:42' }],
+        ['回填測試', 0.05, 0.5, 0.04, { repo: 'cc-mod-trimtab', at: '09/28 23:10' }],
+        ['open-items 的 toast 文字', 0.04, 0.2, 0.02, { repo: 'cc-mod-trimtab', at: '09/20 16:02' }],
+        ['設定 tmux 的狀態列', 0.04, 0.1, 0.03, { repo: 'dotfiles', at: '09/19 22:40' }],
+        ['scratch：試 Ink 的 Static', 0.03, 0.0, 0.0, { repo: 'scratch', at: '09/18 11:05' }],
+        ['session-keeper 的進度格式', 0.03, 0.3, 0.04, { repo: 'cc-mod-trimtab', at: '09/17 09:12' }],
+        ['部落格：Claude Code mod 介紹', 0.02, 0.15, 0.02, { repo: 'blog', at: '09/16 20:30' }],
+      ], extras: [{ key: 'repo', head: 'repo', prio: 6, max: 14 }, { key: 'at', head: '開始', prio: 7 }] },
+      { label: '依模型', more: 0, rows: [
+        ['claude-opus-5-5', 0.55, 0.2, 0.15, { avg: '310k', last: '10/14' }],
+        ['claude-sonnet-5-5', 0.30, 0.7, 0.55, { avg: '96k', last: '10/14' }],
+        ['claude-haiku-5-5', 0.12, 0.9, 0.27, { avg: '41k', last: '10/13' }],
+        ['claude-fable-5-1', 0.03, 0.5, 0.03, { avg: '88k', last: '10/02' }],
+      ], extras: [{ key: 'avg', head: '平均/次', prio: 6 }, { key: 'last', head: '上次', prio: 7 }] },
+      { label: '依種類', more: 0, rows: [
+        ['主 session', 0.62, 0.0, 0.0, { avg: '—', last: '10/14' }],
+        ['Explore', 0.12, 1.0, 0.37, { avg: '58k', last: '10/14' }],
+        ['reviewer', 0.10, 1.0, 0.22, { avg: '102k', last: '10/13' }],
+        ['implementer', 0.08, 1.0, 0.09, { avg: '205k', last: '10/11' }],
+        ['fork', 0.05, 1.0, 0.17, { avg: '67k', last: '10/12' }],
+        ['checker', 0.03, 1.0, 0.15, { avg: '22k', last: '10/10' }],
+      ], extras: [{ key: 'avg', head: '平均/次', prio: 6 }, { key: 'last', head: '上次', prio: 7 }] },
+    ];
+    const G = GROUPS[this.state.gi];
+    const barW = Math.max(6, Math.min(14, Math.round(cols * 0.12)));
+    const rows = G.rows.map(([name, frac, subS, spF, ex]) => {
+      const sp = Math.round(spawns * spF);
+      const n1 = Math.round(sp * 0.3), f1 = Math.round(sp * 0.17);
+      return { name, tokV: sum * frac, tok: this.short(sum * frac), share: Math.round(frac * 100) + '%', sub: Math.round(subS * 100) + '%', subS, sp: String(sp), kinds: n1 + '/' + (sp - n1 - f1) + '/' + f1, cache: this.short(sum * frac * 14.7), ex };
+    });
+    const maxTok = Math.max(...rows.map((r) => r.tokV), 1);
+    const colDefs = [
+      { key: 'tok', head: 'token', prio: 1, get: (r) => r.tok },
+      { key: 'share', head: '佔比', prio: 4, get: (r) => r.share },
+      { key: 'bar', head: '', prio: 3, w: barW },
+      { key: 'sub', head: 'sub', prio: 5, get: (r) => r.sub },
+      { key: 'sp', head: '派出', prio: 2, get: (r) => r.sp },
+      { key: 'kinds', head: '指定/預設/fork', prio: 8, get: (r) => r.kinds },
+      ...G.extras.map((e) => ({ key: e.key, head: e.head, prio: e.prio, max: e.max, get: (r) => r.ex[e.key], left: e.key === 'repo' })),
+      { key: 'cache', head: '快取讀取', prio: 9, get: (r) => r.cache },
+    ];
+    colDefs.forEach((c) => { if (c.w) return; c.w = Math.max(this.W(c.head), ...rows.map((r) => this.W(c.get(r)))); if (c.max) c.w = Math.min(c.w, c.max); });
+    const nameMin = Math.max(16, this.W('g ‹ 依 session ›'));
+    const nameIdeal = Math.max(this.W('g ‹ ' + G.label + ' ›'), ...rows.map((r) => this.W(r.name)));
+    const byPrio = colDefs.slice().sort((a, b) => a.prio - b.prio);
+    const on = new Set();
+    let used = 0;
+    for (const c of byPrio) { if (nameMin + used + 2 + c.w <= cols) { on.add(c.key); used += 2 + c.w; } else break; }
+    const shownCols = colDefs.filter((c) => on.has(c.key));
+    const nameW = Math.min(nameIdeal, cols - used);
+    const lead = cols - (nameW + used);
+    const head = NL('tl ul');
+    head.add('g ‹ ', { color: C.hi }, () => this.setState((s) => ({ gi: (s.gi + 1) % GROUPS.length })), '切換分組');
+    const hs = head.segs[head.segs.length - 1];
+    hs.cells.push(...this.line().add(G.label, { b: true, color: C.hi }).segs[0].cells, ...this.line().add(' ›', { color: C.hi }).segs[0].cells);
+    head.n += this.W(G.label + ' ›');
+    head.pad(nameW + lead);
+    shownCols.forEach((c) => { head.add('  '); const h = c.head; if (c.left) { head.add(h, { color: C.dim }); head.pad(head.n + c.w - this.W(h)); } else { head.pad(head.n + c.w - this.W(h)); head.add(h, { color: C.dim }); } });
+    rows.forEach((r) => {
+      const l = NL();
+      l.add(this.cut(r.name, nameW), { color: C.hi });
+      l.pad(nameW + lead);
+      shownCols.forEach((c) => {
+        l.add('  ');
+        if (c.key === 'bar') {
+          const w = Math.max(1, Math.round((r.tokV / maxTok) * c.w));
+          const sw = r.subS > 0 ? Math.max(1, Math.round(w * r.subS)) : 0;
+          const mw = Math.max(0, w - sw);
+          if (mw) l.add(' '.repeat(mw), { bg: C.main });
+          if (sw) l.add(' '.repeat(sw), { bg: C.sub });
+          l.add(' '.repeat(c.w - mw - sw));
+          return;
+        }
+        let val = c.get(r);
+        if (c.max) val = this.cut(val, c.w);
+        const color = c.key === 'tok' || c.key === 'sp' ? '#d4d4d4' : c.key === 'sub' ? C.subInk : C.mid;
+        if (c.left) { l.add(val, { color }); l.pad(l.n + c.w - this.W(val)); }
+        else { l.add(' '.repeat(c.w - this.W(val))); l.add(val, { color }); }
+      });
+    });
+    if (G.more > 0) { const m = NL(); m.add('m 還有 ' + G.more + ' 筆 ▸', { color: C.hi }, () => {}, '再列 10 筆'); }
+    NL().add(' ');
+    NL().add('Tab 移動 · Enter 打開一列 · Esc 關閉', { color: C.dim });
+    const names = { tok: 'token', share: '佔比', bar: '長條', sub: 'sub', sp: '派出', kinds: '指定/預設/fork', cache: '快取讀取' };
+    G.extras.forEach((e) => { names[e.key] = e.head; });
+    return { cols, lines: lines.map((l) => ({ cls: l.cls, segs: l.segs })), caption: cols + ' 欄 · 清單顯示 ' + ['名稱'].concat(shownCols.map((c) => names[c.key])).join('、'), keysHint: '按 p、h、l、t、g 試試' };
+  }
+}
+</script>
+</body>
+</html>
