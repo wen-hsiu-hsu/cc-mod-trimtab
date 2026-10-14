@@ -906,15 +906,14 @@ export const register: Register = (on, options) => {
     // A session by its first prompt.
     const promptOf = (session: Report['sessions'][number]) => session.prompt || pick(lang, { en: '(no prompt)', 'zh-TW': '（沒有 prompt）' })
 
-    // A bar of `width` cells shared by `of`: `▆` in each part's color in the terminal (DESIGN.md「長條」),
-    // an Svg on desktop.
+    // A bar of `width` cells shared by `of`: colored spaces in the terminal, an Svg on desktop.
     const stack = (of: Part[], width: number) => {
       const shares = splitCells(of.map(part => part.value), width)
       if (Svg !== undefined) {
         return <Svg source={svgStack(of.map((part, i) => ({ cells: shares[i] ?? 0, fill: part.fill })))} alt={of.map(part => `${part.label} ${n(part.value)}`).join(', ')} width={width * 8} height={8} />
       }
 
-      return <Text>{of.map((part, i) => ((shares[i] ?? 0) === 0 ? '' : <Text color={part.ink}>{'▆'.repeat(shares[i] ?? 0)}</Text>))}</Text>
+      return <Text>{of.map((part, i) => ((shares[i] ?? 0) === 0 ? '' : <Text backgroundColor={part.ink}>{' '.repeat(shares[i] ?? 0)}</Text>))}</Text>
     }
     // A list row's bar: `cells` of `width` in `▆`, lines apart from the rows above and below
     // (DESIGN.md「長條」), parts in their own colors.

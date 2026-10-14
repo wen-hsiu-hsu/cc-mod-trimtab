@@ -470,7 +470,7 @@ describe('usage ledger', () => {
       const pane = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' } as never)
       expect((await pane.find({ key: 'period' }))?.text).toContain('Sep 13 – Oct 12')
       expect((await pane.find({ key: 'tokens-line' }))?.text).toMatch(/^1k token/)
-      // Grouped by repo by default, named by the folder; bars are ▆, never '█'.
+      // Grouped by repo by default, named by the folder; bars are glyphs and colored spaces, never '█'.
       expect(await pane.find({ key: 'row:/repo' })).toBeDefined()
       expect(await pane.find({ key: 'row:/old' })).toBeDefined()
       expect(await pane.find({ type: 'Text', text: /█/ })).toBeUndefined()
@@ -582,8 +582,8 @@ describe('usage ledger', () => {
       const text = async (key: string) => (await pane.find({ key }))?.text ?? ''
       expect(await text('tokens-line')).toMatch(/^320 token\s*main 160 {2}sub 160$/)
       expect(await text('spawns-line')).toMatch(/^4 spawns\s*named 2 {2}default 1 {2}fork 1$/)
-      expect(await text('tokens-bar')).toBe('▆'.repeat(bodyColumns))
-      expect(await text('spawns-bar')).toBe('▆'.repeat(bodyColumns))
+      expect(await text('tokens-bar')).toBe(' '.repeat(bodyColumns))
+      expect(await text('spawns-bar')).toBe(' '.repeat(bodyColumns))
       expect(await text('cache-read')).toBe('Cache read 2k, not counted')
       // No card frames.
       expect(await pane.find({ key: 'card:tokens' })).toBeUndefined()
