@@ -61,8 +61,8 @@ export const LEDGER_SPEC: KeySpec = {
   default: true,
   repo: 'never',
   description: {
-    en: 'Record each spawn and the token use of the main session and every subagent in a local ledger, for /subagent-dispatch stats. Off records nothing; existing records stay',
-    'zh-TW': '把每次派出，以及主 session 與各 subagent 的 token 用量記進本機帳本，供 /subagent-dispatch stats 使用。關閉後不再記錄，已有的紀錄保留',
+    en: 'Record each spawn and the token use of the main session and every subagent on this machine, for /subagent-dispatch stats. Off records nothing; existing records stay',
+    'zh-TW': '把每次派出，以及主 session 與各 subagent 的 token 用量記進本機的用量明細，供 /subagent-dispatch stats 使用。關閉後不再記錄，已有的紀錄保留',
   },
 }
 
@@ -901,7 +901,7 @@ export function repoName(lang: Lang, repo: string): string {
 // A spawn in three parts: what it was asked, what ran it, and what it cost.
 export function spawnParts(lang: Lang, spawn: Spawn): [string, string, string] {
   return [
-    spawn.description || pick(lang, { en: '(spawned before the ledger saw it)', 'zh-TW': '（派出時帳本沒看到）' }),
+    spawn.description || pick(lang, { en: '(spawned before it was recorded)', 'zh-TW': '（派出時沒記到）' }),
     `${spawn.type} · ${spawn.requested ?? pick(lang, { en: 'default', 'zh-TW': '預設' })} → ${spawn.model}`,
     [
       ...(spawn.background ? [pick(lang, { en: 'background', 'zh-TW': '背景' })] : []),
@@ -946,8 +946,8 @@ export function summaryLines(lang: Lang, report: Report): string[] {
 }
 
 export const NOT_INCLUDED: Record<Lang, string> = {
-  en: "Not included: mods' own model calls ($.model.fork/complete), cloud sessions, and sessions whose transcripts this machine no longer had when the ledger was installed.",
-  'zh-TW': '不含：各 mod 自己呼叫模型（$.model.fork/complete）的用量、雲端 session，以及安裝帳本時這台電腦已經沒有 transcript 的 session。',
+  en: "Not included: mods' own model calls ($.model.fork/complete), cloud sessions, and sessions whose transcripts this machine no longer had when recording began.",
+  'zh-TW': '不含：各 mod 自己呼叫模型（$.model.fork/complete）的用量、雲端 session，以及開始記錄時這台電腦已經沒有 transcript 的 session。',
 }
 
 // `/subagent-dispatch stats --text [days]`, and what `stats` prints where no pane can be placed.

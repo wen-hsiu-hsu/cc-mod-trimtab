@@ -723,8 +723,8 @@ export const register: Register = (on, options) => {
       return {
         text: startBackfill($, lang, ledger, true)
           ? pick(lang, {
-              en: 'Reading the transcripts of sessions with no ledger, in the background; a toast says how many were added.',
-              'zh-TW': '在背景讀取還沒有帳本的 session 的 transcript，補上後會跳 toast 說補了幾個。',
+              en: 'Reading the transcripts of sessions with no usage details, in the background; a toast says how many were added.',
+              'zh-TW': '在背景讀取還沒有用量明細的 session 的 transcript，補上後會跳 toast 說補了幾個。',
             })
           : pick(lang, { en: 'A backfill is already running.', 'zh-TW': '回填已經在跑。' }),
       }

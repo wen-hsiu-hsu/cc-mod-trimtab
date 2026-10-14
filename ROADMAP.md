@@ -10,12 +10,11 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 
 1. 2.1.296 自己產生的型別檔與 2.1.288 版是否一致（見「查證結果」2；目前只拿得到 2.1.288 版）。
 2. 第一次寫 `.claude/cc-mod-trimtab.local.json` 時加進 `.git/info/exclude`：只有自動測試。
-3. `subagent-dispatch` 帳本跨 `/clear` 的 session 命名與 agent 步數歸屬：只有自動測試。
+3. `subagent-dispatch` 用量明細跨 `/clear` 的 session 命名與 agent 步數歸屬：只有自動測試。
 4. `subagent-dispatch` 回填後 `turn.step` 每次寫入的實際耗時：只在 engine 外量過（見「查證結果」21）。
 ## 待辦
 
 - **讓使用者在自己的終端機確認方塊字元會不會錯位**（subagent-dispatch，等 stats 改版合併後做）：熱圖格子 `■` 與相鄰列長條的 `▆`（U+2586）都是 East Asian Ambiguous 寬度，終端機把 ambiguous 當全形時整排會錯位。在設定流程（安裝後第一次開 stats pane，或 `/subagent-dispatch set` 相關指令）先畫一段 `■ ■ ■` 與 `▆▆▆` 加上對齊參考線，讓使用者看自己的環境決定要不要用；不用時改用替代畫法（例如熱圖用 ASCII、長條用有底色的空格）。要先查：Claude Code 沒有安裝事件（見 [subagent-dispatch 的回填](docs/mods/subagent-dispatch.zh-TW.md#回填)），觸發點只能是第一次開 pane 或指令；選擇存在哪一層設定（`pluginConfigs` 或 `$.store`）。
-- **「帳本」改成「用量明細」**（subagent-dispatch，等 stats 改版合併後做）：「帳本」指每個 session 自己的用量紀錄（主 session 每天的 token、每次派出），保留 90 天；超過後只剩「每日摘要」，「用量明細」跟它成對。改中文介面字串與中文文件（`docs/mods/subagent-dispatch.zh-TW.md`、`DESIGN.md`、`register.tsx` 與 `ledger.ts` 的 `zh-TW` 字串、測試）。英文的 ledger 太正式的話一起改成白話（例如 usage details，對應 daily summary），範圍是 `docs/mods/subagent-dispatch.md` 與 `en` 字串。設定 key `ledger`、store 的 key、檔名 `ledger.ts` 要不要改，動手時再跟使用者討論（改 key 會讓已存的設定與資料讀不到，要有遷移）。
 - **open-items、tool-guard 的說明文件也放 pane 預覽圖**：subagent-dispatch 已用 `scripts/capture-pane.py` 做好（ADR 0028）。每個 mod 要寫 `scripts/pane-shots/<mod>.py`（假資料與一兩個代表畫面），裡面的 `OPEN` 是開 pane 的指令。
 
 ## mod 規劃
@@ -35,7 +34,7 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 | project-memory 的離線評估集（照 LongMemEval 分類標 30–50 段對話的預期整理結果，量抽取與更新的錯誤率） | 成本較高，要先累積一段時間的真實整理結果才有素材 | 用過一個月以上，或懷疑整理品質（記錯、漏記、重複）時 |
 | `tool-guard` 的 cmd-rewrite（Bash 執行前依 repo 設定的 `{ "match", "replace" }` 改寫指令，例如 `npx vitest run` 換成 `npm run test:brief --`；改寫時提示一次，進版控的規則第一次生效前要使用者核准） | 2026-10-11 查一個多月的 prompt 與 transcript：沒有一次因為 Claude 沒照 CLAUDE.md 的指令規則而糾正；唯一一條「該用 X 不要用 Y」的規則才加 5 天，之後還沒有 session 可看 | 有這類規則的 repo 累積 5 個以上 session 後，仍有 2 次以上被糾正或照舊跑錯的指令。先做最窄的版本：設定檔寫死的字面 match／replace |
 | `tool-guard` 的學來的守門（`/tool-guard suggest` 把 memory 中出現 3 次以上的規則交給模型草擬工具呼叫前的比對式，核准才生效；上游 `guards.ts`） | 同一次查證：沒有同一種工具呼叫錯誤在不同 session 被糾正 3 次以上；反覆出現的糾正是寫作風格與流程，比對式擋不了；規則提升已由 `project-memory` 的「3 個 session 證實」處理 | 同一個工具呼叫錯誤在不同 session 被糾正 3 次以上，且寫得成字面比對式。先做使用者自己在設定檔寫 block／warn 比對式，不用模型草擬 |
-| `subagent-dispatch` 的分派提醒（subagent 跑在 Opus 但 description 看不出理由、或同一個 session fork 偏多時跳 toast，只提醒不擋；先在 `stats` 標出符合的派出，看誤判再開 toast，開 toast 時給它自己的開關） | 2026-10-12 查帳本（新舊檔名共 23 次派出）：Sonnet 11、Haiku 9、fork 3，沒有一次跑在 Opus，一個 session 最多 fork 2 次。帳本已記模型、指定模型、fork 與 description，之後可直接從帳本算，不必先加欄位 | 帳本出現 3 次以上 description 沒寫理由的 Opus 派出（非 fork），或有 session fork 3 次以上。先做最窄的版本：`stats` 摘要多一行計數並在列表標出，不跳 toast |
+| `subagent-dispatch` 的分派提醒（subagent 跑在 Opus 但 description 看不出理由、或同一個 session fork 偏多時跳 toast，只提醒不擋；先在 `stats` 標出符合的派出，看誤判再開 toast，開 toast 時給它自己的開關） | 2026-10-12 查用量明細（新舊檔名共 23 次派出）：Sonnet 11、Haiku 9、fork 3，沒有一次跑在 Opus，一個 session 最多 fork 2 次。用量明細已記模型、指定模型、fork 與 description，之後可直接從用量明細算，不必先加欄位 | 用量明細出現 3 次以上 description 沒寫理由的 Opus 派出（非 fork），或有 session fork 3 次以上。先做最窄的版本：`stats` 摘要多一行計數並在列表標出，不跳 toast |
 | CI 跑 `tsc` | 型別檔只在 Claude Code 載入 mod 時產生，CI 拿不到 | Claude Code 提供產生型別檔的指令，或型別檔有公開的套件 |
 
 ### 不做

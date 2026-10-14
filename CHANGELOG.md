@@ -3,6 +3,16 @@
 Each mod keeps its own version in `mods/<mod>/.claude-plugin/plugin.json`.
 Repository releases are tagged `vX.Y.Z` and list the mod versions they ship.
 
+## [0.9.2] - 2026-10-14
+
+| Mod | Version |
+| --- | --- |
+| `subagent-dispatch` | 0.6.2 |
+- `subagent-dispatch` 0.6.2:
+  - Changed: the per-session usage record is called "usage details" in the
+    messages and docs (「用量明細」 in Chinese, was 「帳本」), paired with the
+    day rows. The `ledger` setting and the stored data keep their names.
+
 ## [0.9.1] - 2026-10-14
 
 | Mod | Version |
