@@ -38,6 +38,11 @@ claude plugin marketplace add wen-hsiu-hsu/cc-mod-trimtab
 /plugin install secret-scrub@cc-mod-trimtab
 /plugin install tool-guard@cc-mod-trimtab
 /plugin install output-trimmer@cc-mod-trimtab
+/plugin install subagent-dispatch@cc-mod-trimtab
+/plugin install open-items@cc-mod-trimtab
+/plugin install session-keeper@cc-mod-trimtab
+/plugin install self-check@cc-mod-trimtab
+/plugin install project-memory@cc-mod-trimtab
 ```
 
 裝好就能用，預設值都是安全的。會呼叫模型的功能（`session-keeper` 與 `project-memory`）預設關，用 `/<mod> on` 或在 `/config` 開啟。`/<mod> status` 看 mod 目前的設定。

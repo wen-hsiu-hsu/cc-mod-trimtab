@@ -48,7 +48,7 @@ CI（`.github/workflows/ci.yml`）在 master 與 PR 上跑上面全部，裝 `@a
 scripts/first-install.sh [--local] [--keep] [<mod>...]
 ```
 
-這支腳本用空的暫存設定資料夾（`CLAUDE_CONFIG_DIR`）與空的工作資料夾開 Claude Code，跟新使用者一樣沒有設定、plugin、marketplace 與 store，先加好 marketplace，再照 README 用 `/plugin install` 安裝。也可以在參數列出 mod，讓腳本先裝好。結束時會刪掉暫存資料夾，`~/.claude` 不會被動到。
+這支腳本用空的暫存設定資料夾（`CLAUDE_CONFIG_DIR`）與空的工作資料夾開 Claude Code，跟新使用者一樣沒有設定、plugin、marketplace 與 store。開啟前會印出加 marketplace 的指令，進去後照 README 加 marketplace、用 `/plugin install` 安裝。在參數列出 mod 時，腳本會先加好 marketplace、裝好這些 mod 再開。結束時會刪掉暫存資料夾，`~/.claude` 不會被動到。
 
 - 預設從 GitHub 安裝，拿到的是已經 push 的版本。加 `--local` 改用這個 clone 已 commit 的 HEAD；它是本機資料夾，mod 會從原地載入，不會先複製到 cache。
 - 設定資料夾是空的，所以沒有登入：要執行 `/login`，或先設定 `ANTHROPIC_API_KEY`。

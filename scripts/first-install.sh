@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Opens Claude Code as a first-time user would: an empty config folder (no settings,
-# plugins, marketplaces or stores of yours) and an empty working folder, with the
-# cc-mod-trimtab marketplace added. Install mods with /plugin install as the README says,
-# or name them here to install them first. Your ~/.claude is not touched.
+# plugins, marketplaces or stores of yours) and an empty working folder. Add the
+# marketplace and install mods as the README says; the command to add it is printed
+# first. Name mods here to have both done before Claude Code opens. Your ~/.claude is
+# not touched.
 #
 #   scripts/first-install.sh [--local] [--keep] [<mod>...]
 #
@@ -19,7 +20,7 @@ for arg in "$@"; do
   case $arg in
     --local) source=local ;;
     --keep) keep=1 ;;
-    -h | --help) sed -n '2,13s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,14s/^# \{0,1\}//p' "$0"; exit 0 ;;
     -*) echo "不認得的選項：$arg" >&2; exit 2 ;;
     *) mods+=("$arg") ;;
   esac
@@ -48,8 +49,14 @@ done
 export CLAUDE_CONFIG_DIR=$sandbox/config
 cd "$sandbox/work"
 
-claude plugin marketplace add "$source"
-for mod in ${mods[@]+"${mods[@]}"}; do
-  claude plugin install "$mod@cc-mod-trimtab"
-done
+if [ "${#mods[@]}" -gt 0 ]; then
+  claude plugin marketplace add "$source"
+  for mod in "${mods[@]}"; do
+    claude plugin install "$mod@cc-mod-trimtab"
+  done
+else
+  echo "在 Claude Code 裡先加 marketplace：/plugin marketplace add $source"
+  # Claude Code clears the screen when it opens, so wait until the command is noted.
+  [ -t 0 ] && read -r -p "按 Enter 開啟 Claude Code" _
+fi
 claude
