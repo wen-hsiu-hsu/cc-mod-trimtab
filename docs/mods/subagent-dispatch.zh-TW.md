@@ -51,7 +51,7 @@
 - 清單上下相鄰的長條用 `▆` 畫，兩列之間留一道空隙。
 - pane 開著時會跟上新的用量：記下一個 step 或派出後一秒，依用量明細重畫一次。其他原因的重畫（縮放、按鍵）距上次讀取不到 30 秒時沿用上次讀到的內容，所以 `更新於` 是上次讀取用量明細的時間；別的 session 的用量在下次讀取時出現。
 
-終端機較窄時 pane 會改放在輸入框上方。`/subagent-dispatch stats --text [天數]` 印出同樣內容的文字版；`-p` 執行或無處放 pane 時，`stats` 也改印文字版。
+終端機不到 110 欄時 pane 會改放在輸入框上方（由 Claude Code 決定）。`/subagent-dispatch stats --text [天數]` 印出同樣內容的文字版；`-p` 執行或無處放 pane 時，`stats` 也改印文字版。
 
 不含：各 mod 自己呼叫模型（`$.model.fork` / `$.model.complete`）的用量、雲端 session（不載入 mod），以及安裝時這台電腦已經沒有 transcript 的 session。
 

@@ -51,7 +51,7 @@ The pictures are the real pane over made-up data, captured with `scripts/capture
 - Bars in rows above and below each other are drawn in `▆`, leaving a gap between rows.
 - While the pane is open it follows new use: a second after a step or spawn is recorded, it is drawn again from the usage details. Other redraws (a resize, a key) within 30 seconds of the last read reuse it, so `Updated` is when the usage details were last read; another session's use shows at the next read.
 
-In a narrow terminal the pane opens above the input box instead of beside the conversation. `/subagent-dispatch stats --text [days]` prints the same report as text. `stats` prints it too in a `-p` run, or when no pane can be placed.
+In a terminal under 110 columns the pane opens above the input box instead of beside the conversation (Claude Code decides this). `/subagent-dispatch stats --text [days]` prints the same report as text. `stats` prints it too in a `-p` run, or when no pane can be placed.
 
 Not included: the mods' own model calls (`$.model.fork` / `$.model.complete`), cloud sessions (they do not load mods), and sessions older than the transcripts this machine kept when the mod was installed.
 
