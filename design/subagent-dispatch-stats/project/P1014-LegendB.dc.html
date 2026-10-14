@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>圖例提案 B</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+.ln{display:flex;justify-content:space-between;height:18px;white-space:pre}
+.bar{display:flex;height:12px;margin:3px 0}
+</style>
+</helmet>
+<div style="width: 560px; min-height: 420px; box-sizing: border-box; padding: 20px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; display: flex; flex-direction: column; gap: 10px">
+<div style="color: #8b8b93; font-size: 13px">56 欄。熱圖下面只留 少 ■■■■ 多；「最多」改成期間內最多的那天，放在快取讀取那行右邊；「無資料／無用量」只寫進文件。</div>
+<div style="background: #1b1b1d; border-radius: 10px; padding: 14px 16px; font-family: 'JetBrains Mono', 'Noto Sans TC', monospace; font-size: 12px; line-height: 18px">
+<div style="width: 56ch; display: flex; flex-direction: column">
+<div class="ln"><span style="color: #6b6b73">    少 <span style="color:#1f5a6d">■</span><span style="color:#2a7f9c">■</span><span style="color:#3aa6cc">■</span><span style="color:#86d6f0">■</span> 多</span><span style="color: #a8a8b0">└── 30 天 ──┘</span></div>
+<div class="ln"></div>
+<div class="ln"><span><span style="color: #6b6b73">期間 p</span><b> ‹ 30 天 ›</b><span style="color: #6b6b73">  h</span><b style="color: #f0f0f0"> ‹ 09/15 – 10/14 › </b><span style="color: #6b6b73">l</span></span><span><span style="color: #6b6b73">t</span> 今天</span></div>
+<div class="ln"></div>
+<div class="ln"><span><b style="color: #f0f0f0">12.4M</b> <span style="color: #6b6b73">token</span></span><span><span style="color: #b48ee6">主</span> 8.4M  <span style="color: #3aa6cc">sub</span> 4.0M</span></div>
+<div class="bar"><span style="flex: 84 1 0; background: #8a5cc7"></span><span style="flex: 40 1 0; background: #2f8fb0"></span></div>
+<div class="ln"><span><b style="color: #f0f0f0">46</b> <span style="color: #6b6b73">次派出</span></span><span><span style="color: #d7b84a">指定</span> 14 <span style="color: #8b8b93">預設</span> 24 <span style="color: #5fb36b">fork</span> 8</span></div>
+<div class="bar"><span style="flex: 14 1 0; background: #c98a12"></span><span style="flex: 24 1 0; background: #8b8b93"></span><span style="flex: 8 1 0; background: #3f9a4f"></span></div>
+<div class="ln"><span style="color: #6b6b73">快取讀取 182M 另計</span><span><span style="color: #6b6b73">最多 </span>10/02 1.2M</span></div>
+</div>
+</div>
+<div style="color: #8b8b93; font-size: 13px">好處：「最多」跟著期間走，按 h/l 換期間時也跟著換，比熱圖整體的最高點有用。代價：摘要多一個要讀的數字；期間 1 天時這項不畫。</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":560,"height":420}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>方案 A 時間窗</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+.ln{display:flex;height:18px;white-space:pre}
+.card{border:1px solid #4a4a52;border-radius:7px;padding:0 1ch;box-sizing:border-box}
+.bar{display:inline-block;height:12px;margin-top:3px}
+.k{font:inherit;color:#f0f0f0;background:none;border:0;padding:0;margin:0;cursor:pointer;line-height:inherit;white-space:pre}
+.k:hover{background:#2a2a2e}
+.k:focus-visible{outline:1px solid #6cc4e0}
+</style>
+</helmet>
+<div style="width: 860px; height: 1120px; box-sizing: border-box; padding: 24px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; color: #8b8b93; font-size: 13px">
+<span>A · 期間只有一個：p 改長度、h / l 整窗往前後移</span>
+<span>按 p、h、l、t 試試</span>
+</div>
+<div style="flex: 1; background: #1b1b1d; border-radius: 10px; padding: 16px 18px; font-family: 'JetBrains Mono', 'Noto Sans TC', monospace; font-size: 12px; line-height: 18px; overflow: hidden">
+<div style="width: 100ch; display: flex; flex-direction: column">
+
+<div class="ln"><span style="font-weight: 700; color: #f0f0f0">subagent-dispatch stats </span><span style="color: #3a3a40">──────────────────────────────────────────────────────────────────────────────</span></div>
+<div class="ln"> </div>
+
+<div style="position: relative; height: 18px">
+<sc-for list="{{heat.months}}" as="m" hint-placeholder-count="11"><span style="position: absolute; top: 0; left: {{m.left}}ch; color: #6b6b73; white-space: pre">{{m.text}}</span></sc-for>
+</div>
+<sc-for list="{{heat.rows}}" as="row" hint-placeholder-count="7">
+<div class="ln"><span style="display: inline-block; width: 4ch; color: #6b6b73">{{row.label}}</span><sc-for list="{{row.cells}}" as="c" hint-placeholder-count="48"><span style="color: {{c.color}}; opacity: {{c.op}}; font-weight: {{c.fw}}">{{c.ch}}</span></sc-for></div>
+</sc-for>
+<div style="position: relative; height: 18px"><span style="position: absolute; left: {{bracket.left}}ch; color: {{bracket.color}}; font-weight: 700; white-space: pre">{{bracket.text}}</span><span style="position: absolute; right: 0; color: #6b6b73; white-space: pre">少 <span style="color: #1f5a6d">■</span><span style="color: #2a7f9c">■</span><span style="color: #3aa6cc">■</span><span style="color: #86d6f0">■</span> 多</span></div>
+<div class="ln"> </div>
+
+<div class="ln" style="justify-content: space-between">
+<span><span style="color: #6b6b73">期間 </span><button class="k" onClick="{{cycle}}">p ‹ <b>{{lenLabel}}</b> ›</button><span>   </span><button class="k" onClick="{{back}}" aria-label="往前一個期間">h ‹</button><span style="color: #f0f0f0; font-weight: 700"> {{rangeLabel}} </span><button class="k" onClick="{{fwd}}" aria-label="往後一個期間">› l</button></span>
+<sc-if value="{{moved}}" hint-placeholder-val="{{ false }}"><button class="k" onClick="{{home}}" style="color: #8b8b93">t 回到今天</button></sc-if>
+</div>
+<div class="ln"> </div>
+<sc-if value="{{hasUse}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; gap: 2ch">
+<div class="card" style="width: 49ch">
+<div class="ln" style="justify-content: space-between"><span style="color: #6b6b73">總 token</span><span style="color: #3aa6cc">subagent 佔 {{subPct}}</span></div>
+<div class="ln" style="font-weight: 700; color: #f0f0f0">{{total}}</div>
+<div class="ln"><span class="bar" style="width: 31ch; background: #8a5cc7"></span><span class="bar" style="width: 14ch; background: #2f8fb0"></span></div>
+<div class="ln" style="justify-content: space-between"><span><span style="color: #b48ee6">●</span> 主 session</span><span>{{main}}</span></div>
+<div class="ln" style="justify-content: space-between"><span><span style="color: #3aa6cc">●</span> subagent</span><span>{{sub}}</span></div>
+<div class="ln"> </div>
+</div>
+<div class="card" style="width: 49ch">
+<div class="ln" style="justify-content: space-between"><span style="color: #6b6b73">派出</span></div>
+<div class="ln" style="font-weight: 700; color: #f0f0f0">{{spawns}}</div>
+<div class="ln"><span class="bar" style="width: 14ch; background: #c98a12"></span><span class="bar" style="width: 23ch; background: #8b8b93"></span><span class="bar" style="width: 8ch; background: #3f9a4f"></span></div>
+<div class="ln" style="justify-content: space-between"><span><span style="color: #d7b84a">●</span> 指定模型</span><span>{{named}}</span></div>
+<div class="ln" style="justify-content: space-between"><span><span style="color: #8b8b93">●</span> 沿用預設</span><span>{{dflt}}</span></div>
+<div class="ln" style="justify-content: space-between"><span><span style="color: #5fb36b">●</span> fork</span><span>{{fork}}</span></div>
+</div>
+</div>
+<div class="ln" style="justify-content: space-between"><span style="color: #6b6b73">快取讀取（不計入） {{cache}}</span><span style="color: #6b6b73">更新於 19:04:05</span></div>
+<div class="ln"><span style="color: #3a3a40">────────────────────────────────────────────────────────────────────────────────────────────────────</span></div>
+<div class="ln"><span>g: ‹ <b>依 repo</b> ›</span></div>
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+<div class="card">
+<div class="ln" style="justify-content: space-between"><span>{{g.name}}</span><span>{{g.spawns}}</span></div>
+<div class="ln" style="justify-content: space-between"><span><span class="bar" style="width: {{g.mainW}}ch; background: #8a5cc7"></span><span class="bar" style="width: {{g.subW}}ch; background: #2f8fb0"></span></span><span>{{g.tok}}  {{g.share}}</span></div>
+</div>
+</sc-for>
+</sc-if>
+<sc-if value="{{noUse}}" hint-placeholder-val="{{ false }}">
+<div class="ln" style="color: #6b6b73">{{emptyText}}</div>
+</sc-if>
+<div class="ln"> </div>
+<div class="ln" style="color: #6b6b73">Tab 移動 · Enter 打開一列 · Esc 關閉</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":860,"height":1120}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { li: 2, shift: 0 }; }
+  hash(n, s) { const x = Math.sin(n * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); }
+  tok(d) {
+    if (d < new Date(2026, 4, 18)) return -1;
+    const n = Math.round(d.getTime() / 864e5);
+    const wd = (d.getDay() + 6) % 7;
+    const h = this.hash(n, 1);
+    if ((wd >= 5 && h < 0.6) || (wd < 5 && h < 0.1)) return 0;
+    const h2 = this.hash(n, 2);
+    return Math.round(60000 + h2 * h2 * 1050000);
+  }
+  add(d, k) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + k); }
+  md(d) { return String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0'); }
+  renderVals() {
+    const LENS = [1, 7, 30, 90];
+    const len = LENS[this.state.li];
+    const today = new Date(2026, 9, 14);
+    const end = this.add(today, -this.state.shift);
+    const begin = this.add(end, -(len - 1));
+    const weeks = 48;
+    const dow = (today.getDay() + 6) % 7;
+    const start = new Date(2026, 9, 14 - dow - (weeks - 1) * 7);
+    const at = (w, r) => this.add(start, w * 7 + r);
+    const vals = [];
+    for (let w = 0; w < weeks; w++) for (let r = 0; r < 7; r++) { const d = at(w, r); if (d <= today) { const t = this.tok(d); if (t > 0) vals.push(t); } }
+    vals.sort((a, b) => a - b);
+    const q = (p) => vals[Math.floor(vals.length * p)];
+    const q1 = q(0.25), q2 = q(0.5), q3 = q(0.75);
+    const GV = ['#4a4a52', '#1f5a6d', '#2a7f9c', '#3aa6cc', '#86d6f0'];
+    const LB = ['一', '', '三', '', '五', '', ''];
+    const rows = [];
+    for (let r = 0; r < 7; r++) {
+      const cells = [];
+      for (let w = 0; w < weeks; w++) {
+        const d = at(w, r);
+        if (d > today) { cells.push({ ch: '  ', color: 'transparent', op: 1, fw: 400 }); continue; }
+        const t = this.tok(d);
+        const lv = t < 0 ? -1 : t === 0 ? 0 : t <= q1 ? 1 : t <= q2 ? 2 : t <= q3 ? 3 : 4;
+        const inside = d >= begin && d <= end;
+        let color = lv < 0 ? '#55555c' : GV[lv];
+        if (inside && len === 1) color = '#ff8c42';
+        cells.push({ ch: lv < 0 ? '· ' : '■ ', color, op: inside ? 1 : 0.32, fw: inside && len === 1 ? 700 : 400 });
+      }
+      rows.push({ label: LB[r], cells });
+    }
+    const months = [];
+    let prev = -1;
+    for (let w = 0; w < weeks; w++) {
+      const m = at(w, 6).getMonth();
+      if (w > 0 && m !== prev) months.push({ left: 4 + w * 2, text: (m + 1) + '月' });
+      prev = m;
+    }
+    const wk = (d) => Math.max(0, Math.floor((d - start) / (7 * 864e5)));
+    const WD = ['一', '二', '三', '四', '五', '六', '日'];
+    const dayName = (d) => this.md(d) + '（' + WD[(d.getDay() + 6) % 7] + '）';
+    let bracket;
+    if (len === 1) {
+      bracket = { left: 4 + wk(end) * 2, text: '▲ ' + dayName(end), color: '#ff8c42' };
+      if (wk(end) > weeks - 8) bracket = { left: 4 + wk(end) * 2 - 11, text: dayName(end) + ' ▲', color: '#ff8c42' };
+    } else {
+      const w0 = wk(begin), w1 = wk(end);
+      const span = (w1 - w0) * 2 + 1;
+      bracket = { left: 4 + w0 * 2, text: span < 3 ? '▲' : '└' + '─'.repeat(span - 2) + '┘', color: '#d4d4d4' };
+    }
+    let sum = 0, known = false;
+    for (let i = 0; i < len; i++) { const t = this.tok(this.add(end, -i)); if (t >= 0) { known = true; sum += t; } }
+    const fmt = (x) => Math.round(x).toLocaleString('en-US');
+    const spawns = Math.round(sum / 270000);
+    const named = Math.round(spawns * 0.3), fork = Math.round(spawns * 0.17);
+    const groups = [['cc-mod-trimtab', 0.49, 0.36], ['dotfiles', 0.26, 0.30], ['blog', 0.15, 0.25], ['scratch', 0.10, 0.20]].map(([name, frac, sub]) => {
+      const total = Math.max(1, Math.round(frac * 76));
+      const subW = Math.max(1, Math.round(total * sub));
+      return { name, spawns: Math.round(spawns * frac), tok: fmt(sum * frac), share: Math.round(frac * 100) + '%', mainW: total - subW, subW };
+    });
+    const LBL = ['1 天', '7 天', '30 天', '90 天'];
+    const step = (k) => () => this.setState((s) => {
+      const L = LENS[s.li];
+      const shift = Math.max(0, Math.min(330, s.shift + k * L));
+      return { shift };
+    });
+    return {
+      heat: { rows, months }, bracket,
+      lenLabel: LBL[this.state.li],
+      rangeLabel: len === 1 ? (this.state.shift === 0 ? '今天 ' + dayName(end) : dayName(end)) : this.md(begin) + ' – ' + this.md(end),
+      moved: this.state.shift > 0,
+      hasUse: sum > 0, noUse: sum === 0,
+      emptyText: known ? dayName(end) + ' 沒有用量（有紀錄，主 session 和 subagent 都是 0 token）。' : dayName(end) + ' 沒有資料（回填以前，或 transcript 已被刪掉）。',
+      total: fmt(sum), main: fmt(sum * 0.68), sub: fmt(sum * 0.32), subPct: '32%', cache: fmt(sum * 14.7),
+      spawns, named, fork, dflt: spawns - named - fork, groups,
+      cycle: () => this.setState((s) => ({ li: (s.li + 1) % 4 })),
+      back: step(1), fwd: step(-1),
+      home: () => this.setState({ shift: 0 }),
+    };
+  }
+}
+</script>
+</body>
+</html>

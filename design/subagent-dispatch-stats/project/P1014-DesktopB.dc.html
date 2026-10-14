@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>desktop 提案 B</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+.seg{background:none;border:1px solid #3a3a40;color:#a8a8b0;padding:3px 10px;border-radius:6px;font:inherit;min-height:28px}
+.seg.on{background:#2f8fb0;border-color:#2f8fb0;color:#fff;font-weight:700}
+.key{font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b8b93;margin-right:4px}
+</style>
+</helmet>
+<div style="width: 640px; min-height: 360px; box-sizing: border-box; padding: 24px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; font-size: 13px">
+<div style="background: #1b1b1d; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="font-weight: 700; color: #f0f0f0">subagent-dispatch</span>
+<span style="flex-grow: 1; height: 1px; background: #3a3a40"></span>
+<span style="color: #8b8b93; font-size: 12px">更新於 19:04:05</span>
+</div>
+<div style="position: relative; width: {{svgW}}px; height: {{svgH}}px" role="img" aria-label="每天的 token，42 週">
+<sc-for list="{{months}}" as="m" hint-placeholder-count="6"><span style="position: absolute; top: 0; left: {{m.x}}px; font-size: 9px; color: #8b8b93; line-height: 10px">{{m.label}}</span></sc-for>
+<sc-for list="{{wdays}}" as="w" hint-placeholder-count="3"><span style="position: absolute; left: 0; top: {{w.y}}px; font-size: 9px; color: #8b8b93; line-height: 10px">{{w.label}}</span></sc-for>
+<sc-for list="{{cells}}" as="c" hint-placeholder-count="200"><span style="position: absolute; left: {{c.x}}px; top: {{c.y}}px; width: 10px; height: 10px; border-radius: 2px; box-sizing: border-box; background: {{c.bg}}; border: {{c.bd}}; opacity: {{c.op}}"></span></sc-for>
+</div>
+<div style="font-size: 11px; color: #8b8b93; margin-top: -6px">少 ■■■■ 多</div>
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<span style="color: #8b8b93">期間</span><span class="key">p</span>
+<button class="seg">1 天</button><button class="seg">7 天</button><button class="seg on">30 天</button><button class="seg">90 天</button>
+<span style="width: 6px"></span>
+<button class="seg" aria-label="前一個期間"><span class="key">h</span>‹</button>
+<span style="color: #f0f0f0; font-weight: 700">09/15 – 10/14</span>
+<button class="seg" aria-label="下一個期間">›<span class="key" style="margin: 0 0 0 4px">l</span></button>
+<span style="flex-grow: 1"></span>
+<button class="seg"><span class="key">t</span>今天</button>
+</div>
+<div style="color: #6b6b73; font-size: 12px">熱圖照現在的 Svg：看不出目前的期間落在哪幾週，只能從期間列的日期得知。摘要與清單的長條同提案 A。</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":640,"height":360}}'>
+class Component extends DCLogic {
+  hash(n, s) { const x = Math.sin(n * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); }
+  tok(d) {
+    if (d < new Date(2026, 4, 18)) return -1;
+    const n = Math.round(d.getTime() / 864e5);
+    const wd = (d.getDay() + 6) % 7;
+    const h = this.hash(n, 1);
+    if ((wd >= 5 && h < 0.6) || (wd < 5 && h < 0.1)) return 0;
+    const h2 = this.hash(n, 2);
+    return Math.round(60000 + h2 * h2 * 1050000);
+  }
+  add(d, k) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + k); }
+  renderVals() {
+    const WEEKS = 42, L = 28, T = 14, PITCH = 12;
+    const today = new Date(2026, 9, 14);
+    const lastMon = this.add(today, -((today.getDay() + 6) % 7));
+    const firstMon = this.add(lastMon, -7 * (WEEKS - 1));
+    const cells = [], months = [];
+    let lastMonth = -1;
+    const lvl = (v) => (v < 300000 ? 0.35 : v < 550000 ? 0.55 : v < 800000 ? 0.75 : 1);
+    for (let w = 0; w < WEEKS; w++) {
+      const sun = this.add(firstMon, w * 7 + 6);
+      if (sun.getMonth() !== lastMonth) { if (w > 0) months.push({ x: L + w * PITCH, label: (sun.getMonth() + 1) + '月' }); lastMonth = sun.getMonth(); }
+      for (let r = 0; r < 7; r++) {
+        const d = this.add(firstMon, w * 7 + r);
+        if (d > today) continue;
+        const v = this.tok(d);
+        let bg = '#2f8fb0', bd = '0', op = 1;
+        if (v < 0) { bg = 'transparent'; bd = '1px dashed #8b8b93'; }
+        else if (v === 0) { bg = '#8b8b93'; op = 0.25; }
+        else op = lvl(v);
+        cells.push({ x: L + w * PITCH, y: T + r * PITCH, bg, bd, op });
+      }
+    }
+    return {
+      svgW: L + WEEKS * PITCH, svgH: T + 7 * PITCH, months, cells,
+      wdays: [{ y: T, label: '一' }, { y: T + 2 * PITCH, label: '三' }, { y: T + 4 * PITCH, label: '五' }],
+    };
+  }
+}
+</script>
+</body>
+</html>

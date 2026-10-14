@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>打開一列</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+.ln{display:flex;gap:1ch;height:18px;white-space:pre;align-items:center}
+.sp{justify-content:space-between}
+.bar{display:flex;height:12px;margin:3px 0}
+.d{color:#6b6b73}
+.k{color:#8b8b93}
+.row{display:grid;grid-template-columns:1ch minmax(0,1fr) 16ch 7ch 5ch;column-gap:1ch;height:18px;white-space:pre;align-items:center}
+.nm{overflow:hidden;text-overflow:ellipsis}
+.r{text-align:right}
+.cb{display:block;height:12px;background:#2f8fb0}
+</style>
+</helmet>
+<div style="width: 640px; min-height: 720px; box-sizing: border-box; padding: 20px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; display: flex; flex-direction: column; gap: 10px">
+<div style="color: #8b8b93; font-size: 13px">60 欄，依 repo 分組打開 cc-mod-trimtab。分隔線以上跟總覽一樣，只是沒有熱圖；分隔線以下照現在。</div>
+<div style="background: #1b1b1d; border-radius: 10px; padding: 14px 16px; font-family: 'JetBrains Mono', 'Noto Sans TC', monospace; font-size: 12px; line-height: 18px">
+<div style="width: 60ch; display: flex; flex-direction: column">
+<div class="ln"><b style="color: #f0f0f0">subagent-dispatch</b><span class="d" style="flex-grow: 1; overflow: hidden">──────────────────────────────────────────</span><span class="d">更新於 19:04:05</span></div>
+<div class="ln"></div>
+<div class="ln"><span><span class="k">b</span> ‹ 返回</span><span class="d">repo ›</span><b style="color: #f0f0f0">cc-mod-trimtab</b></div>
+<div class="ln"></div>
+<div class="ln"><span class="d">期間</span><span>30 天</span><span class="d">·</span><b style="color: #f0f0f0">09/15 – 10/14</b></div>
+<div class="ln"></div>
+<div class="ln sp"><span><b style="color: #f0f0f0">5.7M</b> <span class="d">token</span></span><span><span style="color: #b48ee6">主</span> 3.4M  <span style="color: #3aa6cc">sub</span> 2.3M</span></div>
+<div class="bar"><span style="flex: 34 1 0; background: #8a5cc7"></span><span style="flex: 23 1 0; background: #2f8fb0"></span></div>
+<div class="ln sp"><span><b style="color: #f0f0f0">21</b> <span class="d">次派出</span></span><span><span style="color: #d7b84a">指定</span> 7 <span style="color: #8b8b93">預設</span> 10 <span style="color: #5fb36b">fork</span> 4</span></div>
+<div class="bar"><span style="flex: 7 1 0; background: #c98a12"></span><span style="flex: 10 1 0; background: #8b8b93"></span><span style="flex: 4 1 0; background: #3f9a4f"></span></div>
+<div class="ln"><span class="d">快取讀取 84M 另計</span></div>
+<div class="ln"></div>
+<div class="ln"><span class="d" style="overflow: hidden">────────────────────────────────────────────────────────────</span></div>
+<div class="ln"><span class="d">排序 </span><span class="k">s</span><b> ‹ token 多到少 ›</b></div>
+<div class="ln"></div>
+<div class="row d"><span></span><span>派出</span><span></span><span class="r">token</span><span class="r">日期</span></div>
+<div class="row"><span style="color: #d7b84a">●</span><span class="nm">Explore：找熱圖的繪製程式</span><span><span class="cb" style="width: 16ch"></span></span><span class="r">820k</span><span class="r d">10/12</span></div>
+<div class="row"><span style="color: #8b8b93">●</span><span class="nm">reviewer：審查清單欄位省略規則</span><span><span class="cb" style="width: 12ch"></span></span><span class="r">610k</span><span class="r d">10/13</span></div>
+<div class="row"><span style="color: #5fb36b">●</span><span class="nm">fork：查 transcript 回填的日期</span><span><span class="cb" style="width: 9ch"></span></span><span class="r">455k</span><span class="r d">10/09</span></div>
+<div class="row"><span style="color: #d7b84a">●</span><span class="nm">checker：TODO 是否自足</span><span><span class="cb" style="width: 4ch"></span></span><span class="r">190k</span><span class="r d">10/08</span></div>
+<div class="row"><span style="color: #8b8b93">●</span><span class="nm">general-purpose：整理 ROADMAP 查證結果</span><span><span class="cb" style="width: 2ch"></span></span><span class="r">96k</span><span class="r d">10/02</span></div>
+<div class="ln" style="padding-left: 2ch"><span><span class="k">m</span> 還有 16 筆 ▸</span></div>
+<div class="ln"></div>
+<div class="ln"><span class="d">Tab 移動 · Enter 展開一筆 · Esc 關閉</span></div>
+</div>
+</div>
+<div style="color: #8b8b93; font-size: 13px; line-height: 1.6">跟總覽的差別：標題列下面多一行麵包屑；沒有熱圖；期間只顯示、不能切換（沒有 p／h／l／t），期間 1 天時寫成「期間 1 天 · 10/14（三）」；摘要格式跟總覽一樣。依 session 分組打開時，token 那行右邊照現在改列各模型。</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":640,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

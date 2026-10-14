@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>A+B 40 欄</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+.ln{display:flex;height:18px;white-space:pre}
+.bar{display:inline-block;height:12px;margin-top:3px}
+.c{display:inline-block;flex-shrink:0;overflow:hidden}
+.r{text-align:right}
+.shot{background:#1b1b1d;border-radius:10px;padding:14px 16px;font-family:'JetBrains Mono','Noto Sans TC',monospace;font-size:12px;line-height:18px;overflow:hidden;align-self:flex-start}
+.fold{position:absolute;left:-1ch;right:-1ch;bottom:0;background:rgba(14,14,16,.6);border-top:1px dashed #ff8c42;pointer-events:none}
+.fold span{position:absolute;right:0;top:-18px;color:#ff8c42;font-size:11px}
+</style>
+</helmet>
+<div style="width: 480px; height: 1080px; box-sizing: border-box; padding: 20px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; display: flex; flex-direction: column; gap: 10px">
+<div style="color: #8b8b93; font-size: 13px">A+B · 40 欄、輸入框上方只剩 15 列：熱圖收成一行週條，期間的週變亮</div>
+<div class="shot">
+<div style="width: 40ch; display: flex; flex-direction: column; position: relative">
+<div class="ln" style="justify-content: space-between"><span style="font-weight: 700; color: #f0f0f0">subagent-dispatch stats</span><span style="color: #6b6b73">19:04</span></div>
+<div class="ln"><span>p ‹ <b>30 天</b> ›</span><span>  h ‹</span><span style="color: #f0f0f0; font-weight: 700"> 09/15–10/14 </span><span>› l</span></div>
+<div class="ln"><sc-for list="{{strip}}" as="s" hint-placeholder-count="18"><span style="color: {{s.color}}">{{s.ch}}</span></sc-for><span style="color: #6b6b73"> y 熱圖</span></div>
+<div class="ln"> </div>
+<div class="ln" style="justify-content: space-between"><span><b style="color: #f0f0f0">12.4M</b><span style="color: #6b6b73"> token</span></span><span><span style="color: #b48ee6">主</span> 8.4M <span style="color: #3aa6cc">sub</span> 4.0M</span></div>
+<div class="ln"><span class="bar" style="width: 27ch; background: #8a5cc7"></span><span class="bar" style="width: 13ch; background: #2f8fb0"></span></div>
+<div class="ln" style="justify-content: space-between"><span><b style="color: #f0f0f0">46</b><span style="color: #6b6b73"> 派出</span></span><span><span style="color: #d7b84a">指定</span> 14 <span style="color: #8b8b93">預設</span> 24 <span style="color: #5fb36b">fork</span> 8</span></div>
+<div class="ln" style="color: #6b6b73; border-bottom: 1px solid #3a3a40; height: 19px"><span class="c" style="width: 18ch; color: #f0f0f0">g ‹ <b>依 repo</b> ›</span><span class="c r" style="width: 6ch">token</span><span class="c" style="width: 1ch"></span><span class="c" style="width: 11ch"></span><span class="c r" style="width: 4ch">派出</span></div>
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+<div class="ln"><span class="c" style="width: 18ch; color: #f0f0f0">{{g.name}}</span><span class="c r" style="width: 6ch">{{g.tok}}</span><span class="c" style="width: 1ch"></span><span class="c" style="width: 11ch"><span class="bar" style="width: {{g.mainW}}ch; background: #8a5cc7"></span><span class="bar" style="width: {{g.subW}}ch; background: #2f8fb0"></span></span><span class="c r" style="width: 4ch">{{g.spawns}}</span></div>
+</sc-for>
+<div class="ln"><span style="color: #8b8b93">m 還有 2 個</span></div>
+<div class="ln" style="color: #6b6b73">Tab · Enter 打開 · Esc 關閉</div>
+<div class="fold" style="top: 270px"><span>15 列</span></div>
+</div>
+</div>
+
+<div style="color: #8b8b93; font-size: 13px; margin-top: 14px">同樣 40 欄，選了 1 天（h 往前一天）：</div>
+<div class="shot">
+<div style="width: 40ch; display: flex; flex-direction: column">
+<div class="ln" style="justify-content: space-between"><span style="font-weight: 700; color: #f0f0f0">subagent-dispatch stats</span><span style="color: #6b6b73">19:04</span></div>
+<div class="ln" style="justify-content: space-between"><span><span>p ‹ <b>1 天</b> ›</span><span>  h ‹</span><span style="color: #ff8c42; font-weight: 700"> 10/02（五） </span><span>› l</span></span><span style="color: #8b8b93">t 今天</span></div>
+<div class="ln"><sc-for list="{{strip1}}" as="s" hint-placeholder-count="18"><span style="color: {{s.color}}; font-weight: {{s.fw}}">{{s.ch}}</span></sc-for><span style="color: #6b6b73"> y 熱圖</span></div>
+<div class="ln"> </div>
+<div class="ln" style="justify-content: space-between"><span><b style="color: #f0f0f0">1.24M</b><span style="color: #6b6b73"> token</span></span><span><span style="color: #b48ee6">主</span> 670k <span style="color: #3aa6cc">sub</span> 570k</span></div>
+<div class="ln"><span class="bar" style="width: 21ch; background: #8a5cc7"></span><span class="bar" style="width: 19ch; background: #2f8fb0"></span></div>
+<div class="ln" style="justify-content: space-between"><span><b style="color: #f0f0f0">7</b><span style="color: #6b6b73"> 派出</span></span><span><span style="color: #d7b84a">指定</span> 3 <span style="color: #8b8b93">預設</span> 3 <span style="color: #5fb36b">fork</span> 1</span></div>
+<div class="ln" style="color: #6b6b73; border-bottom: 1px solid #3a3a40; height: 19px"><span class="c" style="width: 18ch; color: #f0f0f0">g ‹ <b>依 repo</b> ›</span><span class="c r" style="width: 6ch">token</span><span class="c" style="width: 1ch"></span><span class="c" style="width: 11ch"></span><span class="c r" style="width: 4ch">派出</span></div>
+<div class="ln"><span class="c" style="width: 18ch; color: #f0f0f0">cc-mod-trimtab</span><span class="c r" style="width: 6ch">702k</span><span class="c" style="width: 1ch"></span><span class="c" style="width: 11ch"><span class="bar" style="width: 5ch; background: #8a5cc7"></span><span class="bar" style="width: 6ch; background: #2f8fb0"></span></span><span class="c r" style="width: 4ch">4</span></div>
+<div class="ln"><span class="c" style="width: 18ch; color: #f0f0f0">dotfiles</span><span class="c r" style="width: 6ch">318k</span><span class="c" style="width: 1ch"></span><span class="c" style="width: 11ch"><span class="bar" style="width: 3ch; background: #8a5cc7"></span><span class="bar" style="width: 2ch; background: #2f8fb0"></span></span><span class="c r" style="width: 4ch">2</span></div>
+<div class="ln"><span class="c" style="width: 18ch; color: #f0f0f0">blog</span><span class="c r" style="width: 6ch">219k</span><span class="c" style="width: 1ch"></span><span class="c" style="width: 11ch"><span class="bar" style="width: 2ch; background: #8a5cc7"></span><span class="bar" style="width: 1ch; background: #2f8fb0"></span></span><span class="c r" style="width: 4ch">1</span></div>
+<div class="ln"> </div>
+<div class="ln" style="color: #6b6b73">Tab · Enter 打開 · Esc 關閉</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":480,"height":1080}}'>
+class Component extends DCLogic {
+  hash(n, s) { const x = Math.sin(n * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); }
+  tok(d) {
+    if (d < new Date(2026, 4, 18)) return -1;
+    const n = Math.round(d.getTime() / 864e5);
+    const wd = (d.getDay() + 6) % 7;
+    const h = this.hash(n, 1);
+    if ((wd >= 5 && h < 0.6) || (wd < 5 && h < 0.1)) return 0;
+    const h2 = this.hash(n, 2);
+    return Math.round(60000 + h2 * h2 * 1050000);
+  }
+  renderVals() {
+    const today = new Date(2026, 9, 14);
+    const dow = (today.getDay() + 6) % 7;
+    const weeks = 16;
+    const start = new Date(2026, 9, 14 - dow - (weeks - 1) * 7);
+    const wk = [];
+    for (let w = 0; w < weeks; w++) { let s = 0; for (let r = 0; r < 7; r++) { const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7 + r); if (d > today) continue; s += Math.max(0, this.tok(d)); } wk.push(s); }
+    const wmax = Math.max(...wk);
+    const E = '▁▂▃▄▅▆▇█';
+    const ch = (s) => E[Math.min(7, Math.floor((s / wmax) * 7.99))] + ' ';
+    const w30 = Math.floor((new Date(2026, 8, 15) - start) / (7 * 864e5));
+    const w1 = Math.floor((new Date(2026, 9, 2) - start) / (7 * 864e5));
+    const strip = wk.map((s, w) => ({ ch: ch(s), color: w >= w30 ? '#3aa6cc' : '#2a5f72' }));
+    const strip1 = wk.map((s, w) => ({ ch: ch(s), color: w === w1 ? '#ff8c42' : '#2a5f72', fw: w === w1 ? 700 : 400 }));
+    const groups = [
+      ['cc-mod-trimtab', '6.1M', 22, 1.0, 0.36],
+      ['dotfiles', '3.2M', 12, 0.53, 0.30],
+    ].map(([name, tok, spawns, frac, sub]) => { const total = Math.max(1, Math.round(frac * 11)); const subW = Math.max(1, Math.round(total * sub)); return { name, tok, spawns, mainW: total - subW, subW }; });
+    return { strip, strip1, groups };
+  }
+}
+</script>
+</body>
+</html>

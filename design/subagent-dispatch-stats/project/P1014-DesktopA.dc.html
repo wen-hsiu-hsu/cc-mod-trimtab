@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>desktop 提案 A</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+button{font:inherit}
+.seg{background:none;border:1px solid #3a3a40;color:#a8a8b0;padding:3px 10px;border-radius:6px;cursor:pointer;min-height:28px}
+.seg:hover{background:#2a2a2e}
+.seg.on{background:#2f8fb0;border-color:#2f8fb0;color:#fff;font-weight:700}
+.key{font-family:'JetBrains Mono',monospace;font-size:11px;color:#8b8b93;margin-right:4px}
+</style>
+</helmet>
+<div style="width: 640px; min-height: 860px; box-sizing: border-box; padding: 24px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; font-size: 13px">
+<div style="background: #1b1b1d; border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="font-weight: 700; color: #f0f0f0">subagent-dispatch</span>
+<span style="flex-grow: 1; height: 1px; background: #3a3a40"></span>
+<span style="color: #8b8b93; font-size: 12px">更新於 19:04:05</span>
+</div>
+<div style="position: relative; width: {{svgW}}px; height: {{svgH}}px" role="img" aria-label="每天的 token，42 週，括號標出目前的期間">
+<sc-for list="{{months}}" as="m" hint-placeholder-count="6"><span style="position: absolute; top: 0; left: {{m.x}}px; font-size: 9px; color: #8b8b93; line-height: 10px">{{m.label}}</span></sc-for>
+<sc-for list="{{wdays}}" as="w" hint-placeholder-count="3"><span style="position: absolute; left: 0; top: {{w.y}}px; font-size: 9px; color: #8b8b93; line-height: 10px">{{w.label}}</span></sc-for>
+<sc-for list="{{cells}}" as="c" hint-placeholder-count="200"><span style="position: absolute; left: {{c.x}}px; top: {{c.y}}px; width: 10px; height: 10px; border-radius: 2px; box-sizing: border-box; background: {{c.bg}}; border: {{c.bd}}; opacity: {{c.op}}"></span></sc-for>
+<sc-if value="{{bracket.show}}" hint-placeholder-val="{{ true }}">
+<span style="position: absolute; left: {{bracket.x}}px; top: {{bracket.y}}px; width: {{bracket.w}}px; height: 6px; box-sizing: border-box; border: 1px solid #a8a8b0; border-top: 0"></span>
+<span style="position: absolute; left: {{bracket.x}}px; width: {{bracket.w}}px; top: {{bracket.ty}}px; text-align: center; font-size: 10px; color: #d4d4d4; line-height: 12px; white-space: nowrap">{{bracket.label}}</span>
+</sc-if>
+<sc-if value="{{mark.show}}" hint-placeholder-val="{{ false }}">
+<span style="position: absolute; left: {{mark.x}}px; top: {{mark.y}}px; font-size: 10px; font-weight: 700; color: #ff8c42; line-height: 12px; white-space: nowrap">{{mark.label}}</span>
+</sc-if>
+<span style="position: absolute; left: {{legendX}}px; top: {{bracket.ty}}px; font-size: 10px; color: #8b8b93; line-height: 12px; display: flex; align-items: center; gap: 2px">少 <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#2f8fb0;opacity:.35"></span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#2f8fb0;opacity:.55"></span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#2f8fb0;opacity:.75"></span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#2f8fb0"></span> 多</span>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<span style="color: #8b8b93">期間</span>
+<span class="key">p</span>
+<sc-for list="{{periods}}" as="p" hint-placeholder-count="4"><button class="{{p.cls}}" onClick="{{p.pick}}">{{p.label}}</button></sc-for>
+<span style="width: 6px"></span>
+<button class="seg" onClick="{{prev}}" aria-label="前一個期間"><span class="key">h</span>‹</button>
+<span style="color: #f0f0f0; font-weight: 700; min-width: 108px; text-align: center">{{range}}</span>
+<button class="seg" onClick="{{next}}" aria-label="下一個期間">›<span class="key" style="margin: 0 0 0 4px">l</span></button>
+<span style="flex-grow: 1"></span>
+<button class="seg" onClick="{{today}}"><span class="key">t</span>今天</button>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between; align-items: baseline"><span><b style="color: #f0f0f0; font-size: 15px">{{tot}}</b> <span style="color: #8b8b93">token</span></span><span style="color: #a8a8b0"><span style="color: #b48ee6">●</span> 主 {{mainN}}  <span style="color: #3aa6cc">●</span> sub {{subN}}</span></div>
+<div style="display: flex; height: 8px; gap: 2px"><span style="flex: {{mainF}} 1 0; background: #8a5cc7; border-radius: 2px"></span><span style="flex: {{subF}} 1 0; background: #2f8fb0; border-radius: 2px"></span></div>
+<div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px"><span><b style="color: #f0f0f0; font-size: 15px">{{spawns}}</b> <span style="color: #8b8b93">次派出</span></span><span style="color: #a8a8b0"><span style="color: #d7b84a">●</span> 指定 {{named}}  <span style="color: #8b8b93">●</span> 預設 {{dflt}}  <span style="color: #5fb36b">●</span> fork {{fork}}</span></div>
+<div style="display: flex; height: 8px; gap: 2px"><span style="flex: {{named}} 1 0; background: #c98a12; border-radius: 2px"></span><span style="flex: {{dflt}} 1 0; background: #8b8b93; border-radius: 2px"></span><span style="flex: {{fork}} 1 0; background: #3f9a4f; border-radius: 2px"></span></div>
+<div style="color: #8b8b93; margin-top: 2px">快取讀取 {{cache}} 另計</div>
+</div>
+<div style="display: flex; flex-direction: column">
+<div style="height: 1px; background: #3a3a40; margin-bottom: 8px"></div>
+<div style="color: #a8a8b0; margin-bottom: 8px">分組 <span class="key">g</span><b style="color: #f0f0f0">‹ repo ›</b></div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 60px 44px 64px 44px 40px 56px 44px; column-gap: 10px; color: #8b8b93; font-size: 12px; padding-bottom: 4px; border-bottom: 1px solid #3a3a40">
+<span>repo</span><span style="text-align: right">token</span><span style="text-align: right">佔比</span><span></span><span style="text-align: right">sub</span><span style="text-align: right">派出</span><span style="text-align: right">session</span><span style="text-align: right">上次</span>
+</div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="5">
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 60px 44px 64px 44px 40px 56px 44px; column-gap: 10px; align-items: center; min-height: 26px">
+<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #e4e4e4">{{r.name}}</span><span style="text-align: right; color: #f0f0f0">{{r.tok}}</span><span style="text-align: right; color: #a8a8b0">{{r.share}}</span><span style="display: flex; height: 8px; width: 64px"><span style="width: {{r.mw}}px; background: #8a5cc7; border-radius: 2px 0 0 2px"></span><span style="width: {{r.sw}}px; background: #2f8fb0; border-radius: 0 2px 2px 0"></span></span><span style="text-align: right; color: #3aa6cc">{{r.sub}}</span><span style="text-align: right">{{r.sp}}</span><span style="text-align: right; color: #a8a8b0">{{r.ss}}</span><span style="text-align: right; color: #a8a8b0">{{r.last}}</span>
+</div>
+</sc-for>
+<button class="seg" style="align-self: flex-start; margin-top: 6px"><span class="key">m</span>還有 7 筆 ▸</button>
+</div>
+<div style="color: #6b6b73; font-size: 12px; margin-top: 6px">Tab 移動 · Enter 打開一列 · Esc 關閉</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":640,"height":860}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { p: 30, shift: 0 }; }
+  hash(n, s) { const x = Math.sin(n * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); }
+  tok(d) {
+    if (d < new Date(2026, 4, 18)) return -1;
+    const n = Math.round(d.getTime() / 864e5);
+    const wd = (d.getDay() + 6) % 7;
+    const h = this.hash(n, 1);
+    if ((wd >= 5 && h < 0.6) || (wd < 5 && h < 0.1)) return 0;
+    const h2 = this.hash(n, 2);
+    return Math.round(60000 + h2 * h2 * 1050000);
+  }
+  add(d, k) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + k); }
+  md(d) { return String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0'); }
+  n(v) { return v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? Math.round(v / 1e3) + 'k' : String(v); }
+  renderVals() {
+    const WEEKS = 42, L = 28, T = 14, PITCH = 12;
+    const today = new Date(2026, 9, 14);
+    const lastMon = this.add(today, -((today.getDay() + 6) % 7));
+    const firstMon = this.add(lastMon, -7 * (WEEKS - 1));
+    const P = this.state.p;
+    const end = this.add(today, -this.state.shift * P);
+    const start = this.add(end, -(P - 1));
+    const cells = [], months = [];
+    let total = 0, lastMonth = -1;
+    const lvl = (v) => (v < 300000 ? 0.35 : v < 550000 ? 0.55 : v < 800000 ? 0.75 : 1);
+    for (let w = 0; w < WEEKS; w++) {
+      const sun = this.add(firstMon, w * 7 + 6);
+      if (sun.getMonth() !== lastMonth) { if (w > 0) months.push({ x: L + w * PITCH, label: (sun.getMonth() + 1) + '月' }); lastMonth = sun.getMonth(); }
+      for (let r = 0; r < 7; r++) {
+        const d = this.add(firstMon, w * 7 + r);
+        if (d > today) continue;
+        const v = this.tok(d);
+        const inP = d >= start && d <= end;
+        if (inP && v > 0) total += v;
+        let bg = '#2f8fb0', bd = '0', op = 1;
+        if (v < 0) { bg = 'transparent'; bd = '1px dashed #8b8b93'; }
+        else if (v === 0) { bg = '#8b8b93'; op = 0.25; }
+        else op = lvl(v);
+        if (P === 1 && inP) { bg = '#ff8c42'; bd = '0'; op = 1; }
+        else if (!inP) op = op * 0.3;
+        cells.push({ x: L + w * PITCH, y: T + r * PITCH, bg, bd, op });
+      }
+    }
+    const weekOf = (d) => Math.floor((d - firstMon) / 864e5 / 7);
+    const w0 = Math.max(0, weekOf(start)), w1 = weekOf(end);
+    const gridBottom = T + 7 * PITCH;
+    const bracket = { show: P > 1, x: L + w0 * PITCH, w: (w1 - w0 + 1) * PITCH - 2, y: gridBottom + 2, ty: gridBottom + 10, label: P + ' 天' };
+    const wd = '日一二三四五六'[end.getDay()];
+    const markRight = L + w1 * PITCH + 120 > L + WEEKS * PITCH;
+    const mark = { show: P === 1, y: gridBottom + 4, label: markRight ? this.md(end) + '（' + wd + '） ▲' : '▲ ' + this.md(end) + '（' + wd + '）', x: markRight ? L + w1 * PITCH - 92 : L + w1 * PITCH };
+    const legendX = P > 1 && bracket.x < L + 90 ? L + WEEKS * PITCH - 80 : L;
+    const periods = [1, 7, 30, 90].map((p) => ({ label: p + ' 天', cls: p === P ? 'seg on' : 'seg', pick: () => this.setState({ p, shift: 0 }) }));
+    const range = P === 1 ? this.md(end) + '（' + wd + '）' : this.md(start) + ' – ' + this.md(end);
+    const main = Math.round(total * 0.68), sub = total - main;
+    const spawns = Math.max(1, Math.round(total / 270000));
+    const named = Math.round(spawns * 0.3), fork = Math.round(spawns * 0.17), dflt = spawns - named - fork;
+    const repos = [['cc-mod-trimtab', 0.46, 0.4, 3], ['dotfiles', 0.21, 0.55, 2], ['blog', 0.15, 0.1, 1], ['notes-app', 0.11, 0.3, 2], ['scratch', 0.07, 0, 1]];
+    const rows = repos.map(([name, s, sb, ss], i) => {
+      const t = Math.round(total * s), bw = Math.round(64 * s / 0.46);
+      return { name, tok: this.n(t), share: Math.round(s * 100) + '%', sub: Math.round(sb * 100) + '%', mw: Math.round(bw * (1 - sb)), sw: bw - Math.round(bw * (1 - sb)), sp: String(Math.round(spawns * s)), ss: String(ss), last: this.md(this.add(end, -i)) };
+    });
+    return {
+      svgW: L + WEEKS * PITCH, svgH: gridBottom + 26, months, cells,
+      wdays: [{ y: T + 0 * PITCH, label: '一' }, { y: T + 2 * PITCH, label: '三' }, { y: T + 4 * PITCH, label: '五' }],
+      bracket, mark, legendX, periods, range,
+      prev: () => this.setState({ shift: this.state.shift + 1 }),
+      next: () => this.setState({ shift: Math.max(0, this.state.shift - 1) }),
+      today: () => this.setState({ p: 1, shift: 0 }),
+      tot: this.n(total), mainN: this.n(main), subN: this.n(sub), mainF: main, subF: sub,
+      spawns, named, dflt, fork, cache: this.n(total * 14), rows,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>方案 B 去框</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+.ln{display:flex;height:18px;white-space:pre}
+.bar{display:inline-block;height:12px;margin-top:3px}
+.c{display:inline-block;flex-shrink:0;overflow:hidden}
+.r{text-align:right}
+.k{font:inherit;color:#f0f0f0;background:none;border:0;padding:0;margin:0;cursor:pointer;line-height:inherit;white-space:pre}
+.row{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:left;width:100%;display:flex;height:18px;white-space:pre}
+.row:hover{background:#232327}
+</style>
+</helmet>
+<div style="width: 860px; height: 1120px; box-sizing: border-box; padding: 24px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; color: #8b8b93; font-size: 13px">
+<span>B · 拿掉所有外框：摘要收成兩行、清單一列一行</span>
+<span>時間列沿用 A</span>
+</div>
+<div style="flex: 1; background: #1b1b1d; border-radius: 10px; padding: 16px 18px; font-family: 'JetBrains Mono', 'Noto Sans TC', monospace; font-size: 12px; line-height: 18px; overflow: hidden">
+<div style="width: 100ch; display: flex; flex-direction: column">
+
+<div class="ln" style="justify-content: space-between"><span><span style="font-weight: 700; color: #f0f0f0">subagent-dispatch stats </span><span style="color: #3a3a40">─────────────────────────────────────────────────────────────────</span></span><span style="color: #6b6b73"> 19:04 更新</span></div>
+<div class="ln"> </div>
+
+<div style="position: relative; height: 18px">
+<sc-for list="{{heat.months}}" as="m" hint-placeholder-count="11"><span style="position: absolute; top: 0; left: {{m.left}}ch; color: #6b6b73; white-space: pre">{{m.text}}</span></sc-for>
+</div>
+<sc-for list="{{heat.rows}}" as="row" hint-placeholder-count="7">
+<div class="ln"><span style="display: inline-block; width: 4ch; color: #6b6b73">{{row.label}}</span><sc-for list="{{row.cells}}" as="c" hint-placeholder-count="48"><span style="color: {{c.color}}; opacity: {{c.op}}">{{c.ch}}</span></sc-for></div>
+</sc-for>
+<div style="position: relative; height: 18px"><span style="position: absolute; left: {{bracket.left}}ch; color: #d4d4d4; white-space: pre">{{bracket.text}}</span><span style="position: absolute; right: 0; color: #6b6b73; white-space: pre">少 <span style="color: #1f5a6d">■</span><span style="color: #2a7f9c">■</span><span style="color: #3aa6cc">■</span><span style="color: #86d6f0">■</span> 多</span></div>
+<div class="ln"> </div>
+
+<div class="ln"><span style="color: #6b6b73">期間 </span><button class="k">p ‹ <b>30 天</b> ›</button><span>   </span><button class="k">h ‹</button><span style="color: #f0f0f0; font-weight: 700"> 09/15 – 10/14 </span><button class="k">› l</button></div>
+<div class="ln"> </div>
+
+<div class="ln"><span class="c r" style="width: 7ch; font-weight: 700; color: #f0f0f0">12.4M</span><span class="c" style="width: 9ch; color: #6b6b73"> token</span><span class="c" style="width: 56ch"><span class="bar" style="width: 38ch; background: #8a5cc7"></span><span class="bar" style="width: 18ch; background: #2f8fb0"></span></span><span>  <span style="color: #b48ee6">主</span> 8.4M  <span style="color: #3aa6cc">sub</span> 4.0M</span></div>
+<div class="ln"><span class="c r" style="width: 7ch; font-weight: 700; color: #f0f0f0">46</span><span class="c" style="width: 9ch; color: #6b6b73"> 次派出</span><span class="c" style="width: 56ch"><span class="bar" style="width: 17ch; background: #c98a12"></span><span class="bar" style="width: 29ch; background: #8b8b93"></span><span class="bar" style="width: 10ch; background: #3f9a4f"></span></span><span>  <span style="color: #d7b84a">指定</span> 14 <span style="color: #8b8b93">預設</span> 24 <span style="color: #5fb36b">fork</span> 8</span></div>
+<div class="ln"><span class="c" style="width: 16ch"></span><span style="color: #6b6b73">快取讀取 182M 另計 · 指定的 14 次裡 Opus 3 次</span></div>
+<div class="ln"> </div>
+
+<div class="ln" style="color: #6b6b73; border-bottom: 1px solid #3a3a40; height: 19px"><button class="k" style="width: 20ch">g ‹ <b>依 repo</b> ›</button><span class="c r" style="width: 7ch">token</span><span class="c" style="width: 2ch"></span><span class="c" style="width: 52ch">主 session ▮ / subagent ▮</span><span class="c r" style="width: 6ch">佔比</span><span class="c r" style="width: 7ch">派出</span><button class="k" style="color: #6b6b73; margin-left: auto">s ‹ token ›</button></div>
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="6">
+<button class="row"><span class="c" style="width: 20ch; color: #f0f0f0">{{g.name}}</span><span class="c r" style="width: 7ch">{{g.tok}}</span><span class="c" style="width: 2ch"></span><span class="c" style="width: 52ch"><span class="bar" style="width: {{g.mainW}}ch; background: #8a5cc7"></span><span class="bar" style="width: {{g.subW}}ch; background: #2f8fb0"></span></span><span class="c r" style="width: 6ch; color: #8b8b93">{{g.share}}</span><span class="c r" style="width: 7ch">{{g.spawns}}</span></button>
+</sc-for>
+
+<div class="ln"> </div>
+<div class="ln"> </div>
+<div class="ln" style="color: #6b6b73">同一份資料，依 session 分組時一列加一行灰字：</div>
+<div class="ln" style="color: #6b6b73; border-bottom: 1px solid #3a3a40; height: 19px"><span class="c" style="width: 20ch; color: #f0f0f0">g ‹ <b>依 session</b> ›</span><span class="c r" style="width: 7ch">token</span><span class="c" style="width: 2ch"></span><span class="c" style="width: 52ch"></span><span class="c r" style="width: 6ch">佔比</span><span class="c r" style="width: 7ch">派出</span></div>
+<sc-for list="{{sessions}}" as="s" hint-placeholder-count="3">
+<button class="row"><span class="c" style="width: 20ch; color: #f0f0f0">{{s.name}}</span><span class="c r" style="width: 7ch">{{s.tok}}</span><span class="c" style="width: 2ch"></span><span class="c" style="width: 52ch"><span class="bar" style="width: {{s.mainW}}ch; background: #8a5cc7"></span><span class="bar" style="width: {{s.subW}}ch; background: #2f8fb0"></span></span><span class="c r" style="width: 6ch; color: #8b8b93">{{s.share}}</span><span class="c r" style="width: 7ch">{{s.spawns}}</span></button>
+<div class="ln" style="color: #6b6b73"><span class="c" style="width: 2ch"></span>{{s.meta}}</div>
+</sc-for>
+
+<div class="ln"> </div>
+<div class="ln" style="color: #6b6b73">Tab 移動 · Enter 打開一列 · Esc 關閉</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":860,"height":1120}}'>
+class Component extends DCLogic {
+  hash(n, s) { const x = Math.sin(n * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); }
+  tok(d) {
+    if (d < new Date(2026, 4, 18)) return -1;
+    const n = Math.round(d.getTime() / 864e5);
+    const wd = (d.getDay() + 6) % 7;
+    const h = this.hash(n, 1);
+    if ((wd >= 5 && h < 0.6) || (wd < 5 && h < 0.1)) return 0;
+    const h2 = this.hash(n, 2);
+    return Math.round(60000 + h2 * h2 * 1050000);
+  }
+  renderVals() {
+    const weeks = 48;
+    const today = new Date(2026, 9, 14);
+    const begin = new Date(2026, 8, 15);
+    const dow = (today.getDay() + 6) % 7;
+    const start = new Date(2026, 9, 14 - dow - (weeks - 1) * 7);
+    const at = (w, r) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7 + r);
+    const vals = [];
+    for (let w = 0; w < weeks; w++) for (let r = 0; r < 7; r++) { const d = at(w, r); if (d <= today) { const t = this.tok(d); if (t > 0) vals.push(t); } }
+    vals.sort((a, b) => a - b);
+    const q = (p) => vals[Math.floor(vals.length * p)];
+    const q1 = q(0.25), q2 = q(0.5), q3 = q(0.75);
+    const GV = ['#4a4a52', '#1f5a6d', '#2a7f9c', '#3aa6cc', '#86d6f0'];
+    const LB = ['一', '', '三', '', '五', '', ''];
+    const rows = [];
+    for (let r = 0; r < 7; r++) {
+      const cells = [];
+      for (let w = 0; w < weeks; w++) {
+        const d = at(w, r);
+        if (d > today) { cells.push({ ch: '  ', color: 'transparent', op: 1 }); continue; }
+        const t = this.tok(d);
+        const lv = t < 0 ? -1 : t === 0 ? 0 : t <= q1 ? 1 : t <= q2 ? 2 : t <= q3 ? 3 : 4;
+        cells.push({ ch: lv < 0 ? '· ' : '■ ', color: lv < 0 ? '#55555c' : GV[lv], op: d >= begin ? 1 : 0.32 });
+      }
+      rows.push({ label: LB[r], cells });
+    }
+    const months = [];
+    let prev = -1;
+    for (let w = 0; w < weeks; w++) {
+      const m = at(w, 6).getMonth();
+      if (w > 0 && m !== prev) months.push({ left: 4 + w * 2, text: (m + 1) + '月' });
+      prev = m;
+    }
+    const w0 = Math.floor((begin - start) / (7 * 864e5));
+    const span = (weeks - 1 - w0) * 2 + 1;
+    const bracket = { left: 4 + w0 * 2, text: '└' + '─'.repeat(span - 2) + '┘' };
+    const bars = (frac, sub, max) => { const total = Math.max(1, Math.round(frac * max)); const subW = Math.max(1, Math.round(total * sub)); return { mainW: total - subW, subW }; };
+    const groups = [
+      ['cc-mod-trimtab', '6.1M', '49%', 22, 1.0, 0.36],
+      ['dotfiles', '3.2M', '26%', 12, 0.53, 0.30],
+      ['blog', '1.9M', '15%', 8, 0.31, 0.25],
+      ['scratch', '1.2M', '10%', 4, 0.20, 0.20],
+    ].map(([name, tok, share, spawns, frac, sub]) => ({ name, tok, share, spawns, ...bars(frac, sub, 52) }));
+    const sessions = [
+      ['調整 stats 的熱圖…', '2.4M', '19%', 9, 1.0, 0.41, '10/12 02:11 · cc-mod-trimtab'],
+      ['檢查 diff 並寫 ADR…', '1.6M', '13%', 6, 0.66, 0.33, '10/09 14:30 · cc-mod-trimtab'],
+      ['整理 zsh 設定…', '1.1M', '9%', 3, 0.45, 0.18, '10/03 21:05 · dotfiles'],
+    ].map(([name, tok, share, spawns, frac, sub, meta]) => ({ name, tok, share, spawns, meta, ...bars(frac, sub, 52) }));
+    return { heat: { rows, months }, bracket, groups, sessions };
+  }
+}
+</script>
+</body>
+</html>

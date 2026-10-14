@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>stats 40 欄</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+</style>
+</helmet>
+<div style="width: 380px; height: 700px; background: #0e0e10">
+<dc-import name="Term" cols="{{cols}}" hint-size="380px,700px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":380,"height":700}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { cols: 40 };
+  }
+}
+</script>
+</body>
+</html>

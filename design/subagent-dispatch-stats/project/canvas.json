@@ -1,0 +1,300 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "A-TimeWindow.dc.html": {
+      "h": 1120,
+      "is_interactive": true,
+      "page": "explore",
+      "title": "A · 時間窗：期間 = 長度 × 位置",
+      "w": 860,
+      "x": 940,
+      "y": 0
+    },
+    "B-Flat.dc.html": {
+      "h": 1120,
+      "page": "explore",
+      "title": "B · 去框：摘要兩行 + 表格清單",
+      "w": 860,
+      "x": 1880,
+      "y": 0
+    },
+    "C-DayAsGroup.dc.html": {
+      "h": 1120,
+      "page": "explore",
+      "title": "C · 日期也是一種分組（拿掉 j/k）",
+      "w": 860,
+      "x": 0,
+      "y": 1420
+    },
+    "D-Panels.dc.html": {
+      "h": 1120,
+      "page": "explore",
+      "title": "D · 面板各管各的鍵（btop / lazygit 式）",
+      "w": 860,
+      "x": 940,
+      "y": 1420
+    },
+    "E-Timeline.dc.html": {
+      "h": 1120,
+      "is_interactive": true,
+      "page": "explore",
+      "title": "E · 圖跟著期間：時間軸取代年熱圖",
+      "w": 860,
+      "x": 1880,
+      "y": 1420
+    },
+    "Main.dc.html": {
+      "h": 1120,
+      "page": "explore",
+      "title": "現況（100 欄）",
+      "w": 860,
+      "x": 0,
+      "y": 0
+    },
+    "S-A.dc.html": {
+      "h": 1080,
+      "page": "explore",
+      "title": "A · 55 欄",
+      "w": 480,
+      "x": 560,
+      "y": 2820
+    },
+    "S-B.dc.html": {
+      "h": 1080,
+      "page": "explore",
+      "title": "B · 55 欄",
+      "w": 480,
+      "x": 1120,
+      "y": 2820
+    },
+    "S-C.dc.html": {
+      "h": 1080,
+      "page": "explore",
+      "title": "C · 55 欄",
+      "w": 480,
+      "x": 1680,
+      "y": 2820
+    },
+    "S-D.dc.html": {
+      "h": 1080,
+      "page": "explore",
+      "title": "D · 55 欄（手風琴）",
+      "w": 480,
+      "x": 2240,
+      "y": 2820
+    },
+    "S-E.dc.html": {
+      "h": 1080,
+      "page": "explore",
+      "title": "E · 55 欄",
+      "w": 480,
+      "x": 2800,
+      "y": 2820
+    },
+    "S-Main.dc.html": {
+      "h": 1080,
+      "page": "explore",
+      "title": "現況 · 55 欄",
+      "w": 480,
+      "x": 0,
+      "y": 2820
+    },
+    "S-Tiny.dc.html": {
+      "h": 1080,
+      "page": "explore",
+      "title": "A+B · 40 欄 × 15 列",
+      "w": 480,
+      "x": 3360,
+      "y": 2820
+    },
+    "T120.dc.html": {
+      "h": 700,
+      "is_interactive": true,
+      "page": "b55",
+      "title": "120 欄",
+      "w": 970,
+      "x": 1790,
+      "y": 0
+    },
+    "T40.dc.html": {
+      "h": 700,
+      "is_interactive": true,
+      "page": "b55",
+      "title": "40 欄",
+      "w": 380,
+      "x": 0,
+      "y": 0
+    },
+    "T80.dc.html": {
+      "h": 700,
+      "is_interactive": true,
+      "page": "b55",
+      "title": "80 欄",
+      "w": 680,
+      "x": 1030,
+      "y": 0
+    },
+    "Term.dc.html": {
+      "h": 700,
+      "is_interactive": true,
+      "page": "b55",
+      "title": "55 欄（dock）",
+      "w": 490,
+      "x": 460,
+      "y": 0
+    },
+    "P1014-DesktopA.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 640,
+      "h": 860,
+      "title": "desktop 提案 A：期間標記畫進 Svg",
+      "is_interactive": true,
+      "page": "p1014"
+    },
+    "P1014-DesktopB.dc.html": {
+      "x": 720,
+      "y": 0,
+      "w": 640,
+      "h": 360,
+      "title": "desktop 提案 B：熱圖不動，只改長條",
+      "page": "p1014"
+    },
+    "P1014-LegendA.dc.html": {
+      "x": 0,
+      "y": 1240,
+      "w": 720,
+      "h": 420,
+      "title": "圖例提案 A：寬度夠才補",
+      "is_interactive": true,
+      "page": "p1014"
+    },
+    "P1014-LegendB.dc.html": {
+      "x": 800,
+      "y": 1240,
+      "w": 560,
+      "h": 420,
+      "title": "圖例提案 B：「最多」移到摘要",
+      "page": "p1014"
+    },
+    "P1014-Detail.dc.html": {
+      "x": 0,
+      "y": 2000,
+      "w": 640,
+      "h": 720,
+      "title": "打開一列：上方同總覽，沒有熱圖",
+      "page": "p1014"
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-10-14T10:00:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "page": "b55",
+    "view": "canvas"
+  },
+  "notes": {
+    "b55title": {
+      "kind": "title1",
+      "maxW": 2760,
+      "page": "b55",
+      "text": "B 定案：同一份版面，從 40 欄拉到 120 欄",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    },
+    "row1": {
+      "kind": "title1",
+      "maxW": 2740,
+      "page": "explore",
+      "text": "現況 vs. 整合時間操作 (A) 與去框 (B)",
+      "w": 240,
+      "x": 0,
+      "y": -260
+    },
+    "row2": {
+      "kind": "title1",
+      "maxW": 2740,
+      "page": "explore",
+      "text": "更發散：日期當分組 (C)、面板 (D)、時間軸 (E)",
+      "w": 240,
+      "x": 0,
+      "y": 1170
+    },
+    "row3": {
+      "kind": "title1",
+      "maxW": 3840,
+      "page": "explore",
+      "text": "小畫面：dock 55 欄，虛線是首屏 30 列",
+      "w": 240,
+      "x": 0,
+      "y": 2570
+    },
+    "p1014t1": {
+      "x": 0,
+      "y": -300,
+      "text": "desktop（Svg）怎麼跟上新版面",
+      "kind": "title1",
+      "maxW": 1360,
+      "page": "p1014"
+    },
+    "p1014t2": {
+      "x": 0,
+      "y": 960,
+      "text": "被拿掉的「無資料 · 無用量」與「最多」",
+      "kind": "title1",
+      "maxW": 1360,
+      "page": "p1014"
+    },
+    "p1014t3": {
+      "x": 0,
+      "y": 1740,
+      "text": "打開一列之後的畫面",
+      "kind": "title1",
+      "maxW": 1360,
+      "page": "p1014"
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "A-TimeWindow.dc.html",
+    "B-Flat.dc.html",
+    "C-DayAsGroup.dc.html",
+    "D-Panels.dc.html",
+    "E-Timeline.dc.html",
+    "S-Main.dc.html",
+    "S-A.dc.html",
+    "S-B.dc.html",
+    "S-C.dc.html",
+    "S-D.dc.html",
+    "S-E.dc.html",
+    "S-Tiny.dc.html",
+    "T40.dc.html",
+    "Term.dc.html",
+    "T80.dc.html",
+    "T120.dc.html",
+    "P1014-DesktopA.dc.html",
+    "P1014-DesktopB.dc.html",
+    "P1014-LegendA.dc.html",
+    "P1014-LegendB.dc.html",
+    "P1014-Detail.dc.html"
+  ],
+  "pages": [
+    {
+      "id": "explore",
+      "name": "方案探索"
+    },
+    {
+      "id": "b55",
+      "name": "B 定案（55 欄起）"
+    },
+    {
+      "id": "p1014",
+      "name": "2026-10-14 待決提案"
+    }
+  ],
+  "title": "Subagent-dispatch stats 改版方案"
+}

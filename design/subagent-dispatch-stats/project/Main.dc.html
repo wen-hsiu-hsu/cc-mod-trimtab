@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>stats 現況</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+.ln{display:flex;height:18px;white-space:pre}
+.card{border:1px solid #4a4a52;border-radius:7px;padding:0 1ch;box-sizing:border-box}
+.bar{display:inline-block;height:12px;margin-top:3px}
+</style>
+</helmet>
+<div style="width: 860px; height: 1120px; box-sizing: border-box; padding: 24px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; color: #8b8b93; font-size: 13px">
+<span>現況 · 終端機 100 欄 · 熱圖 48 週 · 期間 30 天 · 今天 10/14（三）</span>
+<span>4 種時間操作：熱圖 / p / j / k</span>
+</div>
+<div style="flex: 1; background: #1b1b1d; border-radius: 10px; padding: 16px 18px; font-family: 'JetBrains Mono', 'Noto Sans TC', monospace; font-size: 12px; line-height: 18px; overflow: hidden">
+<div style="width: 100ch; display: flex; flex-direction: column">
+
+<div class="ln"><span style="font-weight: 700; color: #f0f0f0">subagent-dispatch stats </span><span style="color: #3a3a40">──────────────────────────────────────────────────────────────────────────────</span></div>
+<div class="ln"> </div>
+
+<div style="position: relative; height: 18px">
+<sc-for list="{{heat.months}}" as="m" hint-placeholder-count="11"><span style="position: absolute; top: 0; left: {{m.left}}ch; color: #6b6b73; white-space: pre">{{m.text}}</span></sc-for>
+</div>
+<sc-for list="{{heat.rows}}" as="row" hint-placeholder-count="7">
+<div class="ln"><span style="display: inline-block; width: 4ch; color: #6b6b73">{{row.label}}</span><sc-for list="{{row.cells}}" as="c" hint-placeholder-count="48"><span style="color: {{c.color}}">{{c.ch}}</span></sc-for></div>
+</sc-for>
+<div style="position: relative; height: 18px"><span style="position: absolute; left: {{bracket.left}}ch; color: #8b8b93; white-space: pre">{{bracket.text}}</span></div>
+<div class="ln" style="justify-content: space-between"><span style="color: #6b6b73">無資料 · 無用量 <span style="color: #4a4a52">■</span> 少 <span style="color: #1f5a6d">■</span><span style="color: #2a7f9c">■</span><span style="color: #3aa6cc">■</span><span style="color: #86d6f0">■</span> 多 選到 <span style="color: #ff8c42">■</span></span><span style="color: #6b6b73">最多 10/02 1.2M</span></div>
+<div class="ln"> </div>
+
+<div class="ln" style="justify-content: space-between"><span><span style="color: #6b6b73">期間 </span><span style="color: #f0f0f0">p: ‹ <b>30 天</b> ›</span><span style="color: #6b6b73">  09/15 – 10/14</span></span><span>j: ‹ 前一天   k: 後一天 ›</span></div>
+<div style="display: flex; gap: 2ch">
+<div class="card" style="width: 49ch">
+<div class="ln" style="justify-content: space-between"><span style="color: #6b6b73">總 token</span><span style="color: #3aa6cc">subagent 佔 32%</span></div>
+<div class="ln" style="font-weight: 700; color: #f0f0f0">12,418,302</div>
+<div class="ln"><span class="bar" style="width: 31ch; background: #8a5cc7"></span><span class="bar" style="width: 14ch; background: #2f8fb0"></span></div>
+<div class="ln" style="justify-content: space-between"><span><span style="color: #b48ee6">●</span> 主 session</span><span>8,402,117</span></div>
+<div class="ln" style="justify-content: space-between"><span><span style="color: #3aa6cc">●</span> subagent</span><span>4,016,185</span></div>
+<div class="ln"> </div>
+</div>
+<div class="card" style="width: 49ch">
+<div class="ln" style="justify-content: space-between"><span style="color: #6b6b73">派出</span><span style="color: #6b6b73">46 次</span></div>
+<div class="ln" style="font-weight: 700; color: #f0f0f0">46</div>
+<div class="ln"><span class="bar" style="width: 14ch; background: #c98a12"></span><span class="bar" style="width: 23ch; background: #8b8b93"></span><span class="bar" style="width: 8ch; background: #3f9a4f"></span></div>
+<div class="ln" style="justify-content: space-between"><span><span style="color: #d7b84a">●</span> 指定模型<span style="color: #6b6b73">（Opus 3）</span></span><span>14</span></div>
+<div class="ln" style="justify-content: space-between"><span><span style="color: #8b8b93">●</span> 沿用預設</span><span>24</span></div>
+<div class="ln" style="justify-content: space-between"><span><span style="color: #5fb36b">●</span> fork<span style="color: #6b6b73">（用主 session 的模型）</span></span><span>8</span></div>
+</div>
+</div>
+<div class="ln" style="justify-content: space-between"><span style="color: #6b6b73">快取讀取（不計入） 182,330,914</span><span style="color: #6b6b73">更新於 19:04:05</span></div>
+<div class="ln"><span style="color: #3a3a40">────────────────────────────────────────────────────────────────────────────────────────────────────</span></div>
+<div class="ln"><span>g: ‹ <b>依 repo</b> ›</span></div>
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+<div class="card">
+<div class="ln" style="justify-content: space-between"><span style="text-decoration: underline; text-decoration-color: #4a4a52">{{g.name}}</span><span>{{g.spawns}}</span></div>
+<div class="ln" style="justify-content: space-between"><span><span class="bar" style="width: {{g.mainW}}ch; background: #8a5cc7"></span><span class="bar" style="width: {{g.subW}}ch; background: #2f8fb0"></span></span><span>{{g.tok}}  {{g.share}}</span></div>
+</div>
+</sc-for>
+<div class="ln"> </div>
+<div class="ln" style="color: #6b6b73">Tab 移動 · Enter 打開一列 · Esc 關閉</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":860,"height":1120}}'>
+class Component extends DCLogic {
+  hash(n, s) { const x = Math.sin(n * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); }
+  tok(d) {
+    if (d < new Date(2026, 4, 18)) return -1;
+    const n = Math.round(d.getTime() / 864e5);
+    const wd = (d.getDay() + 6) % 7;
+    const h = this.hash(n, 1);
+    if ((wd >= 5 && h < 0.6) || (wd < 5 && h < 0.1)) return 0;
+    const h2 = this.hash(n, 2);
+    return Math.round(60000 + h2 * h2 * 1050000);
+  }
+  heat(weeks) {
+    const today = new Date(2026, 9, 14);
+    const dow = (today.getDay() + 6) % 7;
+    const start = new Date(2026, 9, 14 - dow - (weeks - 1) * 7);
+    const at = (w, r) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7 + r);
+    const vals = [];
+    for (let w = 0; w < weeks; w++) for (let r = 0; r < 7; r++) { const d = at(w, r); if (d <= today) { const t = this.tok(d); if (t > 0) vals.push(t); } }
+    vals.sort((a, b) => a - b);
+    const q = (p) => vals[Math.floor(vals.length * p)];
+    const q1 = q(0.25), q2 = q(0.5), q3 = q(0.75);
+    const GV = ['#4a4a52', '#1f5a6d', '#2a7f9c', '#3aa6cc', '#86d6f0'];
+    const LB = ['一', '', '三', '', '五', '', ''];
+    const rows = [];
+    for (let r = 0; r < 7; r++) {
+      const cells = [];
+      for (let w = 0; w < weeks; w++) {
+        const d = at(w, r);
+        if (d > today) { cells.push({ ch: '  ', color: 'transparent' }); continue; }
+        const t = this.tok(d);
+        const lv = t < 0 ? -1 : t === 0 ? 0 : t <= q1 ? 1 : t <= q2 ? 2 : t <= q3 ? 3 : 4;
+        cells.push({ ch: lv < 0 ? '· ' : '■ ', color: lv < 0 ? '#55555c' : GV[lv] });
+      }
+      rows.push({ label: LB[r], cells });
+    }
+    const months = [];
+    let prev = -1;
+    for (let w = 0; w < weeks; w++) {
+      const m = at(w, 6).getMonth();
+      if (w > 0 && m !== prev) months.push({ left: 4 + w * 2, text: (m + 1) + '月' });
+      prev = m;
+    }
+    return { rows, months, start };
+  }
+  renderVals() {
+    const weeks = 48;
+    const heat = this.heat(weeks);
+    const w0 = Math.floor((new Date(2026, 8, 15) - heat.start) / (7 * 864e5));
+    const span = (weeks - 1 - w0) * 2 + 1;
+    const label = ' 30 天 ';
+    const side = Math.max(1, Math.floor((span - 2 - 6) / 2));
+    const bracket = { left: 4 + w0 * 2, text: '└' + '─'.repeat(side) + label + '─'.repeat(Math.max(1, span - 2 - 6 - side)) + '┘' };
+    const groups = [
+      ['cc-mod-trimtab', 22, '6,104,220', '49%', 0.49, 0.36],
+      ['dotfiles', 12, '3,201,876', '26%', 0.26, 0.30],
+      ['blog', 8, '1,911,040', '15%', 0.15, 0.25],
+      ['scratch', 4, '1,201,166', '10%', 0.10, 0.20],
+    ].map(([name, spawns, tok, share, frac, sub]) => {
+      const total = Math.max(1, Math.round(frac * 76));
+      const subW = Math.max(1, Math.round(total * sub));
+      return { name, spawns, tok, share, mainW: total - subW, subW };
+    });
+    return { heat, bracket, groups };
+  }
+}
+</script>
+</body>
+</html>

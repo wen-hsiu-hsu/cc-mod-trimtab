@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>E 55 欄</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+.ln{display:flex;height:18px;white-space:pre}
+.bar{display:inline-block;height:12px;margin-top:3px}
+.c{display:inline-block;flex-shrink:0;overflow:hidden}
+.r{text-align:right}
+.fold{position:absolute;left:-1ch;right:-1ch;bottom:0;background:rgba(14,14,16,.6);border-top:1px dashed #ff8c42;pointer-events:none}
+.fold span{position:absolute;right:0;top:-18px;color:#ff8c42;font-size:11px}
+</style>
+</helmet>
+<div style="width: 480px; height: 1080px; box-sizing: border-box; padding: 20px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; display: flex; flex-direction: column; gap: 10px">
+<div style="color: #8b8b93; font-size: 13px">E · 一天一欄、圖只有 4 列高；90 天放不下就改成一週一根</div>
+<div style="background: #1b1b1d; border-radius: 10px; padding: 14px 16px; font-family: 'JetBrains Mono', 'Noto Sans TC', monospace; font-size: 12px; line-height: 18px; overflow: hidden">
+<div style="width: 55ch; display: flex; flex-direction: column; position: relative">
+
+<div class="ln" style="justify-content: space-between"><span><span style="font-weight: 700; color: #f0f0f0">subagent-dispatch stats </span><span style="color: #3a3a40">────────────────────</span></span><span style="color: #6b6b73"> 19:04 更新</span></div>
+<div class="ln"> </div>
+<div class="ln" style="justify-content: space-between"><span><span style="color: #6b6b73">期間 </span><span>p ‹ <b>30 天</b> ›</span><span style="color: #6b6b73">  09/15 – 10/14</span></span><span>h ‹ › l</span></div>
+<div class="ln"> </div>
+<sc-for list="{{d30.rows}}" as="row" hint-placeholder-count="4">
+<div class="ln"><span style="display: inline-block; width: 6ch; color: #6b6b73">{{row.axis}}</span><sc-for list="{{row.cells}}" as="c" hint-placeholder-count="30"><span style="color: {{c.color}}">{{c.ch}}</span></sc-for></div>
+</sc-for>
+<div class="ln"><span style="display: inline-block; width: 6ch"></span><span style="color: #6b6b73">09/15</span><span style="display: inline-block; width: 12ch"></span><span style="color: #ff8c42; font-weight: 700">▲</span><span style="display: inline-block; width: 11ch"></span><span style="color: #6b6b73">今天</span></div>
+<div class="ln"> </div>
+<div class="ln" style="justify-content: space-between"><span style="font-weight: 700; color: #ff8c42">10/02（五）這一天</span><span style="color: #8b8b93">Esc 看整段</span></div>
+<div class="ln" style="justify-content: space-between"><span><b style="color: #f0f0f0">1.24M</b><span style="color: #6b6b73"> token</span></span><span><span style="color: #b48ee6">主</span> 670k  <span style="color: #3aa6cc">sub</span> 570k</span></div>
+<div class="ln"><span class="bar" style="width: 29ch; background: #8a5cc7"></span><span class="bar" style="width: 26ch; background: #2f8fb0"></span></div>
+<div class="ln" style="justify-content: space-between"><span><b style="color: #f0f0f0">7</b><span style="color: #6b6b73"> 次派出</span></span><span><span style="color: #d7b84a">指定</span> 3 <span style="color: #8b8b93">預設</span> 3 <span style="color: #5fb36b">fork</span> 1</span></div>
+<div class="ln"><span class="bar" style="width: 24ch; background: #c98a12"></span><span class="bar" style="width: 23ch; background: #8b8b93"></span><span class="bar" style="width: 8ch; background: #3f9a4f"></span></div>
+<div class="ln"> </div>
+<div class="ln" style="color: #6b6b73; border-bottom: 1px solid #3a3a40; height: 19px"><span class="c" style="width: 19ch; color: #f0f0f0">g ‹ <b>依 repo</b> ›</span><span class="c r" style="width: 6ch">token</span><span class="c" style="width: 1ch"></span><span class="c" style="width: 24ch"></span><span class="c r" style="width: 5ch">派出</span></div>
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+<div class="ln"><span class="c" style="width: 19ch; color: #f0f0f0">{{g.name}}</span><span class="c r" style="width: 6ch">{{g.tok}}</span><span class="c" style="width: 1ch"></span><span class="c" style="width: 24ch"><span class="bar" style="width: {{g.mainW}}ch; background: #8a5cc7"></span><span class="bar" style="width: {{g.subW}}ch; background: #2f8fb0"></span></span><span class="c r" style="width: 5ch">{{g.spawns}}</span></div>
+</sc-for>
+<div class="ln"> </div>
+<div class="ln" style="color: #6b6b73">y 一年的熱圖 · Tab 移動 · Enter 打開 · Esc 關閉</div>
+<div class="ln"> </div>
+<div class="ln"> </div>
+<div class="ln" style="color: #6b6b73">期間 90 天時（49 欄放不下 90 根，改成一週一根）：</div>
+<div class="ln"> </div>
+<sc-for list="{{d90.rows}}" as="row" hint-placeholder-count="4">
+<div class="ln"><span style="display: inline-block; width: 6ch; color: #6b6b73">{{row.axis}}</span><sc-for list="{{row.cells}}" as="c" hint-placeholder-count="13"><span style="color: {{c.color}}">{{c.ch}}</span></sc-for></div>
+</sc-for>
+<div class="ln"><span style="display: inline-block; width: 6ch"></span><span style="color: #6b6b73">7/20 那週</span><span style="display: inline-block; width: 27ch"></span><span style="color: #6b6b73">本週</span></div>
+<div class="ln" style="color: #6b6b73">h / l 一次移一週；Enter 把期間換成那一週</div>
+<div class="fold" style="top: 540px"><span>dock 首屏 30 列</span></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":480,"height":1080}}'>
+class Component extends DCLogic {
+  hash(n, s) { const x = Math.sin(n * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); }
+  tok(d) {
+    if (d < new Date(2026, 4, 18)) return -1;
+    const n = Math.round(d.getTime() / 864e5);
+    const wd = (d.getDay() + 6) % 7;
+    const h = this.hash(n, 1);
+    if ((wd >= 5 && h < 0.6) || (wd < 5 && h < 0.1)) return 0;
+    const h2 = this.hash(n, 2);
+    return Math.round(60000 + h2 * h2 * 1050000);
+  }
+  chart(vals, w, gap, cur, peakLabel) {
+    const max = Math.max(...vals);
+    const E = ' ▁▂▃▄▅▆▇█';
+    const H = 4;
+    const rows = [];
+    for (let r = 0; r < H; r++) {
+      const cells = vals.map((t, i) => {
+        const u = t > 0 ? Math.max(1, Math.round((t / max) * H * 8)) : 0;
+        let ch = t <= 0 ? (r === H - 1 ? '▁' : ' ') : E[Math.max(0, Math.min(8, u - (H - 1 - r) * 8))];
+        const color = i === cur ? '#ff8c42' : t <= 0 ? '#4a4a52' : cur >= 0 ? '#2a5f72' : '#3aa6cc';
+        return { ch: ch.repeat(w) + ' '.repeat(gap), color };
+      });
+      rows.push({ axis: r === 0 ? peakLabel : r === H - 1 ? '0' : '', cells });
+    }
+    return { rows };
+  }
+  renderVals() {
+    const today = new Date(2026, 9, 14);
+    const v30 = [];
+    for (let i = 29; i >= 0; i--) v30.push(this.tok(new Date(2026, 9, 14 - i)));
+    const v90 = [];
+    for (let w = 12; w >= 0; w--) { let s = 0; for (let r = 0; r < 7; r++) s += Math.max(0, this.tok(new Date(2026, 9, 14 - w * 7 - r))); v90.push(s); }
+    const groups = [
+      ['cc-mod-trimtab', '702k', 4, 1.0, 0.5],
+      ['dotfiles', '318k', 2, 0.45, 0.4],
+      ['blog', '219k', 1, 0.31, 0.3],
+    ].map(([name, tok, spawns, frac, sub]) => { const total = Math.max(1, Math.round(frac * 24)); const subW = Math.max(1, Math.round(total * sub)); return { name, tok, spawns, mainW: total - subW, subW }; });
+    return { d30: this.chart(v30, 1, 0, 17, '1.2M'), d90: this.chart(v90, 2, 1, -1, '4.8M'), groups };
+  }
+}
+</script>
+</body>
+</html>

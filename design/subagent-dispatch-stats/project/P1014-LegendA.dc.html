@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>圖例提案 A</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#6cc4e0}a:hover{color:#86d6f0}
+.tl{display:flex;height:18px;white-space:pre}
+.cell{display:inline-block;height:18px;text-align:center;white-space:pre}
+.seg{background:none;border:1px solid #3a3a40;color:#a8a8b0;padding:3px 10px;border-radius:6px;font:inherit;cursor:pointer;min-height:28px}
+.seg.on{background:#2f8fb0;border-color:#2f8fb0;color:#fff;font-weight:700}
+</style>
+</helmet>
+<div style="display: inline-flex; flex-direction: column; gap: 10px; padding: 20px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; box-sizing: border-box; min-width: 720px; min-height: 420px">
+<div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 13px; color: #8b8b93">
+<span>寬度</span>
+<sc-for list="{{widths}}" as="w" hint-placeholder-count="4"><button class="{{w.cls}}" onClick="{{w.pick}}">{{w.label}}</button></sc-for>
+<span style="width: 12px"></span><span>期間</span>
+<sc-for list="{{periods}}" as="p" hint-placeholder-count="4"><button class="{{p.cls}}" onClick="{{p.pick}}">{{p.label}}</button></sc-for>
+</div>
+<div style="color: #8b8b93; font-size: 13px">圖例行：{{shownNote}}</div>
+<div style="background: #1b1b1d; border-radius: 10px; padding: 14px 16px; font-family: 'JetBrains Mono', 'Noto Sans TC', monospace; font-size: 12px; line-height: 18px; align-self: flex-start">
+<div style="width: {{cols}}ch; display: flex; flex-direction: column">
+<sc-for list="{{lines}}" as="ln" hint-placeholder-count="12">
+<div class="tl"><sc-for list="{{ln}}" as="c" hint-placeholder-count="20"><span class="cell" style="width: {{c.w}}ch; color: {{c.color}}; font-weight: {{c.fw}}; opacity: {{c.op}}">{{c.ch}}</span></sc-for></div>
+</sc-for>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":720,"height":420}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { cols: 80, p: 30 }; }
+  hash(n, s) { const x = Math.sin(n * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); }
+  tok(d) {
+    if (d < new Date(2026, 4, 18)) return -1;
+    const n = Math.round(d.getTime() / 864e5);
+    const wd = (d.getDay() + 6) % 7;
+    const h = this.hash(n, 1);
+    if ((wd >= 5 && h < 0.6) || (wd < 5 && h < 0.1)) return 0;
+    const h2 = this.hash(n, 2);
+    return Math.round(60000 + h2 * h2 * 1050000);
+  }
+  add(d, k) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + k); }
+  md(d) { return String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0'); }
+  n(v) { return v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : Math.round(v / 1e3) + 'k'; }
+  wide(ch) { return /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(ch); }
+  W(s) { let n = 0; for (const ch of s) n += this.wide(ch) ? 2 : 1; return n; }
+  renderVals() {
+    const C = { dim: '#6b6b73', mid: '#8b8b93', hi: '#f0f0f0', sel: '#ff8c42' };
+    const GV = ['#4a4a52', '#1f5a6d', '#2a7f9c', '#3aa6cc', '#86d6f0'];
+    const cols = this.state.cols, P = this.state.p;
+    const weeks = Math.max(4, Math.min(53, Math.floor((cols - 4) / 2)));
+    const today = new Date(2026, 9, 14);
+    const lastMon = this.add(today, -((today.getDay() + 6) % 7));
+    const firstMon = this.add(lastMon, -7 * (weeks - 1));
+    const start = this.add(today, -(P - 1));
+    const lvl = (v) => (v < 300000 ? 1 : v < 550000 ? 2 : v < 800000 ? 3 : 4);
+    // A line is an array of cells; each cell is one character with its display width.
+    const line = () => { const cells = []; let w = 0; return { cells, get w() { return w; }, add(s, o) { for (const ch of s) { const cw = this ? 0 : 0; const ww = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(ch) ? 2 : 1; cells.push({ ch, w: ww, color: (o && o.color) || '#d4d4d4', fw: (o && o.fw) || 400, op: (o && o.op) || 1 }); w += ww; } return this; }, pad(to) { while (w < to) this.add(' '); return this; } }; };
+    const lines = [];
+    let peak = { v: 0, d: today };
+    const ml = line(); ml.add('    ');
+    let lastMonth = -1;
+    for (let w = 0; w < weeks; w++) {
+      const sun = this.add(firstMon, w * 7 + 6);
+      if (sun.getMonth() !== lastMonth) { const lab = (sun.getMonth() + 1) + '月'; if (w > 0 && 4 + w * 2 >= ml.w) { ml.pad(4 + w * 2); ml.add(lab, { color: C.dim }); } lastMonth = sun.getMonth(); }
+    }
+    lines.push(ml.cells);
+    const names = ['一', '', '三', '', '五', '', ''];
+    for (let r = 0; r < 7; r++) {
+      const l = line(); l.add(names[r] === '' ? '    ' : names[r] + '  ', { color: C.dim });
+      for (let w = 0; w < weeks; w++) {
+        const d = this.add(firstMon, w * 7 + r);
+        if (d > today) { l.add('  '); continue; }
+        const v = this.tok(d);
+        if (v > peak.v) peak = { v, d };
+        const inP = d >= start;
+        const op = inP ? 1 : 0.35;
+        if (P === 1 && inP) l.add('■', { color: C.sel, fw: 700 });
+        else if (v < 0) l.add('·', { color: C.dim, op });
+        else l.add('■', { color: v === 0 ? GV[0] : GV[lvl(v)], op });
+        l.add(' ');
+      }
+      lines.push(l.cells);
+    }
+    // The row under the grid: the period mark, then the legend items by priority.
+    const weekOf = (d) => Math.floor((d - firstMon) / 864e5 / 7);
+    const w0 = Math.max(0, weekOf(start)), w1 = weeks - 1;
+    const wd = '日一二三四五六'[today.getDay()];
+    let mark, bL, bR;
+    if (P === 1) {
+      const at = 4 + w1 * 2;
+      const s = this.md(today) + '（' + wd + '）';
+      if (at + 2 + this.W(s) <= cols) { mark = { at, s: '▲ ' + s }; } else { mark = { at: at - this.W(s) - 1, s: s + ' ▲' }; }
+      bL = mark.at; bR = mark.at + this.W(mark.s) - 1;
+    } else {
+      bL = 4 + w0 * 2; bR = 4 + w1 * 2;
+      const lab = ' ' + P + ' 天 ';
+      const inner = bR - bL - 1;
+      const dash = Math.max(0, inner - this.W(lab));
+      const s = inner >= this.W(lab) + 2 ? '└' + '─'.repeat(Math.floor(dash / 2)) + lab + '─'.repeat(dash - Math.floor(dash / 2)) + '┘' : '└' + '─'.repeat(Math.max(0, inner)) + '┘';
+      mark = { at: bL, s };
+    }
+    const items = [
+      { key: 'legend', w: this.W('少 ■■■■ 多'), draw: (l) => { l.add('少 ', { color: C.dim }); GV.slice(1).forEach((g) => l.add('■', { color: g })); l.add(' 多', { color: C.dim }); } },
+      { key: 'none', w: this.W('無用量 ■'), draw: (l) => { l.add('無用量 ', { color: C.dim }); l.add('■', { color: GV[0] }); } },
+      { key: 'nodata', w: this.W('無資料 ·'), draw: (l) => { l.add('無資料 ·', { color: C.dim }); } },
+      { key: 'peak', w: this.W('最多 ' + this.md(peak.d) + ' ' + this.n(peak.v)), draw: (l) => { l.add('最多 ', { color: C.dim }); l.add(this.md(peak.d) + ' ' + this.n(peak.v)); } },
+    ];
+    const room = (side) => (side === 'left' ? bL - 2 - 4 : cols - (bR + 1 + 2));
+    const fit = (space) => { const out = []; let used = 0; for (const it of items) { const need = used === 0 ? it.w : used + 2 + it.w; if (need > space) break; out.push(it); used = need; } return { out, used }; };
+    let side = 'left', got = fit(room('left'));
+    if (got.out.length === 0) { side = 'right'; got = fit(room('right')); }
+    const nl = line();
+    const drawItems = (l) => got.out.forEach((it, i) => { if (i > 0) l.add('  '); it.draw(l); });
+    if (side === 'left' && got.out.length > 0) { nl.pad(4); drawItems(nl); }
+    nl.pad(mark.at); nl.add(mark.s, P === 1 ? { color: C.sel, fw: 700 } : { color: '#a8a8b0' });
+    if (side === 'right' && got.out.length > 0) { nl.pad(cols - got.used); drawItems(nl); }
+    lines.push(nl.cells);
+    lines.push(line().cells);
+    const pl = line();
+    pl.add('期間 ', { color: C.dim }); pl.add('p', { color: C.mid }); pl.add(' ‹ ' + P + ' 天 › ', { fw: 700 }); pl.add(' h', { color: C.mid });
+    pl.add(P === 1 ? ' ‹ ' + this.md(today) + '（' + wd + '） › ' : ' ‹ ' + this.md(start) + ' – ' + this.md(today) + ' › ', { color: C.hi, fw: 700 }); pl.add('l', { color: C.mid });
+    const tail = 't 今天'; pl.pad(cols - this.W(tail)); pl.add('t', { color: C.mid }); pl.add(' 今天');
+    lines.push(pl.cells);
+    const keys = got.out.map((it) => ({ legend: '少■■■■多', none: '無用量', nodata: '無資料', peak: '最多' })[it.key]);
+    const shownNote = (keys.length ? keys.join('、') : '放不下，不畫') + '（' + (side === 'left' ? '靠左' : '靠右') + '）。優先順序：少■■■■多 → 無用量 → 無資料 → 最多；放不下就停。';
+    return {
+      cols, lines, shownNote,
+      widths: [40, 55, 80, 110].map((c) => ({ label: c + ' 欄', cls: c === cols ? 'seg on' : 'seg', pick: () => this.setState({ cols: c }) })),
+      periods: [1, 7, 30, 90].map((p) => ({ label: p + ' 天', cls: p === P ? 'seg on' : 'seg', pick: () => this.setState({ p }) })),
+    };
+  }
+}
+</script>
+</body>
+</html>

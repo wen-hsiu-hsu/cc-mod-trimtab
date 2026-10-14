@@ -12,6 +12,7 @@
 | 每個 mod 的行為、指令、設定、費用、已知限制 | `docs/mods/<mod>.md`、`docs/mods/<mod>.zh-TW.md` |
 | 為什麼這樣做（決定與理由） | `docs/adr/`（[索引](adr/README.md)） |
 | 畫面的顏色、版面、控制項、快捷鍵、用詞 | [`DESIGN.md`](../DESIGN.md) |
+| 畫面的設計稿（每一輪提案與定案） | [`design/`](../design/README.md) |
 | 還沒做的事、暫緩與不做的提案、已知問題、查證結果 | [`ROADMAP.md`](../ROADMAP.md) |
 | 每個版本改了什麼 | [`CHANGELOG.md`](../CHANGELOG.md) |
 | 保護範圍與回報方式 | [`SECURITY.md`](../SECURITY.md) |
@@ -86,6 +87,7 @@ mod 不能 import 自己資料夾以外的檔案（見 [ADR 0011](adr/0011-share
 | 新增、改名、移除 mod | 上一列，加上 `README.md` 與 `README.zh-TW.md` 的表、`docs/install*.md` 的安裝清單、`marketplace.json`、`SECURITY.md`（有保護範圍時） |
 | 在幾個做法之間取捨過、之後難以反悔的決定 | 新增一個 ADR（見下方「ADR」） |
 | 畫面規範 | 先改 `DESIGN.md`，再改程式 |
+| 設計畫布 | `design/<主題>/`（見下方「設計稿」） |
 | 實測結果（通過或發現限制） | `ROADMAP.md` 的「查證結果」；是限制的話也寫進 mod 頁面的「已知限制」 |
 | 做完、暫緩或放棄 ROADMAP 的項目 | `ROADMAP.md` 的「待辦」「暫緩」「不做」 |
 | 要發佈的改動 | mod 的 `version` 與 `CHANGELOG.md`（見下方「發佈」） |
@@ -109,6 +111,19 @@ mod 不能 import 自己資料夾以外的檔案（見 [ADR 0011](adr/0011-share
 - 有 mod 改過，HEAD 卻還沒打新的 `v*` tag。
 
 確定這次不發佈新版（例如只推文件）時，在 push 指令後加註解 `# Release: n/a <理由>`。人手動 push 時不會經過這個 hook，自己照下方「發佈」檢查。
+
+## 設計稿
+
+畫面先在 claude.ai 的 Design 畫布上畫，每一份稿都存進 repo，才能往回查某個決定之前的樣子。
+
+- **位置**：`design/<主題>/project/`，檔案跟畫布的 `project/` 一模一樣：`canvas.json` 加上每個 artboard 一個 `.dc.html`。[`design/README.md`](../design/README.md) 列出每個主題和它的畫布連結。發布時 `root` 設成 `design/<主題>`，repo 裡的檔案就是畫布的原始檔，不另外放一份。
+- **一個主題一張畫布**：每一輪新增一頁，頁名寫「YYYY-MM-DD 內容」；artboard 檔名加上那一輪的前綴（例如 `P1014-`），避免跟舊稿撞名。
+- **不改寫舊稿**：討論過或定案的 artboard 不再改；要改就在新的一頁畫新版。同一輪還在討論時可以直接改。
+- **省 token**：開新的一輪只讀上一輪定案的那幾份，不把整張畫布讀進對話；每輪做完就 `/clear`。
+- **上限**：一張畫布最多 40 頁、512 個檔案，快滿時開新畫布 `<主題>-2`，並列進 `design/README.md`。
+- **同步**：畫布每發布一次，就把改到的檔案 commit 進 `design/`（在 worktree 裡）。使用者在頁面上直接改過的，先用 Artifact 的 read 拉回來，再 commit。
+- **稿不是規格**：定案的內容寫進 `DESIGN.md`，程式照 `DESIGN.md` 做。
+- 畫布連結是私人的，只有擁有者打得開。
 
 ## ADR
 
