@@ -116,7 +116,6 @@ class Component extends DCLogic {
         else if (v === 0) { bg = '#8b8b93'; op = 0.25; }
         else op = lvl(v);
         if (P === 1 && inP) { bg = '#ff8c42'; bd = '0'; op = 1; }
-        else if (!inP) op = op * 0.3;
         cells.push({ x: L + w * PITCH, y: T + r * PITCH, bg, bd, op });
       }
     }

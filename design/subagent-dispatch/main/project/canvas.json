@@ -5,7 +5,7 @@
   "launch": {"view": "canvas", "page": "f1014"},
   "pages": [
     {"id": "inv", "name": "畫面清單"},
-    {"id": "f1014", "name": "2026-10-14 stats 改版"}
+    {"id": "f1014", "name": "2026-10-14 stats 改版（0.6.0）"}
   ],
   "boards": {
     "Main.dc.html": {"x": 0, "y": 0, "w": 900, "h": 980, "title": "畫面清單", "page": "inv"},

@@ -161,7 +161,7 @@ class Component extends DCLogic {
           const lv = v < 0 ? -1 : v === 0 ? 0 : v <= q1 ? 1 : v <= q2 ? 2 : v <= q3 ? 3 : 4;
           const inside = d >= begin && d <= end;
           const color = inside && len === 1 ? C.sel : lv < 0 ? '#55555c' : GV[lv];
-          l.add(lv < 0 ? '·' : '■', { color, op: inside ? 1 : 0.32, b: inside && len === 1 });
+          l.add(lv < 0 ? '·' : '■', { color, b: inside && len === 1 });
           l.add(' ');
         }
       }
