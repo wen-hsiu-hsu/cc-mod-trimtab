@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>熱力圖色階與狀態</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 760px; height: 940px; box-sizing: border-box; padding: 40px; background: #f6f6f4; color: #1d1d20; font-family: 'Noto Sans TC', sans-serif; font-size: 14px; line-height: 1.6; display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-size: 26px; font-weight: 700">熱力圖的格子狀態</h1>
+<p style="margin: 0; color: #55555c">六種格子：未來、沒有資料、沒有用量、四級用量。「沒有資料」和「沒有用量」意思不同，所以形狀和亮度都不一樣，不只靠顏色分。</p>
+</div>
+
+<div style="display: grid; grid-template-columns: 120px 64px 64px minmax(0, 1fr); column-gap: 16px; row-gap: 12px; align-items: center">
+<div style="color: #6a6a72; font-size: 12px">狀態</div>
+<div style="color: #6a6a72; font-size: 12px">終端機</div>
+<div style="color: #6a6a72; font-size: 12px">desktop</div>
+<div style="color: #6a6a72; font-size: 12px">什麼時候 · 怎麼畫</div>
+
+<div style="font-weight: 500">未來</div>
+<div style="background: #1b1b1d; padding: 6px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; height: 18px"></div>
+<div style="display: flex; justify-content: center"><svg width="16" height="16" aria-hidden="true"></svg></div>
+<div style="color: #3a3a40">今天以後。完全空白，不能選。</div>
+
+<div style="font-weight: 500">沒有資料</div>
+<div style="background: #1b1b1d; padding: 6px 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 18px; color: #5a5a62">··</div>
+<div style="display: flex; justify-content: center"><svg width="16" height="16" aria-hidden="true"><rect x="1" y="1" width="14" height="14" rx="3" fill="none" stroke="#8b8b93" stroke-width="1" stroke-dasharray="2 2"></rect></svg></div>
+<div style="color: #3a3a40">帳本和 <code>day:</code> 摘要都沒有這天（回填以前、transcript 已刪、別台電腦）。終端機不給底色，畫兩個 <code>dimColor</code> 的 <code>·</code>；desktop 是虛線外框、不填色。</div>
+
+<div style="font-weight: 500">沒有用量</div>
+<div style="background: #1b1b1d; padding: 6px 10px; border-radius: 6px"><div style="width: 2ch; height: 18px; background: #3a3a40; font-family: 'JetBrains Mono', monospace; font-size: 13px"></div></div>
+<div style="display: flex; justify-content: center"><svg width="16" height="16" aria-hidden="true"><rect x="1" y="1" width="14" height="14" rx="3" fill="#8b8b93" fill-opacity="0.25"></rect></svg></div>
+<div style="color: #3a3a40">這天有紀錄，但 token 是 0。實心灰格：終端機 <code>#3a3a40</code>（不支援 hex 時用 <code>gray</code>），desktop 是 <code>COLORS.default.fill</code> 25%。</div>
+
+<div style="font-weight: 500">用量 1–4 級</div>
+<div style="background: #1b1b1d; padding: 6px 10px; border-radius: 6px; display: flex; gap: 0"><div style="width: 12px; height: 18px; background: #173f4d"></div><div style="width: 12px; height: 18px; background: #1f6680"></div><div style="width: 12px; height: 18px; background: #2f8fb0"></div><div style="width: 12px; height: 18px; background: #6cc4e0"></div></div>
+<div style="display: flex; justify-content: center; gap: 2px"><svg width="44" height="16" aria-hidden="true"><rect x="0" y="3" width="10" height="10" rx="2" fill="#2f8fb0" fill-opacity="0.3"></rect><rect x="11" y="3" width="10" height="10" rx="2" fill="#2f8fb0" fill-opacity="0.55"></rect><rect x="22" y="3" width="10" height="10" rx="2" fill="#2f8fb0" fill-opacity="0.8"></rect><rect x="33" y="3" width="10" height="10" rx="2" fill="#2f8fb0"></rect></svg></div>
+<div style="color: #3a3a40">有用量的日子依四分位數分 4 級，只看畫出來的那幾週。沿用 <code>sub</code> 的青色系，越亮越多。<code>backgroundColor</code> 不吃 hex 時，改用 <code>blue</code>、<code>cyan</code>、<code>cyanBright</code>、<code>whiteBright</code> 四個 ANSI 色。</div>
+
+<div style="font-weight: 500">選到的那天</div>
+<div style="background: #1b1b1d; padding: 6px 10px; border-radius: 6px"><div style="width: 2ch; height: 18px; background: #2f8fb0; color: #ffffff; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 18px; text-align: center; font-weight: 700">◆</div></div>
+<div style="display: flex; justify-content: center"><svg width="16" height="16" aria-hidden="true"><rect x="1" y="1" width="14" height="14" rx="3" fill="#2f8fb0" fill-opacity="0.8" stroke="#1d1d20" stroke-width="2"></rect></svg></div>
+<div style="color: #3a3a40">保留原本的底色，上面畫一個 <code>bold</code> 白色 <code>◆</code>；desktop 加深色外框。選到「沒有資料」的日子時底色換成 <code>#2a2a2e</code> 讓 ◆ 看得到。</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700">選一天之後</h2>
+<div style="display: grid; grid-template-columns: 150px minmax(0, 1fr); column-gap: 16px; row-gap: 8px">
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 13px">點格子／j／k</div>
+<div>選那一天。期間變成 <code>‹ 10/02 週五 ›</code>，後面寫 <code>1 天 · p 回到 30 天</code>；卡片、快取讀取、分組清單都換成那天的數字。熱圖本身不變。</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 13px">j: ‹ 前一天</div>
+<div>沒選日時從今天開始，之後一次往前一天；到最左一欄就停。</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 13px">k: 後一天 ›</div>
+<div>往後一天，到今天停。沒選日時不做事。</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 13px">p</div>
+<div>選了日子時，第一下取消選日、回到原本的期間；沒選日時照舊在 1／7／30／90 天之間切換。</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 13px">沒有用量的日子</div>
+<div>卡片位置換成一句灰字：<code>10/04（六）沒有用量（…）。</code></div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 13px">沒有資料的日子</div>
+<div>灰字說「沒有資料」和原因，不畫 0，避免被讀成「那天沒用」。</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 700">圖例</h2>
+<div style="background: #1b1b1d; color: #7d7d85; padding: 8px 12px; border-radius: 6px; font-family: 'JetBrains Mono', 'Noto Sans TC', monospace; font-size: 13px; line-height: 18px; white-space: pre; display: flex">無資料 <span style="color: #5a5a62">··</span>  無用量 <span style="width: 2ch; background: #3a3a40"></span>  少 <span style="width: 2ch; background: #173f4d"></span><span style="width: 2ch; background: #1f6680"></span><span style="width: 2ch; background: #2f8fb0"></span><span style="width: 2ch; background: #6cc4e0"></span> 多   最多 <span style="color: #d4d4d4">10/02 1.2M</span></div>
+<p style="margin: 0; color: #55555c">英文：<code>No data ·· None ▢ Less ▢▢▢▢ More   Peak 10/02 1.2M</code>。80 欄放不下整行時，「最多」那段折到下一行。</p>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":760,"height":940}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

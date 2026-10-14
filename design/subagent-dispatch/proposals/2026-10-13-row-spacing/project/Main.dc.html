@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Stats 列表版面</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0f1011}
+a{color:#7cc4d6}a:hover{color:#a6dbe8}
+</style>
+</helmet>
+<div style="width: 1440px; height: 1180px; box-sizing: border-box; padding: 40px; background: #0f1011; color: #d6d6d6; font-family: 'JetBrains Mono', 'Noto Sans TC', monospace; font-size: 14px; line-height: 20px; display: flex; gap: 48px">
+
+  <section style="display: flex; flex-direction: column; gap: 14px">
+    <h2 style="margin: 0; font-family: 'Noto Sans TC', sans-serif; font-size: 18px; font-weight: 700; color: #f0f0f0">依模型分組（數字為示意）</h2>
+    <div style="flex: 1; border: 1px solid #3a3a3a; border-radius: 8px; padding: 16px 18px; background: #161718; display: flex; flex-direction: column; width: 64ch">
+      <div style="display: flex; gap: 1ch; white-space: nowrap; overflow: hidden"><span style="font-weight: 700; color: #fafafa">subagent-dispatch stats</span><span style="color: #6b6b6b">────────────────────────────────────────</span></div>
+      <div style="height: 20px"></div>
+      <div style="display: flex; gap: 2ch; white-space: pre"><span><span style="color: #6b6b6b">p: </span>‹ 期間 <b>30 天</b> ›</span><span style="color: #8a8a8a">9/14 至 10/13</span></div>
+      <div style="height: 20px"></div>
+      <div style="display: flex; gap: 2ch">
+        <div style="flex: 1; min-width: 0; border: 1px solid #3a3a3a; border-radius: 6px; padding: 0 1ch">
+          <div style="display: flex; justify-content: space-between"><span style="color: #8a8a8a">總 token</span><span style="color: #2fb3c9">subagent 佔 [N]%</span></div>
+          <div style="font-weight: 700">[總數]</div>
+          <div style="display: flex; height: 14px; margin: 3px 0"><span style="flex: 62; background: #b06ad6"></span><span style="flex: 38; background: #2fb3c9"></span></div>
+          <div style="display: flex; justify-content: space-between"><span><span style="color: #b06ad6">●</span> 主 session</span><span>[N]</span></div>
+          <div style="display: flex; justify-content: space-between"><span><span style="color: #2fb3c9">●</span> subagent</span><span>[N]</span></div>
+        </div>
+        <div style="flex: 1; min-width: 0; border: 1px solid #3a3a3a; border-radius: 6px; padding: 0 1ch">
+          <div style="display: flex; justify-content: space-between"><span style="color: #8a8a8a">派出</span><span style="color: #8a8a8a">模型怎麼來</span></div>
+          <div style="font-weight: 700">[N] 次</div>
+          <div style="display: flex; height: 14px; margin: 3px 0"><span style="flex: 50; background: #d9a321"></span><span style="flex: 35; background: #8b8b93"></span><span style="flex: 15; background: #47b45a"></span></div>
+          <div style="display: flex; justify-content: space-between"><span><span style="color: #d9a321">●</span> 指定模型</span><span>[N]</span></div>
+          <div style="display: flex; justify-content: space-between"><span><span style="color: #8b8b93">●</span> 沿用預設</span><span>[N]</span></div>
+          <div style="display: flex; justify-content: space-between"><span><span style="color: #47b45a">●</span> fork</span><span>[N]</span></div>
+        </div>
+      </div>
+      <div style="color: #8a8a8a">快取讀取 [N]，不計入</div>
+      <div style="height: 20px"></div>
+      <div style="color: #4a4a4a; white-space: nowrap; overflow: hidden">────────────────────────────────────────────────────────────────</div>
+      <div style="white-space: pre"><span style="color: #6b6b6b">g: </span>‹ 分組 <b>模型</b> ›</div>
+      <sc-for list="{{ models }}" as="row" hint-placeholder-count="4">
+        <div style="margin-top: 20px">
+          <div style="display: flex; gap: 1ch"><span style="width: 2ch; flex-shrink: 0; color: #5a5a5a">│</span><span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ row.name }}</span><span style="width: 7ch; flex-shrink: 0; text-align: right; color: #8a8a8a">{{ row.spawns }}</span></div>
+          <div style="display: flex; gap: 1ch; align-items: center"><span style="width: 2ch; flex-shrink: 0; color: #5a5a5a">│</span><span style="flex: 1; min-width: 0; display: flex"><span style="height: 16px; background: #2fb3c9; width: {{ row.bar }}"></span></span><span style="width: 11ch; flex-shrink: 0; text-align: right">{{ row.tokens }}</span><span style="width: 5ch; flex-shrink: 0; text-align: right; color: #8a8a8a">{{ row.share }}</span></div>
+        </div>
+      </sc-for>
+      <div style="flex: 1"></div>
+      <div style="color: #8a8a8a; margin-top: 20px">Tab 移動 · Enter 打開一列 · Esc 關閉</div>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 14px">
+    <h2 style="margin: 0; font-family: 'Noto Sans TC', sans-serif; font-size: 18px; font-weight: 700; color: #f0f0f0">依 session 分組</h2>
+    <div style="flex: 1; border: 1px solid #3a3a3a; border-radius: 8px; padding: 16px 18px; background: #161718; display: flex; flex-direction: column; width: 64ch">
+      <div style="display: flex; gap: 1ch; white-space: nowrap; overflow: hidden"><span style="font-weight: 700; color: #fafafa">subagent-dispatch stats</span><span style="color: #6b6b6b">────────────────────────────────────────</span></div>
+      <div style="height: 20px"></div>
+      <div style="display: flex; gap: 2ch; white-space: pre"><span><span style="color: #6b6b6b">p: </span>‹ 期間 <b>30 天</b> ›</span><span style="color: #8a8a8a">9/14 至 10/13</span></div>
+      <div style="height: 20px"></div>
+      <div style="display: flex; gap: 2ch">
+        <div style="flex: 1; min-width: 0; border: 1px solid #3a3a3a; border-radius: 6px; padding: 0 1ch">
+          <div style="display: flex; justify-content: space-between"><span style="color: #8a8a8a">總 token</span><span style="color: #2fb3c9">subagent 佔 [N]%</span></div>
+          <div style="font-weight: 700">[總數]</div>
+          <div style="display: flex; height: 14px; margin: 3px 0"><span style="flex: 62; background: #b06ad6"></span><span style="flex: 38; background: #2fb3c9"></span></div>
+          <div style="display: flex; justify-content: space-between"><span><span style="color: #b06ad6">●</span> 主 session</span><span>[N]</span></div>
+          <div style="display: flex; justify-content: space-between"><span><span style="color: #2fb3c9">●</span> subagent</span><span>[N]</span></div>
+        </div>
+        <div style="flex: 1; min-width: 0; border: 1px solid #3a3a3a; border-radius: 6px; padding: 0 1ch">
+          <div style="display: flex; justify-content: space-between"><span style="color: #8a8a8a">派出</span><span style="color: #8a8a8a">模型怎麼來</span></div>
+          <div style="font-weight: 700">[N] 次</div>
+          <div style="display: flex; height: 14px; margin: 3px 0"><span style="flex: 50; background: #d9a321"></span><span style="flex: 35; background: #8b8b93"></span><span style="flex: 15; background: #47b45a"></span></div>
+          <div style="display: flex; justify-content: space-between"><span><span style="color: #d9a321">●</span> 指定模型</span><span>[N]</span></div>
+          <div style="display: flex; justify-content: space-between"><span><span style="color: #8b8b93">●</span> 沿用預設</span><span>[N]</span></div>
+          <div style="display: flex; justify-content: space-between"><span><span style="color: #47b45a">●</span> fork</span><span>[N]</span></div>
+        </div>
+      </div>
+      <div style="color: #8a8a8a">快取讀取 [N]，不計入</div>
+      <div style="height: 20px"></div>
+      <div style="color: #4a4a4a; white-space: nowrap; overflow: hidden">────────────────────────────────────────────────────────────────</div>
+      <div style="white-space: pre"><span style="color: #6b6b6b">g: </span>‹ 分組 <b>session</b> ›</div>
+      <sc-for list="{{ sessions }}" as="row" hint-placeholder-count="5">
+        <div style="margin-top: 20px">
+          <div style="display: flex; gap: 1ch"><span style="width: 2ch; flex-shrink: 0; color: #5a5a5a">│</span><span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ row.prompt }}</span><span style="width: 7ch; flex-shrink: 0; text-align: right; color: #8a8a8a">{{ row.spawns }}</span></div>
+          <div style="display: flex; gap: 1ch"><span style="width: 2ch; flex-shrink: 0; color: #5a5a5a">│</span><span style="flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #8a8a8a">{{ row.meta }}</span></div>
+          <div style="display: flex; gap: 1ch; align-items: center"><span style="width: 2ch; flex-shrink: 0; color: #5a5a5a">│</span><span style="flex: 1; min-width: 0; display: flex"><span style="height: 16px; background: #2fb3c9; width: {{ row.bar }}"></span></span><span style="width: 11ch; flex-shrink: 0; text-align: right">{{ row.tokens }}</span><span style="width: 5ch; flex-shrink: 0; text-align: right; color: #8a8a8a">{{ row.share }}</span></div>
+        </div>
+      </sc-for>
+      <div style="flex: 1"></div>
+      <div style="color: #8a8a8a; margin-top: 20px">Tab 移動 · Enter 打開一列 · Esc 關閉</div>
+    </div>
+  </section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1180}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      models: [
+        { name: 'claude-opus-5-5', bar: '100%', tokens: '1,234,567', share: '62%', spawns: '0 次' },
+        { name: 'claude-sonnet-5-5', bar: '46%', tokens: '567,890', share: '29%', spawns: '[N] 次' },
+        { name: 'claude-haiku-5-5', bar: '16%', tokens: '98,765', share: '8%', spawns: '[N] 次' },
+        { name: 'claude-sonnet-4-5', bar: '4%', tokens: '4,321', share: '1%', spawns: '[N] 次' }
+      ],
+      sessions: [
+        { prompt: '調整 subagent-dispatch stats 介面', meta: '10/13 17:40 · cc-mod-trimtab', bar: '100%', tokens: '876,543', share: '44%', spawns: '[N] 次' },
+        { prompt: 'open-items pane 依種類分組，加計數長條與排序', meta: '10/13 09:12 · cc-mod-trimtab', bar: '72%', tokens: '654,321', share: '33%', spawns: '[N] 次' },
+        { prompt: '[第一則 prompt]', meta: '10/12 21:05 · [repo]', bar: '30%', tokens: '210,987', share: '11%', spawns: '0 次' },
+        { prompt: '（沒有 prompt）', meta: '10/12 02:11 · [repo]', bar: '6%', tokens: '43,210', share: '2%', spawns: '0 次' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

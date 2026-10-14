@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>stats 熱力圖（終端機）</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.t button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;line-height:inherit}
+.t button:focus-visible{outline:1px solid #6cc4e0;outline-offset:0}
+.ln{display:flex;height:18px;white-space:pre}
+</style>
+</helmet>
+<div style="width: 1000px; height: 940px; box-sizing: border-box; padding: 32px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; color: #8b8b93; font-size: 13px">
+<span>{{caption}} · 終端機 {{cols}} 欄 · 熱圖畫 {{weeks}} 週 · 今天 2026-10-13（二）</span>
+<span>點格子選一天 · 選了之後 p 回到原本的期間</span>
+</div>
+<div class="t" style="flex: 1; background: #1b1b1d; border-radius: 10px; padding: 18px 22px; font-family: 'JetBrains Mono', 'Noto Sans TC', monospace; font-size: 13px; line-height: 18px; overflow: hidden">
+<div style="width: {{cols}}ch; display: flex; flex-direction: column">
+
+<div class="ln"><span style="font-weight: 700">subagent-dispatch stats </span><span style="color: #55555c; overflow: hidden">{{rule}}</span></div>
+<div class="ln"> </div>
+
+<div class="ln" style="color: #7d7d85"><span style="width: 4ch"></span><sc-for list="{{months}}" as="m" hint-placeholder-count="12"><span style="width: {{pitch}}ch; overflow: visible">{{m.label}}</span></sc-for></div>
+<sc-for list="{{rows}}" as="row" hint-placeholder-count="7">
+<div class="ln"><span style="width: 4ch; color: #7d7d85">{{row.label}}</span><sc-for list="{{row.cells}}" as="c" hint-placeholder-count="30"><button type="button" aria-label="{{c.aria}}" onClick="{{c.pick}}" style="width: {{cellW}}ch; margin-right: {{gapW}}ch; text-align: center; background: {{c.bg}}; color: {{c.fg}}; font-weight: {{c.weight}}">{{c.text}}</button></sc-for></div>
+</sc-for>
+<sc-if value="{{showAnno}}" hint-placeholder-val="{{ false }}">
+<div class="ln" style="color: #7d7d85"><span style="width: 4ch"></span><sc-for list="{{anno}}" as="s" hint-placeholder-count="2"><span style="width: {{s.pad}}ch"></span><span style="width: {{s.w}}ch; display: flex; align-items: center; overflow: hidden; color: {{s.color}}; font-weight: {{s.weight}}"><sc-if value="{{s.bracket}}" hint-placeholder-val="{{ true }}"><span>└</span><span style="flex: 1; border-top: 1px solid #55555c"></span><span> {{s.label}} </span><span style="flex: 1; border-top: 1px solid #55555c"></span><span>┘</span></sc-if><sc-if value="{{s.plain}}" hint-placeholder-val="{{ false }}"><span>{{s.label}}</span></sc-if></span></sc-for></div>
+</sc-if>
+<div class="ln" style="margin-top: 0"><span style="width: 4ch"></span><span style="color: #7d7d85">無資料 </span><span style="color: #5a5a62">{{ndSample}}</span><span style="color: #7d7d85">  無用量 </span><span style="background: {{swZero.bg}}; color: {{swZero.fg}}">{{swZero.text}}</span><span style="color: #7d7d85">  少 </span><sc-for list="{{swLevels}}" as="s" hint-placeholder-count="4"><span style="background: {{s.bg}}; color: {{s.fg}}">{{s.text}}</span></sc-for><span style="color: #7d7d85"> 多  選到 </span><span style="color: {{selColor}}; font-weight: 700">{{selSample}}</span><span style="flex: 1"></span><span style="color: #7d7d85">最多 </span><span>{{peak}}</span></div>
+<div class="ln"> </div>
+
+<div class="ln"><span style="color: #7d7d85">期間  </span><button type="button" onClick="{{cyclePeriod}}"><span>p: </span><span style="font-weight: 700">‹ {{periodLabel}} ›</span></button><span style="color: #7d7d85">  {{periodRange}}</span><span style="flex: 1"></span><button type="button" onClick="{{prevDay}}"><span>j: </span><span>‹ 前一天</span></button><span>  </span><button type="button" onClick="{{nextDay}}"><span>k: </span><span>後一天 ›</span></button></div>
+
+<sc-if value="{{showData}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; gap: 2ch; margin-top: 18px">
+<div style="width: {{cardW}}ch; box-sizing: border-box; border: 1px solid #4a4a50; border-radius: 7px; padding: 0 1ch">
+<div class="ln"><span style="color: #7d7d85">總 token</span></div>
+<div class="ln"><span style="font-weight: 700">{{total}}</span></div>
+<div class="ln"><span style="width: {{mainW}}ch; background: #8a5cc7"></span><span style="width: {{subW}}ch; background: #2f8fb0"></span></div>
+<div class="ln"><span style="color: #c678dd">● </span><span style="color: #7d7d85">主 session {{mainTok}}  </span><span style="color: #56b6c2">● </span><span style="color: #7d7d85">subagent {{subTok}} · {{subPct}}</span></div>
+</div>
+<div style="width: {{cardW}}ch; box-sizing: border-box; border: 1px solid #4a4a50; border-radius: 7px; padding: 0 1ch">
+<div class="ln"><span style="color: #7d7d85">派出</span></div>
+<div class="ln"><span style="font-weight: 700">{{spawned}} 次</span></div>
+<div class="ln"><span style="color: #e5c07b">● </span><span style="color: #7d7d85">指定模型 </span><span>{{named}}</span><span style="color: #7d7d85">（Opus {{opus}}）  </span><span style="color: #8b8b93">● </span><span style="color: #7d7d85">沿用預設 </span><span>{{defaults}}</span></div>
+<div class="ln"><span style="color: #98c379">● </span><span style="color: #7d7d85">fork </span><span>{{forks}}</span></div>
+</div>
+</div>
+<div class="ln" style="margin-top: 0"><span style="color: #7d7d85">快取讀取 {{cacheRead}}（不計入）</span><span style="flex: 1"></span><span style="color: #7d7d85">更新於 19:04:05</span></div>
+<div class="ln"> </div>
+<div class="ln" style="color: #55555c; overflow: hidden">{{fullRule}}</div>
+<div class="ln"><span style="color: #7d7d85">分組  </span><button type="button"><span>g: </span><span style="font-weight: 700">‹ repo ›</span></button></div>
+<sc-for list="{{repos}}" as="r" hint-placeholder-count="4">
+<div style="border: 1px solid #4a4a50; border-radius: 7px; padding: 0 1ch; margin-top: 2px">
+<div class="ln"><button type="button" style="color: #d4d4d4">{{r.name}}</button><span style="flex: 1"></span><span style="color: #7d7d85">派出 {{r.count}}</span></div>
+<div class="ln"><span style="width: {{r.w}}ch; background: #2f8fb0"></span><span style="flex: 1"></span><span>{{r.tok}}</span><span style="color: #7d7d85">  {{r.pct}}</span></div>
+</div>
+</sc-for>
+</sc-if>
+
+<sc-if value="{{showZero}}" hint-placeholder-val="{{ false }}">
+<div class="ln" style="margin-top: 18px; color: #7d7d85">{{selDate}} 沒有用量（這天有紀錄，主 session 和 subagent 都是 0 token）。</div>
+</sc-if>
+<sc-if value="{{showNoData}}" hint-placeholder-val="{{ false }}">
+<div class="ln" style="margin-top: 18px; color: #7d7d85">{{selDate}} 沒有資料（帳本與每日摘要都沒有這天：回填以前，或 transcript 已被刪掉）。</div>
+</sc-if>
+
+<div style="flex: 1; min-height: 18px"></div>
+<div class="ln" style="margin-top: 18px"><span>Tab</span><span style="color: #7d7d85"> 移動 · </span><span>Enter</span><span style="color: #7d7d85"> 打開一列 · </span><span>Esc</span><span style="color: #7d7d85"> 關閉</span></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;cols&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;80&quot;,&quot;110&quot;],&quot;default&quot;:&quot;110&quot;},&quot;scenario&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;30 天（未選日）&quot;,&quot;選了一天&quot;,&quot;選到無用量的日子&quot;,&quot;選到無資料的日子&quot;],&quot;default&quot;:&quot;選了一天&quot;},&quot;anno&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true},&quot;glyph&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;bg&quot;,&quot;lower&quot;,&quot;square&quot;,&quot;braille&quot;,&quot;shade&quot;],&quot;default&quot;:&quot;square&quot;},&quot;caption&quot;:{&quot;editor&quot;:null,&quot;default&quot;:&quot;定案 · ■&quot;},&quot;$preview&quot;:{&quot;width&quot;:1000,&quot;height&quot;:940}}">
+class Component extends DCLogic {
+  key(d) { const p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+  md(d) { const p = (n) => String(n).padStart(2, '0'); return p(d.getMonth() + 1) + '/' + p(d.getDate()); }
+  fmt(n) { if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M'; if (n >= 1e3) return Math.round(n / 1e3) + 'k'; return String(n); }
+  hash(n, s) { const x = Math.sin(n * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); }
+  // null = 沒有資料；0 = 有紀錄但沒有用量
+  day(d) {
+    const firstData = new Date(2026, 8, 15);
+    if (d < firstData) return null;
+    const k = this.key(d);
+    if (k === '2026-10-02') return { tokens: 1240000, sub: 0.46 };
+    const n = Math.round(d.getTime() / 864e5);
+    const wd = (d.getDay() + 6) % 7;
+    const h = this.hash(n, 1);
+    if ((wd >= 5 && h < 0.6) || (wd < 5 && h < 0.1)) return { tokens: 0, sub: 0 };
+    const h2 = this.hash(n, 2);
+    return { tokens: Math.round(60000 + h2 * h2 * 1050000), sub: 0.18 + this.hash(n, 3) * 0.4 };
+  }
+  renderVals() {
+    const cols = Number(this.props.cols ?? '110');
+    // 格子的畫法：bg = 底色空白（原案），其他是上色的字元
+    const glyph = this.props.glyph ?? 'square';
+    const G = { bg: '  ', lower: '▆▆', square: '■', braille: '⣿⣿', shade: '▒▒' }[glyph] ?? '  ';
+    const cellW = glyph === 'square' ? 1 : 2;
+    const gapW = 1;
+    const pitch = cellW + gapW;
+    const weeks = Math.min(53, Math.max(4, Math.floor((cols - 4) / pitch)));
+    const today = new Date(2026, 9, 13);
+    const dow = (today.getDay() + 6) % 7;
+    const start = new Date(2026, 9, 13 - dow - (weeks - 1) * 7);
+    const at = (w, r) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + w * 7 + r);
+
+    // 分級只看畫出來的那幾週
+    const vals = [];
+    let peak = null;
+    let firstZero = null;
+    for (let w = 0; w < weeks; w++) for (let r = 0; r < 7; r++) {
+      const d = at(w, r);
+      if (d > today) continue;
+      const v = this.day(d);
+      if (v && v.tokens > 0) { vals.push(v.tokens); if (!peak || v.tokens > peak.tokens) peak = { d, tokens: v.tokens }; }
+      if (v && v.tokens === 0 && !firstZero) firstZero = this.key(d);
+    }
+    vals.sort((a, b) => a - b);
+    const q = (p) => vals[Math.min(vals.length - 1, Math.floor(vals.length * p))];
+    const q1 = q(0.25), q2 = q(0.5), q3 = q(0.75);
+    const level = (t) => (t <= q1 ? 1 : t <= q2 ? 2 : t <= q3 ? 3 : 4);
+    const LV = ['#3a3a40', '#173f4d', '#1f6680', '#2f8fb0', '#6cc4e0'];
+    // 字元只佔格子的一部分，看起來比底色暗，所以色階整體調亮一點
+    // 選到的那天：橘色，跟青色色階是互補色，一眼就跳出來
+    const SEL = '#ff8c42';
+    const GV = ['#4a4a52', '#1f5a6d', '#2a7f9c', '#3aa6cc', '#86d6f0'];
+
+    const scen = this.props.scenario ?? '30 天（未選日）';
+    const initial = scen === '選了一天' ? '2026-10-02' : scen === '選到無用量的日子' ? firstZero : scen === '選到無資料的日子' ? '2026-09-08' : null;
+    const sel = this.state.touched ? this.state.sel : initial;
+    const period = this.state.period ?? 30;
+    const setSel = (k) => this.setState({ touched: true, sel: k });
+
+    const WD = ['一', '二', '三', '四', '五', '六', '日'];
+    const annoOn = !!this.props.anno;
+    const todayOn = !!this.props.todayMark;
+    const collapse = !!this.props.collapse;
+    const todayKey = this.key(today);
+    const rows = [];
+    for (let r = 0; r < 7; r++) {
+      const cells = [];
+      for (let w = 0; w < weeks; w++) {
+        const d = at(w, r);
+        const k = this.key(d);
+        if (d > today) { cells.push({ bg: 'transparent', fg: 'transparent', text: '', weight: 400, aria: k + ' 未來', pick: () => {} }); continue; }
+        const v = this.day(d);
+        const isSel = sel === k;
+        let bg, fg = '#5a5a62', text = '', lv = 0;
+        const nd = cellW === 1 ? '·' : '··';
+        if (glyph === 'bg') {
+          if (!v) { bg = 'transparent'; text = collapse ? '' : nd; }
+          else if (v.tokens === 0) bg = LV[0];
+          else { lv = level(v.tokens); bg = LV[lv]; }
+          if (todayOn && k === todayKey && !isSel) { text = '今'; fg = lv >= 3 ? '#0e0e10' : '#ffffff'; }
+          if (isSel) { fg = '#ffffff'; text = '◆'; if (!v) bg = '#2a2a2e'; }
+        } else {
+          bg = 'transparent';
+          if (!v) text = nd;
+          else { text = G; fg = v.tokens === 0 ? GV[0] : GV[level(v.tokens)]; }
+          if (isSel) { fg = SEL; text = G; }
+        }
+        const desc = !v ? '沒有資料' : v.tokens === 0 ? '沒有用量' : this.fmt(v.tokens) + ' token';
+        cells.push({ bg, fg, text, weight: 700, aria: k + ' ' + desc, pick: () => setSel(k) });
+      }
+      rows.push({ label: r === 0 || r === 2 || r === 4 ? WD[r] : '', cells });
+    }
+
+    // 月份標在每個月第一次出現的那一欄
+    const months = [];
+    let lastM = -1;
+    for (let w = 0; w < weeks; w++) {
+      const m = at(w, 6).getMonth();
+      if (m !== lastM && (w > 0 || at(0, 0).getDate() === 1)) months.push({ label: (m + 1) + '月' });
+      else months.push({ label: '' });
+      lastM = m;
+    }
+
+    // 熱圖下方一行標註：左邊收合的「沒有資料」範圍，右邊是期間範圍或選到的那天
+    const gridW = weeks * pitch - gapW;
+    const weekOf = (d) => Math.floor(Math.round((d - start) / 864e5) / 7);
+    const segs = [];
+    let noWeeks = 0;
+    for (let w = 0; w < weeks; w++) if (!this.day(at(w, 6))) noWeeks = w + 1;
+    if (sel) {
+      const [y, m, dd] = sel.split('-').map(Number);
+      const d = new Date(y, m - 1, dd);
+      const lbl = this.md(d) + ' 週' + WD[(d.getDay() + 6) % 7];
+      let x = weekOf(d) * pitch;
+      let label = '▲ ' + lbl;
+      if (x + 12 > gridW) { label = lbl + ' ▲'; x = Math.max(0, x + cellW - 12); }
+      segs.push({ x, w: 12, label, plain: true, bracket: false, color: SEL, weight: 700 });
+    } else {
+      const ps = new Date(2026, 9, 13 - period + 1);
+      const x = weekOf(ps) * pitch;
+      const label = period === 1 ? '今天' : period + ' 天';
+      if (period === 1) segs.push({ x: weekOf(today) * pitch, w: 8, label: '▲ ' + label, plain: true, bracket: false, color: '#d4d4d4', weight: 700 });
+      else segs.push({ x, w: gridW - x, label, plain: false, bracket: true, color: '#d4d4d4', weight: 700 });
+    }
+    if (collapse && noWeeks >= 7 && segs[0].x >= noWeeks * pitch) {
+      segs.unshift({ x: 0, w: noWeeks * pitch - gapW, label: this.md(new Date(2026, 8, 14)) + ' 以前沒有資料', plain: false, bracket: true, color: '#7d7d85', weight: 400 });
+    }
+    let cursor = 0;
+    const anno = segs.map((s) => { const pad = Math.max(0, s.x - cursor); cursor = s.x + s.w; return { ...s, pad }; });
+
+    const cardW = Math.floor((cols - 2) / 2);
+    const barW = cardW - 4;
+    const rule = '─'.repeat(Math.max(0, cols - 24));
+    const fullRule = '─'.repeat(cols);
+
+    let tokens = 0, subShare = 0, label, range, state = 'data', selDate = '';
+    if (sel) {
+      const [y, m, dd] = sel.split('-').map(Number);
+      const d = new Date(y, m - 1, dd);
+      const v = this.day(d);
+      selDate = this.md(d) + '（' + WD[(d.getDay() + 6) % 7] + '）';
+      label = this.md(d) + ' 週' + WD[(d.getDay() + 6) % 7];
+      range = '1 天 · p 回到 ' + period + ' 天';
+      if (!v) state = 'nodata';
+      else if (v.tokens === 0) state = 'zero';
+      else { tokens = v.tokens; subShare = v.sub; }
+    } else {
+      let subT = 0;
+      for (let i = 0; i < period; i++) {
+        const v = this.day(new Date(2026, 9, 13 - i));
+        if (v) { tokens += v.tokens; subT += v.tokens * v.sub; }
+      }
+      subShare = tokens ? subT / tokens : 0;
+      label = period === 1 ? '今天' : period + ' 天';
+      range = period === 1 ? '10/13' : this.md(new Date(2026, 9, 13 - period + 1)) + ' – 10/13';
+    }
+    const subTok = Math.round(tokens * subShare);
+    const spawned = Math.max(1, Math.round(subTok / 42000));
+    const named = Math.round(spawned * 0.36), forks = Math.round(spawned * 0.22);
+    const shares = [['cc-mod-trimtab', 0.5], ['dotfiles', 0.24], ['blog', 0.17], ['scratch', 0.09]];
+    const repos = shares.map(([name, s]) => ({
+      name, count: Math.max(0, Math.round(spawned * s)), w: Math.max(1, Math.round((cols - 22) * s)),
+      tok: this.fmt(Math.round(tokens * s)), pct: Math.round(s * 100) + '%',
+    }));
+
+    return {
+      cols, weeks, rule, fullRule, rows, months, cardW, repos,
+      caption: this.props.caption ?? '定案 · ■',
+      pitch, cellW, gapW, selColor: SEL, selSample: glyph === 'bg' ? '◆' : G,
+      swZero: glyph === 'bg' ? { text: '  ', bg: LV[0], fg: 'inherit' } : { text: G, bg: 'transparent', fg: GV[0] },
+      swLevels: [1, 2, 3, 4].map((i) => (glyph === 'bg' ? { text: '  ', bg: LV[i], fg: 'inherit' } : { text: G, bg: 'transparent', fg: GV[i] })),
+      showAnno: annoOn, anno, ndSample: collapse ? '空白＋└─┘' : '··',
+      peak: peak ? this.md(peak.d) + ' ' + this.fmt(peak.tokens) : '—',
+      periodLabel: label, periodRange: range,
+      showData: state === 'data', showZero: state === 'zero', showNoData: state === 'nodata', selDate,
+      total: this.fmt(tokens), mainTok: this.fmt(tokens - subTok), subTok: this.fmt(subTok), subPct: Math.round(subShare * 100) + '%',
+      mainW: Math.max(1, Math.round(barW * (1 - subShare))), subW: Math.max(1, Math.round(barW * subShare)),
+      spawned, named, opus: Math.round(spawned * 0.12), forks, defaults: spawned - named - forks,
+      cacheRead: this.fmt(tokens * 7),
+      cyclePeriod: () => {
+        if (sel) { this.setState({ touched: true, sel: null }); return; }
+        const order = [1, 7, 30, 90];
+        this.setState({ period: order[(order.indexOf(period) + 1) % order.length] });
+      },
+      prevDay: () => {
+        const base = sel ? sel.split('-').map(Number) : [2026, 10, 14];
+        const d = new Date(base[0], base[1] - 1, base[2] - 1);
+        if (d >= at(0, 0)) setSel(this.key(d));
+      },
+      nextDay: () => {
+        if (!sel) return;
+        const b = sel.split('-').map(Number);
+        const d = new Date(b[0], b[1] - 1, b[2] + 1);
+        if (d <= today) setSel(this.key(d));
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

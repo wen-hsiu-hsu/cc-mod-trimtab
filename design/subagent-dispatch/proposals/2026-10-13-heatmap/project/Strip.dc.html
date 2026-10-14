@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>提案 C 每日長條時間軸</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&amp;family=Noto+Sans+TC:wght@400;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.t button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;line-height:inherit}
+.t button:focus-visible{outline:1px solid #6cc4e0;outline-offset:0}
+.ln{display:flex;height:18px;white-space:pre}
+</style>
+</helmet>
+<div style="width: 1000px; height: 560px; box-sizing: border-box; padding: 32px; background: #0e0e10; font-family: 'Noto Sans TC', sans-serif; color: #d4d4d4; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; color: #8b8b93; font-size: 13px">
+<span>提案 C · 一欄一天，高度照 token 比例（3 行高，每行 8 階），畫 {{days}} 天</span>
+<span>點任一欄選那一天 · 週末底色稍亮</span>
+</div>
+<div class="t" style="flex: 1; background: #1b1b1d; border-radius: 10px; padding: 18px 22px; font-family: 'JetBrains Mono', 'Noto Sans TC', monospace; font-size: 13px; line-height: 18px; overflow: hidden">
+<div style="width: {{cols}}ch; height: 100%; display: flex; flex-direction: column">
+<div class="ln"><span style="font-weight: 700">subagent-dispatch stats </span><span style="color: #55555c; overflow: hidden">{{rule}}</span></div>
+<div class="ln"> </div>
+<div style="display: flex"><span style="width: 4ch; display: flex; flex-direction: column; color: #7d7d85; white-space: pre"><span style="height: 18px">{{maxLabel}}</span><span style="height: 18px"></span><span style="height: 18px">   0</span></span><sc-for list="{{bars}}" as="b" hint-placeholder-count="100"><button type="button" aria-label="{{b.aria}}" onClick="{{b.pick}}" style="width: 1ch; display: flex; flex-direction: column; background: {{b.shade}}; color: {{b.fg}}"><span style="height: 18px">{{b.l2}}</span><span style="height: 18px">{{b.l1}}</span><span style="height: 18px">{{b.l0}}</span></button></sc-for></div>
+<div class="ln" style="color: #55555c"><span style="width: 4ch"></span><span>{{axis}}</span></div>
+<div class="ln" style="color: #7d7d85"><span style="width: 4ch"></span><sc-for list="{{monthLabels}}" as="m" hint-placeholder-count="4"><span style="width: {{m.pad}}ch"></span><span>{{m.label}}</span></sc-for></div>
+<div class="ln"><span style="width: 4ch"></span><span style="width: {{caretPad}}ch"></span><span style="color: #ffffff; font-weight: 700">{{caret}}</span></div>
+<div class="ln"><span style="width: 4ch"></span><span style="color: #7d7d85">無資料 </span><span style="color: #4a4a50">·</span><span style="color: #7d7d85">   無用量 </span><span style="color: #8b8b93">▁</span><span style="color: #7d7d85">   有用量 </span><span style="color: #2f8fb0">▃▅█</span><span style="color: #7d7d85">（高度＝token）   選到 </span><span style="color: #ffffff">█</span><span style="color: #7d7d85">   最多 </span><span>{{peak}}</span></div>
+<div class="ln"> </div>
+<div class="ln"><span style="color: #7d7d85">期間  </span><button type="button" onClick="{{cyclePeriod}}"><span>p: </span><span style="font-weight: 700">‹ {{periodLabel}} ›</span></button><span style="color: #7d7d85">  {{periodRange}}</span><span style="flex: 1"></span><button type="button" onClick="{{prevDay}}">j: ‹ 前一天</button><span>  </span><button type="button" onClick="{{nextDay}}">k: 後一天 ›</button></div>
+<div class="ln"> </div>
+<div class="ln"><span style="color: #7d7d85">{{summary}}</span></div>
+<div class="ln"><span style="color: #55555c">（卡片、快取讀取與分組清單照舊，數字跟著期間）</span></div>
+<div style="flex: 1"></div>
+<div class="ln"><span>Tab</span><span style="color: #7d7d85"> 移動 · </span><span>Enter</span><span style="color: #7d7d85"> 打開一列 · </span><span>Esc</span><span style="color: #7d7d85"> 關閉</span></div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"cols":{"editor":"enum","options":["80","110"],"default":"110"},"scenario":{"editor":"enum","options":["30 天（未選日）","選了一天","選到無用量的日子","選到無資料的日子"],"default":"選了一天"},"$preview":{"width":1000,"height":560}}'>
+class Component extends DCLogic {
+  key(d) { const p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+  md(d) { const p = (n) => String(n).padStart(2, '0'); return p(d.getMonth() + 1) + '/' + p(d.getDate()); }
+  fmt(n) { if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'; if (n >= 1e3) return Math.round(n / 1e3) + 'k'; return String(n); }
+  hash(n, s) { const x = Math.sin(n * 12.9898 + s * 78.233) * 43758.5453; return x - Math.floor(x); }
+  day(d) {
+    if (d < new Date(2026, 8, 15)) return null;
+    if (this.key(d) === '2026-10-02') return { tokens: 1240000, sub: 0.46 };
+    const n = Math.round(d.getTime() / 864e5);
+    const wd = (d.getDay() + 6) % 7;
+    const h = this.hash(n, 1);
+    if ((wd >= 5 && h < 0.6) || (wd < 5 && h < 0.1)) return { tokens: 0, sub: 0 };
+    const h2 = this.hash(n, 2);
+    return { tokens: Math.round(60000 + h2 * h2 * 1050000), sub: 0.18 + this.hash(n, 3) * 0.4 };
+  }
+  renderVals() {
+    const cols = Number(this.props.cols ?? '110');
+    const days = Math.min(371, cols - 4);
+    const today = new Date(2026, 9, 13);
+    const at = (i) => new Date(2026, 9, 13 - (days - 1) + i);
+    const start = at(0);
+    const WD = ['一', '二', '三', '四', '五', '六', '日'];
+    const E = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+
+    let max = 0; let peak = null; let firstZero = null;
+    for (let i = 0; i < days; i++) {
+      const d = at(i); const v = this.day(d);
+      if (v && v.tokens > max) { max = v.tokens; peak = d; }
+      if (v && v.tokens === 0 && !firstZero) firstZero = this.key(d);
+    }
+    const scen = this.props.scenario ?? '選了一天';
+    const initial = scen === '選了一天' ? '2026-10-02' : scen === '選到無用量的日子' ? firstZero : scen === '選到無資料的日子' ? '2026-09-08' : null;
+    const sel = this.state.touched ? this.state.sel : initial;
+    const period = this.state.period ?? 30;
+    const setSel = (k) => this.setState({ touched: true, sel: k });
+
+    const bars = []; let axis = ''; const monthLabels = []; let lastEnd = 0; let caretPad = 0;
+    for (let i = 0; i < days; i++) {
+      const d = at(i); const k = this.key(d); const v = this.day(d);
+      const wd = (d.getDay() + 6) % 7;
+      const isSel = k === sel;
+      let l = [' ', ' ', ' '], fg = '#2f8fb0';
+      if (!v) { l[0] = '·'; fg = '#4a4a50'; }
+      else if (v.tokens === 0) { l[0] = '▁'; fg = '#8b8b93'; }
+      else {
+        const u = Math.max(1, Math.round((v.tokens / max) * 24));
+        for (let r = 0; r < 3; r++) l[r] = E[Math.max(0, Math.min(8, u - r * 8))];
+      }
+      if (isSel) { fg = '#ffffff'; caretPad = i; if (!v) l[0] = '•'; }
+      bars.push({ l0: l[0], l1: l[1], l2: l[2], fg, shade: wd >= 5 ? '#222226' : 'transparent', aria: k + ' ' + (!v ? '沒有資料' : v.tokens === 0 ? '沒有用量' : this.fmt(v.tokens) + ' token'), pick: () => setSel(k) });
+      if (d.getDate() === 1) { axis += '┼'; monthLabels.push({ pad: i - lastEnd, label: (d.getMonth() + 1) + '月' }); lastEnd = i + 3; }
+      else axis += wd === 0 ? '┴' : '─';
+    }
+    let caret = '';
+    if (sel) {
+      const [y, m, dd] = sel.split('-').map(Number);
+      const d = new Date(y, m - 1, dd);
+      caret = '▲ ' + this.md(d) + ' 週' + WD[(d.getDay() + 6) % 7];
+      if (caretPad + 12 > cols - 4) { caret = this.md(d) + ' 週' + WD[(d.getDay() + 6) % 7] + ' ▲'; caretPad = Math.max(0, caretPad - 11); }
+    }
+
+    let label, range, summary;
+    if (sel) {
+      const [y, m, dd] = sel.split('-').map(Number);
+      const d = new Date(y, m - 1, dd);
+      const v = this.day(d);
+      label = this.md(d) + ' 週' + WD[(d.getDay() + 6) % 7];
+      range = '1 天 · p 回到 ' + period + ' 天';
+      summary = !v ? this.md(d) + ' 沒有資料（帳本與每日摘要都沒有這天）。' : v.tokens === 0 ? this.md(d) + ' 沒有用量（有紀錄，0 token）。' : '總 token ' + this.fmt(v.tokens) + ' · subagent ' + Math.round(v.sub * 100) + '% · 派出 ' + Math.max(1, Math.round(v.tokens * v.sub / 42000)) + ' 次';
+    } else {
+      let t = 0;
+      for (let i = 0; i < period; i++) { const v = this.day(new Date(2026, 9, 13 - i)); if (v) t += v.tokens; }
+      label = period === 1 ? '今天' : period + ' 天';
+      range = period === 1 ? '10/13' : this.md(new Date(2026, 9, 13 - period + 1)) + ' – 10/13';
+      summary = '總 token ' + this.fmt(t);
+    }
+
+    return {
+      cols, days, bars, axis, monthLabels, caret, caretPad,
+      maxLabel: this.fmt(max).padStart(4, ' '),
+      rule: '─'.repeat(Math.max(0, cols - 24)),
+      peak: peak ? this.md(peak) + ' ' + this.fmt(max) : '—',
+      periodLabel: label, periodRange: range, summary,
+      cyclePeriod: () => { if (sel) { this.setState({ touched: true, sel: null }); return; } const o = [1, 7, 30, 90]; this.setState({ period: o[(o.indexOf(period) + 1) % 4] }); },
+      prevDay: () => { const b = sel ? sel.split('-').map(Number) : [2026, 10, 14]; const d = new Date(b[0], b[1] - 1, b[2] - 1); if (d >= start) setSel(this.key(d)); },
+      nextDay: () => { if (!sel) return; const b = sel.split('-').map(Number); const d = new Date(b[0], b[1] - 1, b[2] + 1); if (d <= today) setSel(this.key(d)); },
+    };
+  }
+}
+</script>
+</body>
+</html>
