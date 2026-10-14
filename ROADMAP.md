@@ -15,7 +15,7 @@ cc-mod-trimtab 還沒做的事：待辦、待實測、暫緩與不做的提案�
 ## 待辦
 
 - **讓使用者在自己的終端機確認方塊字元會不會錯位**（subagent-dispatch，等 stats 改版合併後做）：熱圖格子 `■` 與相鄰列長條的 `▆`（U+2586）都是 East Asian Ambiguous 寬度，終端機把 ambiguous 當全形時整排會錯位。在設定流程（安裝後第一次開 stats pane，或 `/subagent-dispatch set` 相關指令）先畫一段 `■ ■ ■` 與 `▆▆▆` 加上對齊參考線，讓使用者看自己的環境決定要不要用；不用時改用替代畫法（例如熱圖用 ASCII、長條用有底色的空格）。要先查：Claude Code 沒有安裝事件（見 [subagent-dispatch 的回填](docs/mods/subagent-dispatch.zh-TW.md#回填)），觸發點只能是第一次開 pane 或指令；選擇存在哪一層設定（`pluginConfigs` 或 `$.store`）。
-- **中文的「帳本」改成好懂的詞**（subagent-dispatch，等 stats 改版合併後做）：「帳本」指每個 session 自己的用量紀錄（主 session 每天的 token、每次派出），保留 90 天；超過後只剩「每日摘要」。候選：「用量明細」（與「每日摘要」對稱，建議）、「詳細 Agent 資料」（但它也含主 session 的 token）。只改中文介面字串與中文文件（`docs/mods/subagent-dispatch.zh-TW.md`、`DESIGN.md`、`register.tsx` 與 `ledger.ts` 的 `zh-TW` 字串、測試）；英文維持 `ledger`，設定 key `ledger` 與 store 的 key 都不改。
+- **「帳本」改成「用量明細」**（subagent-dispatch，等 stats 改版合併後做）：「帳本」指每個 session 自己的用量紀錄（主 session 每天的 token、每次派出），保留 90 天；超過後只剩「每日摘要」，「用量明細」跟它成對。改中文介面字串與中文文件（`docs/mods/subagent-dispatch.zh-TW.md`、`DESIGN.md`、`register.tsx` 與 `ledger.ts` 的 `zh-TW` 字串、測試）。英文的 ledger 太正式的話一起改成白話（例如 usage details，對應 daily summary），範圍是 `docs/mods/subagent-dispatch.md` 與 `en` 字串。設定 key `ledger`、store 的 key、檔名 `ledger.ts` 要不要改，動手時再跟使用者討論（改 key 會讓已存的設定與資料讀不到，要有遷移）。
 
 ## mod 規劃
 
