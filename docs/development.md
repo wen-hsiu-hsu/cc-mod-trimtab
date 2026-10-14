@@ -42,6 +42,18 @@ scripts/check-docs.sh               # 檢查文件：每個 mod 有中英頁面�
 
 CI（`.github/workflows/ci.yml`）在 master 與 PR 上跑上面全部，裝 `@anthropic-ai/claude-code@2.1.296`。CI 沒跑 `tsc`：型別檔只在 Claude Code 載入 mod 時產生，CI 拿不到；`secret-scrub/hooks/history.test.ts` 也已有 2 個型別錯誤。
 
+## 模擬第一次安裝
+
+```bash
+scripts/first-install.sh [--local] [--keep] [<mod>...]
+```
+
+這支腳本用空的暫存設定資料夾（`CLAUDE_CONFIG_DIR`）與空的工作資料夾開 Claude Code，跟新使用者一樣沒有設定、plugin、marketplace 與 store，先加好 marketplace，再照 README 用 `/plugin install` 安裝。也可以在參數列出 mod，讓腳本先裝好。結束時會刪掉暫存資料夾，`~/.claude` 不會被動到。
+
+- 預設從 GitHub 安裝，拿到的是已經 push 的版本。加 `--local` 改用這個 clone 已 commit 的 HEAD；它是本機資料夾，mod 會從原地載入，不會先複製到 cache。
+- 設定資料夾是空的，所以沒有登入：要執行 `/login`，或先設定 `ANTHROPIC_API_KEY`。
+- mod 用 `<mod>@cc-mod-trimtab` 安裝，所以讀得到 `pluginConfigs["<mod>@cc-mod-trimtab"]`。用 `--plugin-dir` 開的 session 讀不到，這支腳本補上了這個缺口。
+
 ## 寫 mod
 
 - `.claude-plugin/types/` 由 Claude Code 在載入 mod 時產生（API 型別），已列入 `.gitignore`；`tsconfig.json` 繼承它，載入過一次後可用 `npx tsc -p mods/<mod>` 型別檢查。
